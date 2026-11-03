@@ -1,33 +1,7 @@
 local ADDON, FN = ...
 
 local RUINED = 2934 -- Ruined Leather Scraps
-local IDLE = 300 -- seconds without a skin that end a session
-
--- ------------------------------------------------------------
--- Session: from your first skin until five quiet minutes
--- ------------------------------------------------------------
-local session = { count = 0, ruined = 0, loot = {}, creatures = {} }
-
-function FN.SessionAdd(npc, items)
-    local now = GetTime()
-    if not session.last or now - session.last > IDLE then
-        session.count, session.ruined, session.start = 0, 0, now
-        wipe(session.loot)
-        wipe(session.creatures)
-    end
-    session.count = session.count + 1
-    session.last = now
-    if items[RUINED] then session.ruined = session.ruined + 1 end
-    for id, n in pairs(items) do session.loot[id] = (session.loot[id] or 0) + n end
-    if npc and npc > 0 then session.creatures[npc] = (session.creatures[npc] or 0) + 1 end
-end
-
--- skins per minute, counting at least one minute so the first skin reads as 1.0, not a spike
-function FN.SessionRate()
-    if session.count == 0 then return 0 end
-    local minutes = math.max(1, (session.last - session.start) / 60)
-    return session.count / minutes
-end
+local session = FN.session -- Session.lua
 
 -- ------------------------------------------------------------
 -- Words and numbers
@@ -57,7 +31,7 @@ local function ZoneName(mapID)
 end
 
 -- ------------------------------------------------------------
--- /fn
+-- /fn summary: the same numbers in chat
 -- ------------------------------------------------------------
 -- true when the game has not loaded an item's name yet; asking (GetItemInfo) starts the load
 local function AnyUncached(ids)
@@ -118,20 +92,32 @@ SLASH_FIELDNOTES1 = "/fn"
 SLASH_FIELDNOTES2 = "/fieldnotes"
 SlashCmdList.FIELDNOTES = function(msg)
     msg = (msg or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
-    if msg == "" then
+    if msg == "" or msg == "stats" then
+        FN.ToggleStats()
+    elseif msg == "summary" then
         Summary()
+    elseif msg == "tracker" then
+        FN.db.settings.tracker = FN.db.settings.tracker == false
+        if FN.db.settings.tracker then
+            FN.Print("The session tracker will show while you skin.")
+        else
+            FN.HideTracker()
+            FN.Print("The session tracker is off. /fn tracker brings it back.")
+        end
     elseif msg == "chat" then
         FN.db.settings.chat = not FN.db.settings.chat
         FN.Print("A chat line for each skin is now " .. (FN.db.settings.chat and "on." or "off."))
     elseif msg == "demo" then
         FN.DemoLoad()
-        Summary()
+        FN.ShowStats()
     elseif msg == "demo off" then
         FN.DemoClear()
     elseif msg == "fake" then
         FN.DemoFakeSkin()
     else
-        FN.Print("/fn  your skinning so far, this session and this zone")
+        FN.Print("/fn  open or close your skinning stats")
+        FN.Print("/fn summary  the same numbers in chat")
+        FN.Print("/fn tracker  turn the session tracker on or off")
         FN.Print("/fn chat  turn the chat line for each skin on or off")
         FN.Print("/fn demo  load sample data to try Fieldnotes (your own records stay as they are)")
         FN.Print("/fn fake  pretend to skin something where you stand (demo mode only)")

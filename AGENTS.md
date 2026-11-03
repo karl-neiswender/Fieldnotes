@@ -28,6 +28,10 @@ module on the same event model. See [ROADMAP](ROADMAP.md) and
 - **In-game fonts only.** Every visible string uses the game's own fonts through its
   font objects (`GameFontNormal`, `GameFontHighlightSmall`, `NumberFontNormal` ...)
   or `STANDARD_TEXT_FONT`. Ship no font files. Mockup typefaces are stand-ins.
+- **One family with Forever Goal Tracker.** Build UI from `Style.lua` (`FN.Style`): its
+  colors, etched gradient tiles, gold chosen state, title-gold headings, pill switch and
+  icons are Forever Goal Tracker's own. New pieces extend Style.lua rather than invent a
+  look; data colors (heat ramp, leather dots) stay in Map.lua.
 - Map drawing uses pooled textures; no per-frame allocations, redraw only on map or
   filter change.
 

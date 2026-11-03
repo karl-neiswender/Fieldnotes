@@ -2,14 +2,17 @@
 ## Title: |cffe9b265Fieldnotes|r
 ## Notes: A gathering journal. Remembers every creature you skin, what it gave you and where.
 ## Author: Karl
-## Version: 0.3.0
+## Version: 0.4.0
 ## SavedVariables: FieldnotesDB
 ## Category: Professions
 ## X-Category: Professions
 ## X-License: MIT
 
 Core.lua
+Style.lua
 Recorder.lua
+Session.lua
 Stats.lua
 Demo.lua
 Map.lua
+Panel.lua

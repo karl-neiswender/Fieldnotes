@@ -55,6 +55,8 @@ local function SkinningSkill()
     return 0
 end
 
+FN.SkinningSkill = SkinningSkill
+
 local function PlayerPosition()
     if not (C_Map and C_Map.GetBestMapForUnit) then return 0 end
     local mapID = C_Map.GetBestMapForUnit("player")

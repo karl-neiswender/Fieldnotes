@@ -102,7 +102,15 @@ function GetSkillLineInfo() return "Skinning", false, false, 225 end
 C_Map = {
   GetBestMapForUnit = function() return 1434 end,
   GetPlayerMapPosition = function() return { GetXY = function() return 0.4712, 0.2201 end } end,
-  GetMapInfo = function() return { name = "Stranglethorn Vale" } end,
+  GetMapInfo = function(id) return { name = "Stranglethorn Vale", mapType = id == 1415 and 2 or 3 } end,
+  -- Eastern Kingdoms (1415) and a few of its zones, each with its rectangle on the continent
+  GetMapChildrenInfo = function(id)
+    if id ~= 1415 then return {} end
+    local out = {}
+    for _, z in ipairs({ 1426, 1429, 1434, 1436, 1417, 1418 }) do out[#out + 1] = { mapID = z, name = "Zone " .. z, mapType = 3 } end
+    return out
+  end,
+  GetMapRectOnMap = function(z) local x = (z % 7) / 8; return x, x + 0.1, x * 0.8, x * 0.8 + 0.1 end,
 }
 function GetZoneText() return "Stranglethorn Vale" end
 loot = {}
@@ -113,6 +121,9 @@ function GetLootSlotInfo(i) return "icon", "x", loot[i].n end
 function GetLootSourceInfo(i) return loot[i] and loot[i].guid, 1 end
 function GetItemInfo(id) return nil end
 SlashCmdList = {}
+UIParent = NewWidget("frame")
+UISpecialFrames = {}
+function GetItemIcon() return 134400 end
 C_Timer = { After = function(_, fn) fn() end }
 """
 
@@ -151,7 +162,9 @@ Fire("UNIT_SPELLCAST_SENT", "player", "Stranglethorn Tiger", "cast-3", 8618)
 now = now + 30
 Fire("LOOT_READY"); Fire("LOOT_CLOSED")
 
+SlashCmdList.FIELDNOTES("summary")
 SlashCmdList.FIELDNOTES("")
+local trackerShown = ns.session.count == 1
 SlashCmdList.FIELDNOTES("chat")
 SlashCmdList.FIELDNOTES("help")
 
@@ -186,14 +199,44 @@ WorldMapFrame.mapID = 1426
 FieldnotesDB.settings.map.on = false
 local off = Open("heat", "account")
 FieldnotesDB.settings.map.on = true
-local mapResult = heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off
+-- settings: Spotlight, Heat by Hides, every color scheme, the settings panel open
+local spot = Open("spotlight", "account")
+FieldnotesDB.settings.map.heatBy = "hides"
+local hides = Open("heat", "account")
+FieldnotesDB.settings.map.heatBy = "skins"
+for _, c in ipairs({ "thermal", "frost", "verdant", "gold", "ember" }) do
+  FieldnotesDB.settings.map.colors = c
+  Open("heat", "account")
+end
+local gear = ns.Map.ui.gear
+gear.scripts.OnClick(gear)
+Open("heat", "account")
+local settingsOpen = ns.Map.ui.reset.shown and 1 or 0
+FieldnotesDB.settings.map.when = 7
+local recent = Open("heat", "account")
+FieldnotesDB.settings.map.when = 0
+WorldMapFrame.mapID = 1415 -- the continent: a badge per zone with notes
+Open("heat", "account")
+local continentBadges = ns.Map.ui.badgeCount
+WorldMapFrame.mapID = 1426
+local mapResult = continentBadges .. "," .. spot .. "," .. hides .. "," .. settingsOpen .. "," .. recent .. "," .. heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off
+
+-- 7. the stats window on the demo
+SlashCmdList.FIELDNOTES("")
+SlashCmdList.FIELDNOTES("")
+local u = ns.statsUI
+local stats = u.tiles[1].value.text .. "|" .. u.tiles[2].value.text .. "|" .. u.tiles[3].value.text .. "|" .. u.tiles[4].value.text
+FieldnotesDB.settings.statsShow = "me"
+ns.RefreshStats()
+local meSkins = u.tiles[1].value.text
+FieldnotesDB.settings.statsShow = "account"
 
 SlashCmdList.FIELDNOTES("demo off")
 local cleared = FieldnotesDB.demo == nil and not FieldnotesDB.settings.demo
 
 local list = FieldnotesDB.events.skinning[1434]
 return #list, list[1], FieldnotesDB.creatures[682].name, FieldnotesDB.creatures[682].minLevel, table.concat(chat, "\n"),
-  refused, demoCount, faked, realAfter == realBefore, cleared, mapResult
+  refused, demoCount, faked, realAfter == realBefore, cleared, mapResult, stats, meSkins, trackerShown
 """
 
 ok = True
@@ -213,8 +256,11 @@ if ok:
     g = rt.globals()
     g.FILES = rt.table_from(FILES)
     g.SOURCES = rt.table_from(sources)
-    count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result = rt.execute(PLAY)
-    heat, p_me, p_all, p_comm, empty, off = [int(v) for v in map_result.split(",")]
+    count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result, stats, me_skins, tracker = rt.execute(PLAY)
+    print("stats      tiles %s, Me %s" % (stats, me_skins))
+    continent, spot, hides, settings_open, recent, heat, p_me, p_all, p_comm, empty, off = [int(v) for v in map_result.split(",")]
+    print("map        continent badges %d" % continent)
+    print("map        spotlight %d, hides %d, last 7 days %d, settings panel %s" % (spot, hides, recent, "open" if settings_open else "closed"))
     print("map        heat %d, points me %d / account %d / community %d, empty map %d, off %d" % (heat, p_me, p_all, p_comm, empty, off))
     print("demo       %d sample skins" % demo_count)
     checks = [
@@ -232,6 +278,15 @@ if ok:
         ("map: points grow from Me to Account to Community", 0 < p_me < p_all < p_comm),
         ("map: a map without notes draws nothing but the dimming", empty <= 1),
         ("map: switched off draws nothing", off == 0),
+        ("map: the continent shows a badge for each zone with notes", continent == 6),
+        ("map: Spotlight dims the map", spot > heat),
+        ("map: Heat by Hides draws fewer areas than skins", 0 < hides < heat),
+        ("map: the settings panel opens", settings_open == 1),
+        ("map: Last 7 days draws less than All time", recent < heat),
+        ("session tracker counts the real skin", bool(tracker)),
+        ("stats window fills its tiles", stats.split("|")[0].replace(",", "").isdigit() and stats.split("|")[1] != "-"),
+        ("stats window: Me counts fewer skins than Account",
+         0 < int(me_skins.replace(",", "")) < int(stats.split("|")[0].replace(",", ""))),
     ]
     for label, passed in checks:
         ok = ok and passed

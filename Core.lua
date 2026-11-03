@@ -92,10 +92,17 @@ function FN.Add(profession, mapID, r, store)
         byMap[mapID] = list
     end
     list[#list + 1] = FN.Encode(r)
-    if FN.OnDataChanged and not FN.bulk then FN.OnDataChanged() end -- bulk: Demo.lua's loader
+    if not FN.bulk then FN.NotifyData() end -- bulk: Demo.lua's loader tells once at the end
 end
 
--- What /fn and (later) the map show: the demo store while demo mode is on, else your records.
+-- Views that redraw when records change (the map, the stats window): FN.OnData(fn) adds one
+FN.dataListeners = {}
+function FN.OnData(fn) table.insert(FN.dataListeners, fn) end
+function FN.NotifyData()
+    for _, fn in ipairs(FN.dataListeners) do fn() end
+end
+
+-- What /fn and the map show: the demo store while demo mode is on, else your records.
 -- Real skins are always saved to your records, demo mode or not.
 function FN.View()
     if FN.db.settings.demo and FN.db.demo then return FN.db.demo end

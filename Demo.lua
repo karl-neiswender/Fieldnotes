@@ -77,6 +77,20 @@ local function Gauss()
 end
 local function Clamp(v) return math.max(5, math.min(995, math.floor(v + 0.5))) end
 
+-- Sample skins come in sessions, as real ones do: one character, a run of skins about 20
+-- seconds apart, on some day in the last two months.
+local sessionLeft, clock, sessionChar = 0, 0, 1
+local function NextSkin(now)
+    if sessionLeft <= 0 then
+        sessionLeft = 25 + math.floor(Rand() * 50)
+        clock = now - math.floor(Rand() * DAYS * 86400)
+        sessionChar = Rand() < 0.5 and 1 or (Rand() < 0.6 and 2 or 3)
+    end
+    sessionLeft = sessionLeft - 1
+    clock = clock + 12 + math.floor(Rand() * 18)
+    return clock, sessionChar
+end
+
 local function Roll(c)
     local items = {}
     for _, l in ipairs(c[8]) do
@@ -105,11 +119,12 @@ function FN.DemoLoad()
         for _, c in ipairs(ZONES[mapID]) do
             Note(store, c)
             for _, spot in ipairs(c[7]) do
+                sessionLeft = 0 -- each spot starts its own sessions
                 for _ = 1, 60 + math.floor(Rand() * 80) do
-                    local char = Rand() < 0.5 and 1 or (Rand() < 0.6 and 2 or 3)
+                    local t, char = NextSkin(now)
                     FN.Add("skinning", mapID, {
                         x = Clamp(spot[1] + Gauss() * spot[3]), y = Clamp(spot[2] + Gauss() * spot[3]),
-                        time = now - math.floor(Rand() * DAYS * 86400), npc = c[1], char = char,
+                        time = t, npc = c[1], char = char,
                         skill = c[6] + math.floor(Rand() * 15), items = Roll(c),
                     }, store)
                     total = total + 1
@@ -142,7 +157,7 @@ function FN.DemoLoad()
     FN.db.demo = store
     FN.db.settings.demo = true
     FN.Print(string.format("Demo mode on: %d sample skins in %d zones, from 3 made-up characters, plus a sample Community layer.", total, #mapIDs))
-    if FN.OnDataChanged then FN.OnDataChanged() end
+    FN.NotifyData()
 end
 
 function FN.DemoClear()
@@ -150,7 +165,7 @@ function FN.DemoClear()
     FN.db.demo = nil
     FN.db.settings.demo = false
     FN.Print(had and "Sample data removed. Showing your own records." or "No sample data was loaded.")
-    if FN.OnDataChanged then FN.OnDataChanged() end
+    FN.NotifyData()
 end
 
 -- one pretend skin where you stand, through the same session tracking as a real one
