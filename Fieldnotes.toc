@@ -1,0 +1,15 @@
+## Interface: 11509, 16001
+## Title: |cffe9b265Fieldnotes|r
+## Notes: A gathering journal. Remembers every creature you skin, what it gave you and where.
+## Author: Karl
+## Version: 0.3.0
+## SavedVariables: FieldnotesDB
+## Category: Professions
+## X-Category: Professions
+## X-License: MIT
+
+Core.lua
+Recorder.lua
+Stats.lua
+Demo.lua
+Map.lua

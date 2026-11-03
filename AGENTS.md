@@ -25,6 +25,9 @@ module on the same event model. See [ROADMAP](ROADMAP.md) and
 - Sharing is copy-paste only: an add-on cannot reach the internet or the clipboard.
   Share strings and pre-filled links, the same pattern as Forever Goal Tracker's
   Send feedback window.
+- **In-game fonts only.** Every visible string uses the game's own fonts through its
+  font objects (`GameFontNormal`, `GameFontHighlightSmall`, `NumberFontNormal` ...)
+  or `STANDARD_TEXT_FONT`. Ship no font files. Mockup typefaces are stand-ins.
 - Map drawing uses pooled textures; no per-frame allocations, redraw only on map or
   filter change.
 

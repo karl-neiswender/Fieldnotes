@@ -1,0 +1,243 @@
+"""Checks Fieldnotes' Lua with real Lua 5.1 (the game's version).
+
+1. Compiles every file in the .toc: catches syntax slips and Lua's 200-local limit.
+2. Loads them against a small stand-in for the WoW API and plays a few skins:
+   a real skin is recorded once (even when both loot events fire), an ordinary kill's loot
+   and a failed cast are not, and /fn runs without errors.
+
+Run from the repository folder:  python3 tools/check.py
+Needs lupa. It reuses Forever Goal Tracker's copy (tools/.py) when that checkout sits next to
+this one; otherwise:  pip3 install --target tools/.py lupa
+"""
+import os
+import sys
+
+here = os.path.dirname(os.path.abspath(__file__))
+root = os.path.dirname(here)
+for p in (os.path.join(here, ".py"), os.path.join(root, "..", "ForeverGoalTracker", "tools", ".py")):
+    if os.path.isdir(p):
+        sys.path.insert(0, p)
+from lupa import lua51  # noqa: E402
+
+toc = open(os.path.join(root, "Fieldnotes.toc"), encoding="utf-8").read().splitlines()
+FILES = [l.strip() for l in toc if l.strip().endswith(".lua")]
+
+STUB = r"""
+chat, handlers, now, clock = {}, {}, 100, 1700000000
+DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) chat[#chat + 1] = m end }
+-- frames, textures and font strings: any method not listed does nothing
+local Widget = {}
+Widget.__index = function(t, k)
+  local m = rawget(Widget, k)
+  if m then return m end
+  return function() end
+end
+function NewWidget(kind) return setmetatable({ kind = kind, events = {}, scripts = {}, shown = true, w = 0, h = 0, text = "" }, Widget) end
+function Widget:RegisterEvent(e) self.events[e] = true; handlers[#handlers + 1] = self end
+function Widget:UnregisterEvent(e) self.events[e] = nil end
+function Widget:SetScript(name, fn) self.scripts[name] = fn end
+function Widget:HookScript(name, fn) self.scripts[name] = fn end
+function Widget:Show() self.shown = true end
+function Widget:Hide() self.shown = false end
+function Widget:SetShown(v) self.shown = v and true or false end
+function Widget:IsShown() return self.shown end
+function Widget:SetSize(w, h) self.w, self.h = w, h end
+function Widget:SetWidth(w) self.w = w end
+function Widget:SetHeight(h) self.h = h end
+function Widget:GetSize() return self.w, self.h end
+function Widget:SetAllPoints(t) if t and t.w then self.w, self.h = t.w, t.h end end
+function Widget:GetWidth() return self.w end
+function Widget:GetHeight() return self.h end
+function Widget:GetFrameLevel() return 1 end
+function Widget:GetEffectiveScale() return 1 end
+function Widget:SetText(t) self.text = tostring(t) end
+function Widget:GetText() return self.text end
+function Widget:GetStringWidth() return #self.text * 6 end
+function Widget:GetStringHeight() return 12 end
+function Widget:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
+function Widget:CreateTexture() local t = NewWidget("texture"); t.owner = self; textures[#textures + 1] = t; return t end
+function Widget:CreateFontString() return NewWidget("fontstring") end
+function Widget:Click() if self.scripts.OnClick then self.scripts.OnClick(self) end end
+textures = {}
+function CreateFrame(kind, name, parent) local f = NewWidget(kind); f.parent = parent; return f end
+function Fire(e, ...)
+  for _, f in ipairs(handlers) do if f.events[e] and f.scripts.OnEvent then f.scripts.OnEvent(f, e, ...) end end
+end
+function hooksecurefunc(t, k, fn) local old = t[k]; t[k] = function(...) old(...); fn() end end
+GameTooltip = NewWidget("tooltip")
+canvas = NewWidget("frame"); canvas.w, canvas.h = 1002, 668
+WorldMapFrame = NewWidget("frame")
+WorldMapFrame.ScrollContainer = NewWidget("frame")
+WorldMapFrame.mapID = 1426
+function WorldMapFrame:GetCanvas() return canvas end
+function WorldMapFrame:GetMapID() return self.mapID end
+function WorldMapFrame:OnMapChanged() end
+Enum = { UIMapType = { Zone = 3 } }
+-- textures on the map canvas that are showing (heat squares and dots)
+function ShownOnMap()
+  local n = 0
+  for _, t in ipairs(textures) do if t.shown and t.owner and t.owner.parent == canvas then n = n + 1 end end
+  return n
+end
+function GetTime() return now end
+function time() return clock end
+function wipe(t) for k in pairs(t) do t[k] = nil end return t end
+function strsplit(sep, s)
+  local out = {}
+  for part in (s .. sep):gmatch("(.-)%" .. sep) do out[#out + 1] = part end
+  return unpack(out)
+end
+function UnitName(u) if u == "player" then return "Tester" end return units[u] and units[u].name end
+function GetRealmName() return "Realm" end
+units = {}
+function UnitExists(u) return units[u] ~= nil end
+function UnitIsPlayer(u) return false end
+function UnitIsDead(u) return units[u] and units[u].dead end
+function UnitGUID(u) return units[u] and units[u].guid end
+function UnitCreatureType(u) return "Beast" end
+function UnitLevel(u) return units[u] and units[u].level or 0 end
+function GetSpellInfo(id) if id == 8613 or id == 8618 then return "Skinning" end return "Other" end
+function GetNumSkillLines() return 1 end
+function GetSkillLineInfo() return "Skinning", false, false, 225 end
+C_Map = {
+  GetBestMapForUnit = function() return 1434 end,
+  GetPlayerMapPosition = function() return { GetXY = function() return 0.4712, 0.2201 end } end,
+  GetMapInfo = function() return { name = "Stranglethorn Vale" } end,
+}
+function GetZoneText() return "Stranglethorn Vale" end
+loot = {}
+function GetNumLootItems() return #loot end
+function LootSlotHasItem(i) return loot[i] ~= nil end
+function GetLootSlotLink(i) return "|cffffffff|Hitem:" .. loot[i].id .. "::::::::|h[x]|h|r" end
+function GetLootSlotInfo(i) return "icon", "x", loot[i].n end
+function GetLootSourceInfo(i) return loot[i] and loot[i].guid, 1 end
+function GetItemInfo(id) return nil end
+SlashCmdList = {}
+C_Timer = { After = function(_, fn) fn() end }
+"""
+
+PLAY = r"""
+local ns = {}
+for _, name in ipairs(FILES) do
+  local fn = assert(loadstring(SOURCES[name], "@" .. name))
+  fn("Fieldnotes", ns)
+end
+Fire("ADDON_LOADED", "Fieldnotes")
+Fire("PLAYER_LOGIN")
+
+local tiger = "Creature-0-1-0-1-682-00000ABC"
+units.mouseover = { name = "Stranglethorn Tiger", guid = tiger, dead = true, level = 33 }
+Fire("UPDATE_MOUSEOVER_UNIT")
+
+-- 1. a real skin, both loot events firing
+Fire("UNIT_SPELLCAST_SENT", "player", "Stranglethorn Tiger", "cast-1", 8618)
+now = now + 2
+loot = { { id = 2319, n = 2, guid = tiger }, { id = 2934, n = 1, guid = tiger } }
+Fire("LOOT_READY"); Fire("LOOT_OPENED"); Fire("LOOT_CLOSED")
+
+-- 2. ordinary kill loot, no Skinning cast
+now = now + 5
+loot = { { id = 4306, n = 1, guid = tiger } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+
+-- 3. a cast that fails, then loot
+Fire("UNIT_SPELLCAST_SENT", "player", "Stranglethorn Tiger", "cast-2", 8618)
+Fire("UNIT_SPELLCAST_FAILED", "player", "cast-2", 8618)
+loot = { { id = 2319, n = 1, guid = tiger } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+
+-- 4. a cast whose loot comes too late
+Fire("UNIT_SPELLCAST_SENT", "player", "Stranglethorn Tiger", "cast-3", 8618)
+now = now + 30
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+
+SlashCmdList.FIELDNOTES("")
+SlashCmdList.FIELDNOTES("chat")
+SlashCmdList.FIELDNOTES("help")
+
+-- 5. demo mode: sample data apart from the real records, fake skins only into the demo
+local realBefore = #FieldnotesDB.events.skinning[1434]
+SlashCmdList.FIELDNOTES("fake") -- refused before /fn demo
+local refused = #FieldnotesDB.events.skinning[1434] == realBefore and FieldnotesDB.demo == nil
+SlashCmdList.FIELDNOTES("demo")
+local demoCount = 0
+for _, l in pairs(FieldnotesDB.demo.events.skinning) do demoCount = demoCount + #l end
+local demoStv = #FieldnotesDB.demo.events.skinning[1434]
+SlashCmdList.FIELDNOTES("fake")
+local faked = #FieldnotesDB.demo.events.skinning[1434] == demoStv + 1
+local realAfter = #FieldnotesDB.events.skinning[1434]
+for _, l in pairs(FieldnotesDB.demo.events.skinning) do
+  for _, s in ipairs(l) do assert(ns.Decode(s), "bad demo record " .. s) end
+end
+-- 6. the map overlay, on the demo's Dun Morogh
+local function Open(mode, show)
+  FieldnotesDB.settings.map = FieldnotesDB.settings.map or {}
+  if mode then FieldnotesDB.settings.map.mode = mode end
+  if show then FieldnotesDB.settings.map.show = show end
+  ns.Map.Refresh()
+  return ShownOnMap()
+end
+WorldMapFrame.scripts.OnShow()
+local heat = Open("heat", "account")
+local pointsMe, pointsAll, pointsCommunity = Open("points", "me"), Open("points", "account"), Open("points", "community")
+WorldMapFrame.mapID = 947 -- a map with no notes
+local empty = Open("heat", "account")
+WorldMapFrame.mapID = 1426
+FieldnotesDB.settings.map.on = false
+local off = Open("heat", "account")
+FieldnotesDB.settings.map.on = true
+local mapResult = heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off
+
+SlashCmdList.FIELDNOTES("demo off")
+local cleared = FieldnotesDB.demo == nil and not FieldnotesDB.settings.demo
+
+local list = FieldnotesDB.events.skinning[1434]
+return #list, list[1], FieldnotesDB.creatures[682].name, FieldnotesDB.creatures[682].minLevel, table.concat(chat, "\n"),
+  refused, demoCount, faked, realAfter == realBefore, cleared, mapResult
+"""
+
+ok = True
+rt = lua51.LuaRuntime()
+sources = {}
+for name in FILES:
+    src = open(os.path.join(root, name), encoding="utf-8").read()
+    sources[name] = src
+    err = rt.eval("function(s, n) local f, e = loadstring(s, '@' .. n) return e end")(src, name)
+    if err:
+        ok = False
+        print("COMPILE    " + err)
+print(("compile    " if ok else "COMPILE    ") + ", ".join(FILES))
+
+if ok:
+    rt.execute(STUB)
+    g = rt.globals()
+    g.FILES = rt.table_from(FILES)
+    g.SOURCES = rt.table_from(sources)
+    count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result = rt.execute(PLAY)
+    heat, p_me, p_all, p_comm, empty, off = [int(v) for v in map_result.split(",")]
+    print("map        heat %d, points me %d / account %d / community %d, empty map %d, off %d" % (heat, p_me, p_all, p_comm, empty, off))
+    print("demo       %d sample skins" % demo_count)
+    checks = [
+        ("one skin recorded, not four", count == 1),
+        ("record holds place, time, creature, character, skill and loot",
+         first == "471:220:1700000000:682:1:225:2319=2,2934=1"),
+        ("creature remembered from mouseover", cname == "Stranglethorn Tiger" and clevel == 33),
+        ("/fn summary runs", "1 skins on this account" in chat),
+        ("/fn fake refused outside demo mode", bool(refused)),
+        ("/fn demo loads sample skins", demo_count > 1000),
+        ("/fn fake adds one skin to the demo", bool(faked)),
+        ("real records untouched by demo mode", bool(real_kept)),
+        ("/fn demo off removes the sample data", bool(cleared)),
+        ("map: heat squares drawn", heat > 20),
+        ("map: points grow from Me to Account to Community", 0 < p_me < p_all < p_comm),
+        ("map: a map without notes draws nothing but the dimming", empty <= 1),
+        ("map: switched off draws nothing", off == 0),
+    ]
+    for label, passed in checks:
+        ok = ok and passed
+        print(("ok         " if passed else "FAIL       ") + label)
+    if not ok:
+        print("record: " + str(first))
+        print(chat)
+
+sys.exit(0 if ok else 1)
