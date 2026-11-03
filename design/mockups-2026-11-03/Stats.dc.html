@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fieldnotes stats panel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#e9c27a}a:hover{color:#f6dca6}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; padding: 40px; background: #120f0b; font-family: Inter, system-ui, sans-serif; color: #efe6d4; display: flex; gap: 32px; align-items: flex-start">
+
+  <div style="width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px">
+    <span style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #a89a80">Session tracker</span>
+    <div style="box-sizing: border-box; padding: 14px 16px; border-radius: 12px; background: rgba(18,14,10,0.92); box-shadow: 0 0 0 1px rgba(240,210,150,0.16), 0 8px 24px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600"><span style="width: 8px; height: 8px; border-radius: 50%; background: #7fc48a"></span>Skinning</span>
+        <span style="font-size: 13px; color: #c9bba0; font-variant-numeric: tabular-nums">24:18</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 22px; font-weight: 600; color: #f3e4c0">77</span><span style="font-size: 11px; color: #a89a80">skins</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 22px; font-weight: 600; color: #f3e4c0">3.2</span><span style="font-size: 11px; color: #a89a80">per minute</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 22px; font-weight: 600; color: #f3e4c0">9%</span><span style="font-size: 11px; color: #a89a80">ruined</span></div>
+      </div>
+      <div style="display: flex; align-items: flex-end; gap: 3px; height: 36px" aria-label="Skins per minute, last 24 minutes" role="img">
+        <sc-for list="{{spark}}" as="b" hint-placeholder-count="24">
+          <div style="{{b.style}}"></div>
+        </sc-for>
+      </div>
+      <div style="height: 1px; background: rgba(240,210,150,0.12)"></div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <sc-for list="{{sessionLoot}}" as="l" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 13px">
+            <span style="{{l.icon}}"></span>
+            <span style="flex-grow: 1">{{l.name}}</span>
+            <span style="color: #f3e4c0; font-variant-numeric: tabular-nums">× {{l.count}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; gap: 8px">
+        <button style="flex-grow: 1; height: 32px; border-radius: 7px; border: 1px solid rgba(240,210,150,0.22); background: transparent; color: #d9ccb2; font-size: 12px">Pause</button>
+        <button style="flex-grow: 1; height: 32px; border-radius: 7px; border: 0; background: #e9b265; color: #1b140c; font-size: 12px; font-weight: 600">End session</button>
+      </div>
+    </div>
+    <span style="font-size: 12px; color: #a89a80; line-height: 1.5">Small and movable. Shows itself on your first skin and fades after two idle minutes.</span>
+  </div>
+
+  <div style="flex-grow: 1; height: 720px; box-sizing: border-box; border-radius: 14px; background: #1a1510; box-shadow: 0 0 0 1px rgba(240,210,150,0.16), 0 16px 48px rgba(0,0,0,0.5); display: flex; flex-direction: column; overflow: hidden">
+    <div style="height: 56px; padding: 0 20px; display: flex; align-items: center; gap: 24px; border-bottom: 1px solid rgba(240,210,150,0.1)">
+      <span style="font-family: Cinzel, serif; font-size: 17px; font-weight: 600; letter-spacing: 0.06em; color: #f3e4c0">Fieldnotes</span>
+      <nav style="display: flex; gap: 4px; flex-grow: 1" aria-label="Sections">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+          <a href="#" style="{{t.style}}">{{t.label}}</a>
+        </sc-for>
+      </nav>
+      <span style="font-size: 12px; color: #a89a80">Skinning 265 · All characters</span>
+      <button aria-label="Close" style="width: 32px; height: 32px; border-radius: 7px; border: 0; background: transparent; color: #a89a80; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+    </div>
+
+    <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px; flex-grow: 1; min-height: 0">
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+          <div style="padding: 14px 16px; border-radius: 10px; background: rgba(255,240,210,0.04); box-shadow: 0 0 0 1px rgba(240,210,150,0.08); display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; color: #a89a80">{{k.label}}</span>
+            <span style="font-size: 26px; font-weight: 600; color: #f3e4c0; font-variant-numeric: tabular-nums">{{k.value}}</span>
+            <span style="font-size: 11px; color: #a89a80">{{k.sub}}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; flex-grow: 1; min-height: 0">
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; align-items: baseline; justify-content: space-between">
+            <h2 style="margin: 0; font-size: 14px; font-weight: 600">Best zones for your skill</h2>
+            <span style="font-size: 11px; color: #a89a80">Leather per hour</span>
+          </div>
+          <sc-for list="{{zones}}" as="z" hint-placeholder-count="5">
+            <div style="display: flex; flex-direction: column; gap: 5px">
+              <div style="display: flex; justify-content: space-between; font-size: 13px"><span>{{z.name}}</span><span style="color: #f3e4c0; font-variant-numeric: tabular-nums">{{z.value}}</span></div>
+              <div style="height: 6px; border-radius: 3px; background: rgba(255,240,210,0.06)"><div style="{{z.bar}}"></div></div>
+              <span style="font-size: 11px; color: #a89a80">{{z.note}}</span>
+            </div>
+          </sc-for>
+
+          <h2 style="margin: 8px 0 0; font-size: 14px; font-weight: 600">What you got</h2>
+          <div style="display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px">
+            <sc-for list="{{mix}}" as="m" hint-placeholder-count="5">
+              <div style="{{m.bar}}"></div>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px 14px">
+            <sc-for list="{{mix}}" as="m" hint-placeholder-count="5">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px"><span style="{{m.swatch}}"></span>{{m.name}} <span style="color: #a89a80">{{m.pct}}</span></span>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; min-height: 0">
+          <div style="display: flex; align-items: baseline; justify-content: space-between">
+            <h2 style="margin: 0; font-size: 14px; font-weight: 600">Creatures</h2>
+            <span style="font-size: 11px; color: #a89a80">Stranglethorn Vale</span>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+            <thead>
+              <tr style="color: #a89a80; font-size: 11px; text-align: left">
+                <th style="font-weight: 500; padding: 0 0 8px">Creature</th>
+                <th style="font-weight: 500; padding: 0 0 8px; text-align: right">Skins</th>
+                <th style="font-weight: 500; padding: 0 0 8px 12px">Main drop</th>
+                <th style="font-weight: 500; padding: 0 0 8px; text-align: right">Ruined</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{creatures}}" as="c" hint-placeholder-count="6">
+                <tr style="border-top: 1px solid rgba(240,210,150,0.08)">
+                  <td style="padding: 9px 0"><span style="display: block">{{c.name}}</span><span style="font-size: 11px; color: #a89a80">{{c.meta}}</span></td>
+                  <td style="padding: 9px 0; text-align: right; font-variant-numeric: tabular-nums; color: #f3e4c0">{{c.skins}}</td>
+                  <td style="padding: 9px 0 9px 12px"><span style="display: inline-flex; align-items: center; gap: 6px"><span style="{{c.swatch}}"></span>{{c.drop}}</span></td>
+                  <td style="padding: 9px 0; text-align: right; font-variant-numeric: tabular-nums; color: #c9bba0">{{c.ruined}}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          <a href="Main.dc.html" style="font-size: 12px; text-decoration: none">Show on map  ›</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+var C = { 'Medium Leather': '#f3dfa8', 'Heavy Leather': '#e39a3b', 'Heavy Hide': '#8a3526', 'Raptor Hide': '#3f8f8a', 'Ruined Scraps': '#8f8a80' };
+function sw(k, s) { s = s || 9; return 'display: inline-block; flex-shrink: 0; width: ' + s + 'px; height: ' + s + 'px; border-radius: 50%; background: ' + C[k] + '; box-shadow: 0 0 0 1px rgba(0,0,0,0.5)'; }
+class Component extends DCLogic {
+  renderVals() {
+    var spark = [2, 3, 3, 4, 2, 0, 1, 3, 4, 5, 4, 3, 3, 2, 4, 4, 5, 3, 2, 3, 4, 3, 4, 3];
+    var zones = [
+      ['Stranglethorn Vale', 214, 'Heavy Leather · tigers and panthers'],
+      ['Arathi Highlands', 188, 'Heavy Leather · raptors'],
+      ['Badlands', 171, 'Heavy Leather · buzzards and dragonkin'],
+      ['Swamp of Sorrows', 152, 'Heavy Leather · crocolisks'],
+      ['Desolace', 140, 'Heavy Leather · kodos']
+    ];
+    var mix = [['Heavy Leather', 46], ['Medium Leather', 29], ['Raptor Hide', 8], ['Heavy Hide', 4], ['Ruined Scraps', 13]];
+    return {
+      spark: spark.map(function (v) {
+        return { style: 'flex: 1 1 0; height: ' + Math.max(2, v * 7) + 'px; border-radius: 2px; background: ' + (v ? '#e9b265' : 'rgba(255,240,210,0.12)') };
+      }),
+      sessionLoot: [['Heavy Leather', 41], ['Medium Leather', 22], ['Heavy Hide', 3], ['Ruined Scraps', 7]].map(function (l) {
+        return { name: l[0], count: l[1], icon: 'width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0; background: ' + C[l[0]] + '; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), 0 0 0 1px rgba(240,210,150,0.2)' };
+      }),
+      tabs: ['Overview', 'Zones', 'Creatures', 'Share'].map(function (t, i) {
+        return { label: t, style: 'padding: 8px 12px; border-radius: 7px; font-size: 13px; font-weight: 500; text-decoration: none; ' + (i === 0 ? 'background: rgba(233,178,101,0.14); color: #f3e4c0' : 'color: #a89a80') };
+      }),
+      kpis: [
+        { label: 'Skins', value: '1,284', sub: 'All time, 3 characters' },
+        { label: 'Skins per minute', value: '3.2', sub: 'This session · best 4.1' },
+        { label: 'Leather per hour', value: '214', sub: 'This session' },
+        { label: 'Ruined', value: '9%', sub: 'Lower at higher skill' }
+      ],
+      zones: zones.map(function (z) {
+        return { name: z[0], value: z[1], note: z[2], bar: 'height: 6px; border-radius: 3px; background: #e9b265; width: ' + Math.round(z[1] / zones[0][1] * 100) + '%' };
+      }),
+      mix: mix.map(function (m) {
+        return { name: m[0], pct: m[1] + '%', swatch: sw(m[0]), bar: 'flex: ' + m[1] + ' 1 0; background: ' + C[m[0]] };
+      }),
+      creatures: [
+        ['Stranglethorn Tiger', 'Beast · 32-34', 186, 'Medium Leather', '11%'],
+        ['Shadowmaw Panther', 'Beast · 38-40', 142, 'Heavy Leather', '8%'],
+        ['Lashtail Raptor', 'Beast · 34-35', 121, 'Raptor Hide', '10%'],
+        ['Jungle Stalker', 'Beast · 40-41', 96, 'Heavy Leather', '7%'],
+        ['Young Panther', 'Beast · 32-33', 64, 'Medium Leather', '14%'],
+        ['Elder Saltwater Crocolisk', 'Beast · 43-44', 38, 'Heavy Leather', '6%']
+      ].map(function (c) { return { name: c[0], meta: c[1], skins: c[2], drop: c[3], ruined: c[4], swatch: sw(c[3], 8) }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

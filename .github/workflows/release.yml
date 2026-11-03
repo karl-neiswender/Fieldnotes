@@ -1,0 +1,23 @@
+# Publishes a new version to CurseForge whenever a tag like v2.1.1 is
+# pushed. Needs the repository secret CF_API_KEY (a CurseForge API token)
+# and "## X-Curse-Project-ID: <id>" in Fieldnotes.toc.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: BigWigsMods/packager@v2

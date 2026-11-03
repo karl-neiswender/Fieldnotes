@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fieldnotes share and import</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#e9c27a}a:hover{color:#f6dca6}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,textarea:focus-visible{outline:2px solid #f0c674;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; padding: 40px; background: #120f0b; font-family: Inter, system-ui, sans-serif; color: #efe6d4; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; align-items: start">
+
+  <section style="box-sizing: border-box; border-radius: 14px; background: #1a1510; box-shadow: 0 0 0 1px rgba(240,210,150,0.16), 0 16px 48px rgba(0,0,0,0.5); padding: 24px; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0; font-family: Cinzel, serif; font-size: 20px; font-weight: 600; letter-spacing: 0.04em; color: #f3e4c0">Share your notes</h2>
+      <p style="margin: 0; font-size: 13px; color: #c9bba0; line-height: 1.5">Copy one line of text and paste it anywhere: the community form, Discord, or a friend’s Import box.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89a80">What to share</span>
+      <div role="radiogroup" aria-label="What to share" style="display: flex; flex-direction: column; gap: 6px">
+        <sc-for list="{{scopes}}" as="s" hint-placeholder-count="3">
+          <button role="radio" aria-checked="{{s.checked}}" onClick="{{s.pick}}" style="{{s.style}}">
+            <span style="{{s.dot}}"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px; text-align: left; flex-grow: 1">
+              <span style="font-size: 14px; font-weight: 500">{{s.label}}</span>
+              <span style="font-size: 12px; color: #a89a80">{{s.sub}}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <label for="share-text" style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89a80">Your share text</label>
+      <textarea id="share-text" readonly="readonly" value="{{shareText}}" style="height: 76px; resize: none; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(233,178,101,0.5); background: rgba(233,178,101,0.07); color: #f3e4c0; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; word-break: break-all"></textarea>
+      <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #c9bba0">
+        <span>Selected. Press <kbd style="padding: 1px 6px; border-radius: 4px; background: rgba(255,240,210,0.1); font-family: inherit">Ctrl</kbd> + <kbd style="padding: 1px 6px; border-radius: 4px; background: rgba(255,240,210,0.1); font-family: inherit">C</kbd> to copy</span>
+        <span style="color: #a89a80">{{sizeNote}}</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: rgba(127,196,138,0.08); font-size: 12px; color: #c9e3cd">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
+      No character names, realms or times of day. Just where, what and how much.
+    </div>
+
+    <div style="display: flex; gap: 10px">
+      <a href="#" style="flex-grow: 1; height: 40px; border-radius: 8px; background: #e9b265; color: #1b140c; font-size: 13px; font-weight: 600; text-decoration: none; display: flex; align-items: center; justify-content: center">Get the community form link</a>
+      <button style="height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid rgba(240,210,150,0.22); background: transparent; color: #d9ccb2; font-size: 13px">Done</button>
+    </div>
+  </section>
+
+  <section style="box-sizing: border-box; border-radius: 14px; background: #1a1510; box-shadow: 0 0 0 1px rgba(240,210,150,0.16), 0 16px 48px rgba(0,0,0,0.5); padding: 24px; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0; font-family: Cinzel, serif; font-size: 20px; font-weight: 600; letter-spacing: 0.04em; color: #f3e4c0">Import notes</h2>
+      <p style="margin: 0; font-size: 13px; color: #c9bba0; line-height: 1.5">Paste someone’s share text. It joins your Community layer and never mixes into your own numbers.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <label for="import-text" style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89a80">Paste here</label>
+      <textarea id="import-text" value="{{importText}}" style="height: 76px; resize: none; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(240,210,150,0.22); background: rgba(255,240,210,0.04); color: #efe6d4; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; word-break: break-all"></textarea>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 10px; background: rgba(255,240,210,0.04); box-shadow: 0 0 0 1px rgba(240,210,150,0.08)">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #c9e3cd">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>
+        Looks good
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 22px; font-weight: 600; color: #f3e4c0">2,318</span><span style="font-size: 11px; color: #a89a80">skins</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 22px; font-weight: 600; color: #f3e4c0">6</span><span style="font-size: 11px; color: #a89a80">zones</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 22px; font-weight: 600; color: #f3e4c0">412</span><span style="font-size: 11px; color: #a89a80">new to you</span></div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px">
+        <sc-for list="{{zoneChips}}" as="z" hint-placeholder-count="6">
+          <span style="padding: 4px 9px; border-radius: 12px; background: rgba(255,240,210,0.06); font-size: 12px; color: #c9bba0">{{z}}</span>
+        </sc-for>
+      </div>
+      <span style="font-size: 12px; color: #a89a80">Already have some of these? Duplicates are skipped.</span>
+    </div>
+
+    <div style="display: flex; gap: 10px">
+      <button style="flex-grow: 1; height: 40px; border-radius: 8px; border: 0; background: #e9b265; color: #1b140c; font-size: 13px; font-weight: 600">Add to Community</button>
+      <button style="height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid rgba(240,210,150,0.22); background: transparent; color: #d9ccb2; font-size: 13px">Cancel</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+var SCOPES = [
+  { key: 'zone', label: 'This zone', sub: 'Stranglethorn Vale · 520 skins', size: 'Short, about 2,000 characters', text: '!FN1!STV!eJyNkk1Ow0AMhe9yTpAV2qqbqrAIXSCKUNmgLtyJpzMkM5Ox0yGq+u44SaFFiAW78fef3/OMn5rYqF0tDHfBd2gSZ8gnm4KXx7G9Uo3gOP6ajb2ZAC1fMuKrIvBR4UUT8RBdHVV2Q2rClyFzfFcY...' },
+  { key: 'skinning', label: 'All my skinning', sub: '3 characters · 1,284 skins · 6 zones', size: 'About 6,000 characters', text: '!FN1!SKN!eJydlVtv2zAMhf+K4ecuSHPdbS9Diy1d0QIrthRDHwqKoi3OkqiKdJz13w9y0nZrl2IP20sB8nyHPDzSaq9GlGx1w7oKbxxrzZfJp4xSFxQu+h/r+UWoTJm4iLf/LiAxfp3HQ2iJDeE5a2W7kItp1Rt4jGFxy...' },
+  { key: 'all', label: 'Everything', sub: 'Skinning now; mining and herbs later', size: 'About 6,000 characters', text: '!FN1!ALL!eJydlVtv2zAMhf+K4ecuSHPdbS9Diy1d0QIrthRDHwqKoi3OkqiKdJz13w9y0nZrl2IP20sB8nyHPDzSaq9GlGx1w7oKbxxrzZfJp4xSFxQu+h/r+UWoTJm4iLf/LiAxfp3HQ2iJDeE5a2W7kItp1Rt4jGFxy...' }
+];
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { scope: 'zone' }; }
+  renderVals() {
+    var self = this, st = this.state, cur = SCOPES.filter(function (s) { return s.key === st.scope; })[0];
+    return {
+      scopes: SCOPES.map(function (s) {
+        var on = s.key === st.scope;
+        return {
+          label: s.label, sub: s.sub, checked: on ? 'true' : 'false',
+          pick: function () { self.setState({ scope: s.key }); },
+          style: 'display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 9px; color: #efe6d4; ' + (on ? 'border: 1px solid rgba(233,178,101,0.6); background: rgba(233,178,101,0.1)' : 'border: 1px solid rgba(240,210,150,0.14); background: transparent'),
+          dot: 'width: 16px; height: 16px; flex-shrink: 0; box-sizing: border-box; border-radius: 50%; ' + (on ? 'border: 5px solid #e9b265; background: #1b140c' : 'border: 2px solid #6d604c')
+        };
+      }),
+      shareText: cur.text,
+      sizeNote: cur.size,
+      importText: '!FN1!SKN!eJzFl0tv2zAMhf+K4XNWOGnTtd2lWw/rgBXdgK4dUhQUTVuaZVETJbf+++OkTR9rNiyHXQSRP+fwkRqtdylJx9bULbtRv...',
+      zoneChips: ['Stranglethorn Vale', 'Arathi Highlands', 'Badlands', 'Swamp of Sorrows', 'Desolace', 'Feralas']
+    };
+  }
+}
+</script>
+</body>
+</html>

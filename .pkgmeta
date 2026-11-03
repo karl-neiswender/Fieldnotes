@@ -1,0 +1,19 @@
+# BigWigs packager settings: builds Fieldnotes-<version>.zip
+# and uploads it to CurseForge when a version tag is pushed.
+package-as: Fieldnotes
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - README.md
+  - .github
+  - .gitignore
+  - .pkgmeta
+  - ROADMAP.md
+  - CLAUDE.md
+  - AGENTS.md
+  - tools
+  - reports
+  - design

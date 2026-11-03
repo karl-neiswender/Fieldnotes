@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fieldnotes world map overlay</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#e9c27a}a:hover{color:#f6dca6}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid #f0c674;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #120f0b; font-family: Inter, system-ui, sans-serif; color: #efe6d4; position: relative; overflow: hidden">
+
+  <div style="height: 64px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between">
+    <div style="display: flex; align-items: baseline; gap: 14px">
+      <h1 style="margin: 0; font-family: Cinzel, serif; font-weight: 600; font-size: 22px; letter-spacing: 0.04em; color: #f3e4c0">Stranglethorn Vale</h1>
+      <span style="font-size: 13px; color: #a89a80">Eastern Kingdoms</span>
+    </div>
+    <button onClick="{{toggleOverlay}}" aria-pressed="{{overlayPressed}}" style="{{toggleStyle}}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"></path></svg>
+      <span>Fieldnotes</span>
+      <span style="{{switchTrack}}"><span style="{{switchKnob}}"></span></span>
+    </button>
+  </div>
+
+  <div style="position: absolute; left: 24px; top: 64px; width: 1232px; height: 704px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(240,210,150,0.16), 0 12px 40px rgba(0,0,0,0.5)">
+
+    <svg width="1232" height="704" viewBox="0 0 1232 704" style="position: absolute; left: 0; top: 0" aria-hidden="true">
+      <defs>
+        <radialGradient id="land" cx="55%" cy="45%" r="75%">
+          <stop offset="0%" stop-color="#d4c49c"></stop>
+          <stop offset="100%" stop-color="#b6a47c"></stop>
+        </radialGradient>
+        <linearGradient id="sea" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#4f6a6e"></stop>
+          <stop offset="100%" stop-color="#6e8a8a"></stop>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="1232" height="704" fill="url(#land)"></rect>
+      <path d="{{seaPath}}" fill="url(#sea)"></path>
+      <path d="{{coastPath}}" fill="none" stroke="#8d7b58" stroke-width="2"></path>
+      <g fill="none" stroke="#a8956d" stroke-width="1.2" opacity="0.7">
+        <ellipse cx="880" cy="150" rx="170" ry="90"></ellipse>
+        <ellipse cx="880" cy="150" rx="110" ry="55"></ellipse>
+        <ellipse cx="760" cy="430" rx="150" ry="80"></ellipse>
+        <ellipse cx="760" cy="430" rx="85" ry="42"></ellipse>
+        <ellipse cx="520" cy="560" rx="120" ry="60"></ellipse>
+      </g>
+      <path d="M1232 250 C 1080 270, 980 330, 860 320 S 600 260, 470 330 S 300 420, 200 440" fill="none" stroke="#6e8a8a" stroke-width="7" stroke-linecap="round" opacity="0.85"></path>
+      <path d="M600 0 C 590 120, 560 200, 520 300 S 470 470, 520 560 S 420 660, 400 704" fill="none" stroke="#8a7552" stroke-width="2" stroke-dasharray="6 6"></path>
+    </svg>
+
+    <div style="{{muteStyle}}"></div>
+
+    <sc-if value="{{showHeat}}" hint-placeholder-val="{{ true }}">
+      <div style="{{heatLayerStyle}}">
+        <sc-for list="{{cells}}" as="c" hint-placeholder-count="40">
+          <div style="{{c.style}}"></div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{showPoints}}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 0">
+        <sc-for list="{{dots}}" as="d" hint-placeholder-count="40">
+          <div style="{{d.style}}"></div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-for list="{{labels}}" as="l" hint-placeholder-count="6">
+      <div style="{{l.style}}">{{l.name}}</div>
+    </sc-for>
+
+    <sc-if value="{{showCallout}}" hint-placeholder-val="{{ true }}">
+      <div style="{{callout.ringStyle}}"></div>
+      <div style="{{callout.cardStyle}}">
+        <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #e9b265">Hot spot</div>
+        <div style="font-size: 15px; font-weight: 600; margin-top: 4px">{{callout.count}} skins here</div>
+        <div style="font-size: 12px; color: #c9bba0; margin-top: 6px; line-height: 1.5">{{callout.creatures}}</div>
+        <div style="font-size: 12px; color: #c9bba0; line-height: 1.5">{{callout.loot}}</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{overlayOn}}" hint-placeholder-val="{{ true }}">
+      <div style="position: absolute; left: 16px; top: 16px; width: 316px; box-sizing: border-box; padding: 16px; border-radius: 12px; background: rgba(18,14,10,0.88); box-shadow: 0 0 0 1px rgba(240,210,150,0.14), 0 8px 24px rgba(0,0,0,0.35); display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <span style="font-family: Cinzel, serif; font-size: 15px; font-weight: 600; letter-spacing: 0.06em; color: #f3e4c0">Fieldnotes</span>
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #c9bba0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20c6 0 10-4 12-10l4-6-6 4C8 10 4 14 4 20z"></path></svg>
+            Skinning
+          </span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89a80">View</span>
+          <div role="group" aria-label="View" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 9px; background: rgba(255,240,210,0.06)">
+            <sc-for list="{{modes}}" as="m" hint-placeholder-count="2">
+              <button onClick="{{m.pick}}" aria-pressed="{{m.pressed}}" style="{{m.style}}">{{m.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89a80">Show</span>
+          <div role="group" aria-label="Show" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 9px; background: rgba(255,240,210,0.06)">
+            <sc-for list="{{shows}}" as="s" hint-placeholder-count="3">
+              <button onClick="{{s.pick}}" aria-pressed="{{s.pressed}}" style="{{s.style}}">{{s.label}}</button>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; color: #a89a80">{{showNote}}</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89a80">Leather</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{leathers}}" as="f" hint-placeholder-count="6">
+              <button onClick="{{f.pick}}" aria-pressed="{{f.pressed}}" style="{{f.style}}"><span style="{{f.swatch}}"></span>{{f.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="position: absolute; left: 16px; bottom: 16px; box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(18,14,10,0.88); box-shadow: 0 0 0 1px rgba(240,210,150,0.14); display: flex; flex-direction: column; gap: 8px">
+        <sc-if value="{{showHeat}}" hint-placeholder-val="{{ true }}">
+          <span style="font-size: 12px; color: #c9bba0">Skins per area</span>
+          <div style="width: 220px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #f3e2a6, #eeb35c 30%, #de7a3a 55%, #b3402b 80%, #6a1c22)"></div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #a89a80"><span>Fewer</span><span>More</span></div>
+        </sc-if>
+        <sc-if value="{{showPoints}}" hint-placeholder-val="{{ false }}">
+          <span style="font-size: 12px; color: #c9bba0">One dot per skin</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px 14px; max-width: 340px">
+            <sc-for list="{{legend}}" as="g" hint-placeholder-count="5">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #efe6d4"><span style="{{g.swatch}}"></span>{{g.label}}</span>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="position: absolute; right: 16px; bottom: 16px; width: 268px; box-sizing: border-box; padding: 14px 16px; border-radius: 10px; background: rgba(18,14,10,0.88); box-shadow: 0 0 0 1px rgba(240,210,150,0.14); display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <span style="font-size: 26px; font-weight: 600; color: #f3e4c0">{{total}}</span>
+          <span style="font-size: 12px; color: #a89a80">skins in this zone</span>
+        </div>
+        <div style="height: 1px; background: rgba(240,210,150,0.12)"></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12px"><span style="color: #a89a80">Best spot</span><span style="text-align: right">{{bestSpot}}</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12px"><span style="color: #a89a80">Top creature</span><span style="text-align: right">{{topCreature}}</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12px"><span style="color: #a89a80">Top leather</span><span style="text-align: right">{{topLeather}}</span></div>
+        <a href="Stats.dc.html" style="font-size: 12px; text-decoration: none; margin-top: 2px">Open stats  ›</a>
+      </div>
+    </sc-if>
+
+    <div style="position: absolute; right: 16px; top: 16px; padding: 4px 8px; border-radius: 6px; background: rgba(18,14,10,0.7); font-size: 11px; color: #a89a80">Sample data</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mute":{"editor":"range","default":0.3,"min":0,"max":0.7,"step":0.05,"section":"Map"},"soft":{"editor":"boolean","default":true,"section":"Map"},"$preview":{"width":1280,"height":800}}'>
+var W = 1232, H = 704, CELL = 22, COLS = 56, ROWS = 32;
+var RAMP = [[0, [243,226,166]], [0.3, [238,179,92]], [0.55, [222,122,58]], [0.8, [179,64,43]], [1, [106,28,34]]];
+var LEATHER = {
+  'Medium Leather': '#f3dfa8',
+  'Heavy Leather': '#e39a3b',
+  'Heavy Hide': '#8a3526',
+  'Raptor Hide': '#3f8f8a',
+  'Ruined Scraps': '#8f8a80'
+};
+var CLUSTERS = [
+  { x: 0.47, y: 0.22, sx: 0.06, sy: 0.05, w: 1.0, who: 'Stranglethorn Tiger', mix: { 'Medium Leather': 5, 'Heavy Leather': 3, 'Ruined Scraps': 1 } },
+  { x: 0.33, y: 0.44, sx: 0.05, sy: 0.06, w: 0.9, who: 'Lashtail Raptor', mix: { 'Raptor Hide': 3, 'Medium Leather': 4, 'Ruined Scraps': 1 } },
+  { x: 0.60, y: 0.32, sx: 0.05, sy: 0.04, w: 0.6, who: 'Young Panther', mix: { 'Medium Leather': 6, 'Ruined Scraps': 2 } },
+  { x: 0.72, y: 0.54, sx: 0.06, sy: 0.05, w: 0.8, who: 'Shadowmaw Panther', mix: { 'Heavy Leather': 5, 'Heavy Hide': 1, 'Ruined Scraps': 1 } },
+  { x: 0.21, y: 0.66, sx: 0.03, sy: 0.08, w: 0.6, who: 'Elder Saltwater Crocolisk', mix: { 'Heavy Leather': 4, 'Heavy Hide': 1 } },
+  { x: 0.84, y: 0.30, sx: 0.05, sy: 0.07, w: 0.9, who: 'Jungle Stalker', mix: { 'Heavy Leather': 4, 'Raptor Hide': 2, 'Heavy Hide': 1 } },
+  { x: 0.55, y: 0.72, sx: 0.07, sy: 0.05, w: 0.7, who: 'Elder Shadowmaw Panther', mix: { 'Heavy Leather': 5, 'Heavy Hide': 2 } }
+];
+var SHOW = {
+  me: { n: 150, k: 3, seed: 11, note: 'This character only' },
+  account: { n: 520, k: 5, seed: 23, note: 'Every character on this account' },
+  community: { n: 2600, k: 7, seed: 37, note: 'Everyone who has shared, merged' }
+};
+var PLACES = [
+  { name: 'Kurzen’s Compound', x: 0.55, y: 0.08 },
+  { name: 'Nesingwary’s Expedition', x: 0.44, y: 0.18 },
+  { name: 'Zul’Gurub', x: 0.86, y: 0.14 },
+  { name: 'Grom’gol Base Camp', x: 0.28, y: 0.36 },
+  { name: 'Ruins of Zul’Mamwe', x: 0.74, y: 0.44 },
+  { name: 'Gurubashi Arena', x: 0.47, y: 0.60 },
+  { name: 'Booty Bay', x: 0.31, y: 0.92 }
+];
+function coast(y) { return 0.10 + 0.045 * Math.sin(y * 7.5 + 1) + (y > 0.8 ? (y - 0.8) * 0.9 : 0); }
+function rng(seed) {
+  var s = seed >>> 0;
+  return function () {
+    s = (s + 0x6D2B79F5) >>> 0;
+    var t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function pickWeighted(r, obj) {
+  var keys = Object.keys(obj), sum = 0, i;
+  for (i = 0; i < keys.length; i++) sum += obj[keys[i]];
+  var v = r() * sum;
+  for (i = 0; i < keys.length; i++) { v -= obj[keys[i]]; if (v <= 0) return keys[i]; }
+  return keys[keys.length - 1];
+}
+function ramp(v) {
+  for (var i = 1; i < RAMP.length; i++) {
+    if (v <= RAMP[i][0]) {
+      var a = RAMP[i - 1], b = RAMP[i], t = (v - a[0]) / (b[0] - a[0]);
+      return 'rgb(' + [0, 1, 2].map(function (j) { return Math.round(a[1][j] + (b[1][j] - a[1][j]) * t); }).join(',') + ')';
+    }
+  }
+  return 'rgb(106,28,34)';
+}
+var cache = {};
+function build(show) {
+  if (cache[show]) return cache[show];
+  var cfg = SHOW[show], r = rng(cfg.seed), pts = [], clusters = CLUSTERS.slice(0, cfg.k);
+  var wsum = clusters.reduce(function (s, c) { return s + c.w; }, 0);
+  while (pts.length < cfg.n) {
+    var v = r() * wsum, c = clusters[0];
+    for (var i = 0; i < clusters.length; i++) { v -= clusters[i].w; if (v <= 0) { c = clusters[i]; break; } }
+    var u1 = Math.max(r(), 1e-6), u2 = r();
+    var g1 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    var g2 = Math.sqrt(-2 * Math.log(u1)) * Math.sin(2 * Math.PI * u2);
+    var x = c.x + g1 * c.sx, y = c.y + g2 * c.sy;
+    if (x < coast(y) + 0.015 || x > 0.98 || y < 0.03 || y > 0.97) continue;
+    pts.push({ x: x, y: y, who: c.who, leather: pickWeighted(r, c.mix) });
+  }
+  cache[show] = pts;
+  return pts;
+}
+function heat(pts) {
+  var g = [], r, c, i;
+  for (r = 0; r < ROWS; r++) { g.push([]); for (c = 0; c < COLS; c++) g[r].push(0); }
+  pts.forEach(function (p) {
+    var cc = Math.min(COLS - 1, Math.floor(p.x * COLS)), rr = Math.min(ROWS - 1, Math.floor(p.y * ROWS));
+    g[rr][cc] += 1;
+  });
+  var K = [[1, 2, 1], [2, 4, 2], [1, 2, 1]];
+  for (var pass = 0; pass < 2; pass++) {
+    var n = [];
+    for (r = 0; r < ROWS; r++) {
+      n.push([]);
+      for (c = 0; c < COLS; c++) {
+        var s = 0;
+        for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
+          var rr2 = r + dr, cc2 = c + dc;
+          if (rr2 >= 0 && rr2 < ROWS && cc2 >= 0 && cc2 < COLS) s += g[rr2][cc2] * K[dr + 1][dc + 1];
+        }
+        n[r].push(s / 16);
+      }
+    }
+    g = n;
+  }
+  var max = 0, hot = { r: 0, c: 0 };
+  for (r = 0; r < ROWS; r++) for (c = 0; c < COLS; c++) if (g[r][c] > max) { max = g[r][c]; hot = { r: r, c: c }; }
+  return { g: g, max: max, hot: hot };
+}
+function top(counts, n) {
+  return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, n);
+}
+function nearestPlace(x, y) {
+  var best = PLACES[0], bd = 9;
+  PLACES.forEach(function (p) { var d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y); if (d < bd) { bd = d; best = p; } });
+  return best.name;
+}
+function seg(on) {
+  return 'border: 0; border-radius: 6px; padding: 8px 6px; font-size: 13px; font-weight: 500; ' +
+    (on ? 'background: #e9b265; color: #1b140c' : 'background: transparent; color: #d9ccb2');
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'heat', show: 'account', leather: 'All', overlay: true };
+  }
+  renderVals() {
+    var self = this, st = this.state;
+    var mute = this.props.mute ?? 0.3, soft = this.props.soft ?? true;
+    var all = build(st.show);
+    var pts = st.leather === 'All' ? all : all.filter(function (p) { return p.leather === st.leather; });
+    var h = heat(pts);
+
+    var cells = [];
+    if (h.max > 0) {
+      for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
+        var v = h.g[r][c] / h.max;
+        if (v < 0.06) continue;
+        cells.push({ style: 'position: absolute; left: ' + (c * CELL) + 'px; top: ' + (r * CELL) + 'px; width: ' + CELL + 'px; height: ' + CELL + 'px; background: ' + ramp(v) + '; opacity: ' + (0.35 + 0.6 * v).toFixed(2) + (soft ? '' : '; box-shadow: inset 0 0 0 1px rgba(18,14,10,0.25)') });
+      }
+    }
+    var dots = pts.map(function (p) {
+      var sz = st.show === 'community' ? 5 : 7;
+      return { style: 'position: absolute; left: ' + (p.x * W - sz / 2).toFixed(1) + 'px; top: ' + (p.y * H - sz / 2).toFixed(1) + 'px; width: ' + sz + 'px; height: ' + sz + 'px; border-radius: 50%; background: ' + LEATHER[p.leather] + '; box-shadow: 0 0 0 1px rgba(20,14,8,0.75)' };
+    });
+
+    var hx = (h.hot.c + 0.5) / COLS, hy = (h.hot.r + 0.5) / ROWS, near = { who: {}, loot: {} }, nearCount = 0;
+    pts.forEach(function (p) {
+      if (Math.abs(p.x - hx) < 2.5 / COLS && Math.abs(p.y - hy) < 2.5 / ROWS) {
+        nearCount++;
+        near.who[p.who] = (near.who[p.who] || 0) + 1;
+        near.loot[p.leather] = (near.loot[p.leather] || 0) + 1;
+      }
+    });
+    var whoAll = {}, lootAll = {};
+    pts.forEach(function (p) { whoAll[p.who] = (whoAll[p.who] || 0) + 1; if (p.leather !== 'Ruined Scraps') lootAll[p.leather] = (lootAll[p.leather] || 0) + 1; });
+    var cx = hx * W, cy = hy * H, cardLeft = cx + 28 + 236 > W - 300 ? cx - 28 - 236 : cx + 28;
+
+    var overlayOn = st.overlay;
+    var labels = PLACES.map(function (p) {
+      return { name: p.name, style: 'position: absolute; left: ' + (p.x * W) + 'px; top: ' + (p.y * H) + 'px; transform: translate(-50%, -50%); font-family: Cinzel, serif; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #2a2015; text-shadow: 0 0 3px rgba(230,215,180,0.9), 0 0 8px rgba(230,215,180,0.7); white-space: nowrap; pointer-events: none' };
+    });
+
+    return {
+      seaPath: (function () {
+        var d = 'M0 0 ';
+        for (var i = 0; i <= 40; i++) { var y = i / 40; d += 'L' + (coast(y) * W).toFixed(1) + ' ' + (y * H).toFixed(1) + ' '; }
+        return d + 'L0 ' + H + ' Z';
+      })(),
+      coastPath: (function () {
+        var d = '';
+        for (var i = 0; i <= 40; i++) { var y = i / 40; d += (i ? 'L' : 'M') + (coast(y) * W).toFixed(1) + ' ' + (y * H).toFixed(1) + ' '; }
+        return d;
+      })(),
+      muteStyle: 'position: absolute; inset: 0; background: #15110c; pointer-events: none; opacity: ' + (overlayOn ? mute : 0),
+      heatLayerStyle: 'position: absolute; inset: 0; mix-blend-mode: multiply;' + (soft ? ' filter: blur(7px);' : ''),
+      overlayOn: overlayOn,
+      overlayPressed: overlayOn ? 'true' : 'false',
+      showHeat: overlayOn && st.mode === 'heat',
+      showPoints: overlayOn && st.mode === 'points',
+      showCallout: overlayOn && st.mode === 'heat' && nearCount > 0,
+      cells: cells,
+      dots: dots,
+      labels: labels,
+      callout: {
+        count: nearCount,
+        creatures: top(near.who, 2).join(', '),
+        loot: top(near.loot, 2).join(' · '),
+        ringStyle: 'position: absolute; left: ' + (cx - 22) + 'px; top: ' + (cy - 22) + 'px; width: 44px; height: 44px; border-radius: 50%; box-shadow: 0 0 0 2px #fff4dc, 0 0 0 4px rgba(18,14,10,0.6); pointer-events: none',
+        cardStyle: 'position: absolute; left: ' + cardLeft + 'px; top: ' + (cy - 44) + 'px; width: 236px; box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(18,14,10,0.92); box-shadow: 0 0 0 1px rgba(240,210,150,0.18), 0 8px 20px rgba(0,0,0,0.4)'
+      },
+      toggleOverlay: function () { self.setState({ overlay: !st.overlay }); },
+      toggleStyle: 'display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px 0 14px; border-radius: 20px; border: 1px solid ' + (overlayOn ? 'rgba(233,178,101,0.6)' : 'rgba(240,210,150,0.2)') + '; background: ' + (overlayOn ? 'rgba(233,178,101,0.14)' : 'transparent') + '; color: ' + (overlayOn ? '#f3e4c0' : '#a89a80') + '; font-size: 14px; font-weight: 500',
+      switchTrack: 'position: relative; width: 34px; height: 20px; border-radius: 10px; background: ' + (overlayOn ? '#e9b265' : '#3a3128'),
+      switchKnob: 'position: absolute; top: 3px; left: ' + (overlayOn ? 17 : 3) + 'px; width: 14px; height: 14px; border-radius: 50%; background: ' + (overlayOn ? '#1b140c' : '#a89a80'),
+      modes: [['heat', 'Heat map'], ['points', 'Points']].map(function (m) {
+        var on = st.mode === m[0];
+        return { label: m[1], pressed: on ? 'true' : 'false', style: seg(on), pick: function () { self.setState({ mode: m[0] }); } };
+      }),
+      shows: [['me', 'Me'], ['account', 'My Account'], ['community', 'Community']].map(function (m) {
+        var on = st.show === m[0];
+        return { label: m[1], pressed: on ? 'true' : 'false', style: seg(on), pick: function () { self.setState({ show: m[0] }); } };
+      }),
+      showNote: SHOW[st.show].note,
+      leathers: ['All'].concat(Object.keys(LEATHER)).map(function (k) {
+        var on = st.leather === k;
+        return {
+          label: k, pressed: on ? 'true' : 'false',
+          pick: function () { self.setState({ leather: k }); },
+          swatch: k === 'All' ? 'display: none' : 'display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: ' + LEATHER[k] + '; box-shadow: 0 0 0 1px rgba(0,0,0,0.5)',
+          style: 'display: inline-flex; align-items: center; border-radius: 14px; padding: 6px 10px; font-size: 12px; font-weight: 500; ' + (on ? 'border: 1px solid #e9b265; background: rgba(233,178,101,0.16); color: #f3e4c0' : 'border: 1px solid rgba(240,210,150,0.18); background: transparent; color: #c9bba0')
+        };
+      }),
+      legend: Object.keys(LEATHER).map(function (k) {
+        return { label: k, swatch: 'display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: ' + LEATHER[k] + '; box-shadow: 0 0 0 1px rgba(0,0,0,0.6)' };
+      }),
+      total: pts.length.toLocaleString('en-US'),
+      bestSpot: nearCount ? nearestPlace(hx, hy) : 'Not enough data',
+      topCreature: top(whoAll, 1)[0] || '-',
+      topLeather: top(lootAll, 1)[0] || '-'
+    };
+  }
+}
+</script>
+</body>
+</html>
