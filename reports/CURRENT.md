@@ -18,8 +18,10 @@
 - v0.4.0: Session.lua (session tracker), Panel.lua (stats window, /fn), map settings behind
   the gear (leather, 5 color schemes, Heat by, When, Strength, Spread, Thin areas), Spotlight
   view, continent/world zone badges (reviewed in game on Era 2026-11-03). Checks pass (21).
-- Not yet seen in game: the stats window and session tracker; real skinning; Forever client.
+- Stats window and session tracker reviewed in game on Era (2026-11-03): taller zone rows,
+  click a zone for its creatures, sample-data note in the header.
+- Not yet tested: real skinning (Karl's characters are too low); Forever client.
 - Known: on Kalimdor the Moonglade badge sits under the map bar.
 - Ideas queued (Atlassian heatmap guide): comparison view (diverging Me vs Community),
   "when you skin" day x hour grid in stats, counts beside hot spot pins, stepped legend.
-- Next: Karl reviews the stats window in game; then sharing (share strings, import).
+- Next: sharing (share strings, import into the Community layer).

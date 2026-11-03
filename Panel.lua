@@ -14,7 +14,8 @@ local STYLE = St.STYLE
 local RUINED = 2934
 local GAP = 300 -- seconds between skins that split two sessions
 local TAIL = 20 -- seconds a session's last skin is counted as taking
-local W, H = 720, 470
+local W, H = 720, 500
+local ROW = 48 -- one best-zone row: name, bar, note, then a gap before the next
 local PAD = 16
 local ZONE_ROWS, CREATURE_ROWS, MIX = 5, 7, 5
 
@@ -217,17 +218,39 @@ local function Build()
     ui.zonesCap:SetText("Leather per hour")
     for i = 1, ZONE_ROWS do
         local row = {}
-        local y = -22 - (i - 1) * 40
+        local y = -22 - (i - 1) * ROW
+        -- the whole row is a button: click to see that zone's creatures on the right
+        row.hit = CreateFrame("Button", nil, left)
+        row.hit:SetPoint("TOPLEFT", -6, y + 4)
+        row.hit:SetSize(colW + 12, ROW - 4)
+        row.hl = row.hit:CreateTexture(nil, "BACKGROUND")
+        row.hl:SetAllPoints()
+        row.hl:SetColorTexture(1, 0.94, 0.82, 0.06)
+        row.hl:Hide()
+        row.hit:SetScript("OnEnter", function(self)
+            row.hl:Show()
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Click to see this zone's creatures", 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        row.hit:SetScript("OnLeave", function()
+            if not row.picked then row.hl:Hide() end
+            GameTooltip:Hide()
+        end)
+        row.hit:SetScript("OnClick", function()
+            ui.pickedZone = row.map
+            FN.RefreshStats()
+        end)
         row.name = St.Text(left, 11, C.TEXT)
         row.name:SetPoint("TOPLEFT", 0, y)
         row.value = St.Text(left, 11, C.TITLE)
         row.value:SetPoint("TOPRIGHT", 0, y)
         row.value:SetJustifyH("RIGHT")
         row.bar = St.Bar(left, 6)
-        row.bar:SetPoint("TOPLEFT", 0, y - 16)
-        row.bar:SetPoint("TOPRIGHT", 0, y - 16)
+        row.bar:SetPoint("TOPLEFT", 0, y - 17)
+        row.bar:SetPoint("TOPRIGHT", 0, y - 17)
         row.note = St.Text(left, 10, C.SUBTEXT)
-        row.note:SetPoint("TOPLEFT", 0, y - 26)
+        row.note:SetPoint("TOPLEFT", 0, y - 28)
         row.note:SetWidth(colW)
         zoneRows[i] = row
     end
@@ -235,7 +258,7 @@ local function Build()
     ui.zonesEmpty:SetPoint("TOPLEFT", 0, -24)
     ui.zonesEmpty:SetWidth(colW)
 
-    local mixY = -22 - ZONE_ROWS * 40 - 8
+    local mixY = -22 - ZONE_ROWS * ROW - 4
     ui.mixHead = Heading(left, "What you got")
     ui.mixHead:SetPoint("TOPLEFT", 0, mixY)
     ui.mixBar = CreateFrame("Frame", nil, left)
@@ -267,7 +290,8 @@ local function Build()
     ui.whoCap = St.Text(right, 10, C.SUBTEXT)
     ui.whoCap:SetPoint("TOPRIGHT", 0, -1)
     ui.whoCap:SetJustifyH("RIGHT")
-    local cols = { { "Creature", 0, "LEFT" }, { "Skins", 196, "RIGHT" }, { "Main drop", 212, "LEFT" }, { "Ruined", colW, "RIGHT" } }
+    local SKINS_X, DROP_X = 168, 184 -- right edge of Skins, left edge of Main drop
+    local cols = { { "Creature", 0, "LEFT" }, { "Skins", SKINS_X, "RIGHT" }, { "Main drop", DROP_X, "LEFT" }, { "Ruined", colW, "RIGHT" } }
     for _, c in ipairs(cols) do
         local h = St.Text(right, 10, C.SUBTEXT)
         h:SetText(c[1])
@@ -284,20 +308,20 @@ local function Build()
         row.line:SetPoint("TOPRIGHT", 0, y)
         row.name = St.Text(right, 11, C.TEXT)
         row.name:SetPoint("TOPLEFT", 0, y - 6)
-        row.name:SetWidth(170)
+        row.name:SetWidth(SKINS_X - 34)
         row.name:SetWordWrap(false)
         row.meta = St.Text(right, 10, C.SUBTEXT)
         row.meta:SetPoint("TOPLEFT", 0, y - 19)
         row.skins = St.Text(right, 11, C.TITLE)
-        row.skins:SetPoint("TOPRIGHT", right, "TOPLEFT", 196, y - 6)
+        row.skins:SetPoint("TOPRIGHT", right, "TOPLEFT", SKINS_X, y - 6)
         row.skins:SetJustifyH("RIGHT")
         row.dot = right:CreateTexture(nil, "ARTWORK")
         row.dot:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask")
         row.dot:SetSize(8, 8)
-        row.dot:SetPoint("TOPLEFT", 212, y - 8)
+        row.dot:SetPoint("TOPLEFT", DROP_X, y - 8)
         row.drop = St.Text(right, 11, C.TEXT)
         row.drop:SetPoint("LEFT", row.dot, "RIGHT", 5, 0)
-        row.drop:SetWidth(colW - 212 - 13 - 44)
+        row.drop:SetWidth(colW - DROP_X - 13 - 46)
         row.drop:SetWordWrap(false)
         row.ruined = St.Text(right, 11, C.INK2)
         row.ruined:SetPoint("TOPRIGHT", 0, y - 6)
@@ -308,9 +332,6 @@ local function Build()
     ui.whoEmpty:SetPoint("TOPLEFT", 0, -44)
     ui.whoEmpty:SetWidth(colW)
 
-    ui.demo = St.Text(frame, 10, C.SUBTEXT)
-    ui.demo:SetPoint("BOTTOMLEFT", PAD, PAD - 4)
-    ui.demo:SetText("Sample data  ·  /fn demo off to hide it")
 
     frame:SetScript("OnShow", function() FN.RefreshStats() end)
 end
@@ -337,12 +358,11 @@ function FN.RefreshStats()
     local d = Collect()
     local view = FN.View()
     local inDemo = view ~= FN.db
-    ui.demo:SetShown(inDemo)
 
     local live = FN.SkinningSkill and FN.SkinningSkill() or 0
     local skill = (not inDemo and live > 0) and live or d.maxSkill
-    ui.sub:SetText(string.format("Skinning %s  ·  %s", skill > 0 and skill or "-",
-        show == "me" and "This character" or "All characters"))
+    ui.sub:SetText(string.format("Skinning %s  ·  %s%s", skill > 0 and skill or "-",
+        show == "me" and "This character" or "All characters", inDemo and "  ·  Sample data" or ""))
 
     -- headline numbers
     local total = #d.all
@@ -391,6 +411,8 @@ function FN.RefreshStats()
         row.value:SetShown(z ~= nil)
         row.bar:SetShown(z ~= nil)
         row.note:SetShown(z ~= nil)
+        row.hit:SetShown(z ~= nil)
+        row.map = z and z.map
         if z then
             row.name:SetText(ZoneName(z.map))
             local c = z.can and C.TEXT or C.SUBTEXT
@@ -457,9 +479,15 @@ function FN.RefreshStats()
 
     -- creatures: the zone you are in, or your busiest zone
     local here = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
-    local map = here
+    local map = ui.pickedZone
+    if not (map and d.zoneSkins[map]) then map = here end
     if not (map and d.zoneSkins[map]) then
         map = Top(d.zoneSkins, 1)[1]
+    end
+    for _, row in ipairs(zoneRows) do
+        row.picked = row.map ~= nil and row.map == map
+        row.hl:SetShown(row.picked)
+        if row.picked then row.name:SetTextColor(C.TITLE[1], C.TITLE[2], C.TITLE[3]) end
     end
     ui.whoCap:SetText(map and ZoneName(map) or "")
     local rows = {}
