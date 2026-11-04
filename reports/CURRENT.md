@@ -242,3 +242,17 @@
 - v0.7.0 released (2026-11-04): CF_API_KEY added by Karl; tag v0.7.0 pushed; the Release workflow passed
   (16 s) and uploaded v0.7.0 to project 1783590 as a Release for game versions 1.15.9 and 1.60.1, now
   Under Review with the project. Still to do: gallery shots (/fn shots), Forever checks after launch.
+- Demo spots on walkable ground (2026-11-04, Karl: some samples sat in mountains or the sea): every spot
+  moved onto known places (towns, camps, mines, lakeshores, creature grounds), spreads tightened (about
+  half), the scatter cut off at 1.8 spreads, and the Community layer's random extra spot replaced by a
+  fixed one per zone (COMMUNITY_EXTRA). Coordinates are from memory: check them in the gallery shots.
+  Checks pass, copied to Era. Not yet seen.
+- First gallery run (2026-11-04): shots.py now handles the first run's rects (Shots.lua lost the screen
+  height to `a and f()`, fixed). The run showed stale sample data (saved demo from before the spot fix):
+  /fn shots now always rebuilds the demo. Checked every crop against the map art: Dun Morogh's only lake is
+  east of Kharanos, so fishing sits on its shores; Dun Morogh and Stranglethorn spots nudged onto open
+  ground; Spotlight's key no longer says "skin" on other pages; the session shot puts the tracker beside
+  the dock (put back after). Checks pass, copied to Era. Retake pending.
+- Gallery taken and checked (2026-11-04): all ten shots cropped into Screenshots/ (contact sheet
+  design/Gallery-0.7.0-contact-sheet.png); every sample spot on walkable ground; session shot has the tracker
+  beside the dock. Not uploaded yet (CurseForge Media tab, titles in reports/CurseForge-gallery-0.7.0.md).

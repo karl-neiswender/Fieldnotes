@@ -1046,7 +1046,7 @@ local function Draw()
     if s.mode == "heat" then
         model.peak = rawMax -- the key numbers its ramp from 1 to this
     elseif s.mode == "spotlight" then
-        model.scale = "Brightest where you skin most"
+        model.scale = "Brightest where you " .. (s.prof == "fishing" and "fish" or "gather") .. " most"
     else
         model.legend = {}
         for _, l in ipairs(list) do

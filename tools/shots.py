@@ -73,9 +73,14 @@ for src, name in zip(burst, names):
         box = (0, 0, img.width, img.height)
     else:
         l, t, rr, b, w, h = r
-        # the game saved pixels for its own screen size; scale if the image differs
-        kx = img.width / float(w) if w else 1
-        ky = img.height / float(h) if h else 1
+        if not h:
+            # (saved by 0.7.0's first /fn shots, which lost the screen height: the numbers are in
+            # the game's UI units, where the screen is 768 tall)
+            kx = ky = img.height / 768.0
+        else:
+            # the game saved pixels for its own screen size; scale if the image differs
+            kx = img.width / float(w) if w else 1
+            ky = img.height / float(h)
         box = (max(0, int(l * kx) - MARGIN), max(0, int(t * ky) - MARGIN),
                min(img.width, int(rr * kx) + MARGIN), min(img.height, int(b * ky) + MARGIN))
     out = os.path.join(out_dir, name + ".png")

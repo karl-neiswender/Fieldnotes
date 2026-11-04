@@ -29,7 +29,8 @@ FN.SHOTS = SHOTS
 local function Pixels(f)
     if not (f and f:IsShown() and f:GetLeft()) then return nil end
     local s = f:GetEffectiveScale()
-    local w, h = GetPhysicalScreenSize and GetPhysicalScreenSize()
+    local w, h
+    if GetPhysicalScreenSize then w, h = GetPhysicalScreenSize() end -- (`a and f()` keeps only one value)
     local uiH = UIParent:GetHeight() * UIParent:GetEffectiveScale()
     local k = (h and uiH > 0) and (h / uiH) or 1
     local top = (h or uiH) - f:GetTop() * s * k
@@ -88,6 +89,14 @@ local function Stage(shot)
         for _ = 1, 17 do FN.SessionGather("cloth", 0, {}) end
         FN.session.start = GetTime() - 2530
         FN.ShowTracker()
+        -- beside the rail, so the shot has no empty gap (where it was is put back after)
+        local f, rail = FN.TrackerFrame(), FN.MapUI.rail
+        local last = rail and rail[1]
+        if f and last then
+            FN.trackerWas = FN.trackerWas or { f:GetPoint() }
+            f:ClearAllPoints()
+            f:SetPoint("TOPLEFT", FN.MapUI.dock, "TOPRIGHT", 56, -40)
+        end
     end
     if shot.subject == "stats" then FN.ShowStats() end
     if shot.subject == "share" then FN.ShowShare() end
@@ -122,7 +131,7 @@ function FN.TakeShots(only)
         pcall(setCVar, "screenshotFormat", "tga")
         pcall(setCVar, "screenshotQuality", "10")
     end
-    if not hadDemo then FN.DemoLoad() end
+    FN.DemoLoad() -- always fresh: saved sample data can be from an older version
     FN.db.settings.trackerCompact = false
     FN.db.shotRects = FN.db.shotRects or {}
     FN.shooting = true
@@ -131,6 +140,12 @@ function FN.TakeShots(only)
     local function Finish()
         FN.shooting = nil
         FN.SessionEnd()
+        local f = FN.TrackerFrame and FN.TrackerFrame()
+        if f and FN.trackerWas and FN.trackerWas[1] then
+            f:ClearAllPoints()
+            f:SetPoint(unpack(FN.trackerWas))
+        end
+        FN.trackerWas = nil
         local s = FN.Map.S()
         wipe(s)
         for k, v in pairs(saved) do s[k] = v end
@@ -163,7 +178,8 @@ function FN.TakeShots(only)
             GameTooltip:Hide()
             local r = Subject(shot)
             if r then
-                local w, h = GetPhysicalScreenSize and GetPhysicalScreenSize()
+                local w, h
+                if GetPhysicalScreenSize then w, h = GetPhysicalScreenSize() end
                 FN.db.shotRects[shot.file] = string.format("%d,%d,%d,%d,%d,%d", r[1], r[2], r[3], r[4], w or 0, h or 0)
             end
             pcall(Screenshot)
