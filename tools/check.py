@@ -231,12 +231,41 @@ ns.RefreshStats()
 local meSkins = u.tiles[1].value.text
 FieldnotesDB.settings.statsShow = "account"
 
+-- 8. sharing in demo mode: a round trip, a cut-off paste, an import into the demo's Community
+local text, shSkins, shZones = ns.Share.Make(nil)
+local back = ns.Share.Read(text)
+local roundTrip = back ~= nil and back.skins == shSkins and back.zoneCount == shZones and back.demo
+local cutOff = ns.Share.Read(text:sub(1, #text - 6)) == nil
+local before = 0
+for _, l in ipairs(ns.CommunityLists("skinning", 1426)) do before = before + #l end
+local imported = ns.Share.Import(back)
+local after = 0
+for _, l in ipairs(ns.CommunityLists("skinning", 1426)) do after = after + #l end
+SlashCmdList.FIELDNOTES("share")
+local words = ns.shareUI.summary.text .. " | " .. ns.shareUI.fit.text.text
+SlashCmdList.FIELDNOTES("import")
+print("share      window: " .. words)
+-- the window speaks in skins and zones, never "characters" (a WoW player reads that as alts)
+local demoShare = roundTrip and cutOff and imported and after > before
+  and words:find("skins", 1, true) and not words:lower():find("character", 1, true)
+
 SlashCmdList.FIELDNOTES("demo off")
 local cleared = FieldnotesDB.demo == nil and not FieldnotesDB.settings.demo
 
+-- 9. sharing for real: demo text and your own text are refused, someone else's is added
+local refusedDemo = not ns.Share.Import(back)
+local mine = ns.Share.Read((ns.Share.Make(nil)))
+local refusedOwn = mine ~= nil and not ns.Share.Import(mine)
+local theirs = ns.Share.Read((ns.Share.Make(nil)):gsub("^!FN1!%w%w%w%w%w%w!", "!FN1!Zzzzzz!"))
+local addedTheirs = theirs ~= nil and ns.Share.Import(theirs)
+local communityReal = 0
+for _, l in ipairs(ns.CommunityLists("skinning", 1434)) do communityReal = communityReal + #l end
+local realShare = (refusedDemo and refusedOwn and addedTheirs and communityReal == 1) and "ok"
+  or ("demo " .. tostring(refusedDemo) .. " own " .. tostring(refusedOwn) .. " theirs " .. tostring(addedTheirs) .. " n " .. communityReal)
+
 local list = FieldnotesDB.events.skinning[1434]
 return #list, list[1], FieldnotesDB.creatures[682].name, FieldnotesDB.creatures[682].minLevel, table.concat(chat, "\n"),
-  refused, demoCount, faked, realAfter == realBefore, cleared, mapResult, stats, meSkins, trackerShown
+  refused, demoCount, faked, realAfter == realBefore, cleared, mapResult, stats, meSkins, trackerShown, demoShare, realShare
 """
 
 ok = True
@@ -256,7 +285,8 @@ if ok:
     g = rt.globals()
     g.FILES = rt.table_from(FILES)
     g.SOURCES = rt.table_from(sources)
-    count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result, stats, me_skins, tracker = rt.execute(PLAY)
+    count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result, stats, me_skins, tracker, demo_share, real_share = rt.execute(PLAY)
+    print("share      real: %s" % real_share)
     print("stats      tiles %s, Me %s" % (stats, me_skins))
     continent, spot, hides, settings_open, recent, heat, p_me, p_all, p_comm, empty, off = [int(v) for v in map_result.split(",")]
     print("map        continent badges %d" % continent)
@@ -284,6 +314,8 @@ if ok:
         ("map: the settings panel opens", settings_open == 1),
         ("map: Last 7 days draws less than All time", recent < heat),
         ("session tracker counts the real skin", bool(tracker)),
+        ("share: demo text reads back whole, a cut-off paste is caught, import adds to Community", bool(demo_share)),
+        ("share: demo text and your own text are refused; someone else's joins Community", real_share == "ok"),
         ("stats window fills its tiles", stats.split("|")[0].replace(",", "").isdigit() and stats.split("|")[1] != "-"),
         ("stats window: Me counts fewer skins than Account",
          0 < int(me_skins.replace(",", "")) < int(stats.split("|")[0].replace(",", ""))),

@@ -189,6 +189,12 @@ local function Build()
         x = x - b:GetWidth() - 3
         ui.shows[i] = b
     end
+    -- Share opens the share and import window (Share.lua)
+    ui.share = St.ChoiceButton(frame, function() FN.ShowShare() end)
+    ui.share.text:SetText("Share")
+    ui.share:SetWidth(math.ceil(ui.share.text:GetStringWidth()) + 18)
+    ui.share:SetPoint("TOPRIGHT", frame, "TOPRIGHT", x - 9, -PAD + 4)
+    ui.share.tip = "Share your notes, or import someone else's"
 
     ui.rule = frame:CreateTexture(nil, "ARTWORK")
     ui.rule:SetColorTexture(0.33, 0.29, 0.20, 0.8)

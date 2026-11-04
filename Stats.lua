@@ -94,6 +94,12 @@ SlashCmdList.FIELDNOTES = function(msg)
     msg = (msg or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
     if msg == "" or msg == "stats" then
         FN.ToggleStats()
+    elseif msg == "debug" then
+        FN.Map.Debug()
+    elseif msg == "share" then
+        FN.ShowShare()
+    elseif msg == "import" then
+        FN.ShowShare(true)
     elseif msg == "summary" then
         Summary()
     elseif msg == "tracker" then
@@ -116,6 +122,8 @@ SlashCmdList.FIELDNOTES = function(msg)
         FN.DemoFakeSkin()
     else
         FN.Print("/fn  open or close your skinning stats")
+        FN.Print("/fn share  copy your notes as one line of text to paste anywhere")
+        FN.Print("/fn import  paste someone else's notes into your Community layer")
         FN.Print("/fn summary  the same numbers in chat")
         FN.Print("/fn tracker  turn the session tracker on or off")
         FN.Print("/fn chat  turn the chat line for each skin on or off")

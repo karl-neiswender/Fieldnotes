@@ -1,5 +1,15 @@
 # Fieldnotes changelog
 
+## 0.5.0
+
+- **Share your notes** (`/fn share`, or Share in the stats window): one line of text with this
+  zone or all your skinning, selected and ready for Ctrl+C. Paste it in Discord, a forum post or
+  a friend's Import box. It holds no character names, realms or times of day, just where, what
+  and how much. One zone fits in a Discord message.
+- **Import notes** (`/fn import`): paste someone's share text to see what's in it, then add it to
+  your Community layer. It never mixes into your own numbers. A newer share from the same person
+  replaces their older one, and Remove all empties the layer.
+
 ## 0.4.0
 
 - **Stats window** (`/fn`): your skins, skins per minute, leather per hour and how often you get

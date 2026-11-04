@@ -189,6 +189,7 @@ end
 -- ------------------------------------------------------------
 local overlay, mute, hud, bar, key, menu
 local blobs, dots, rings, pins, shades, badges = {}, {}, {}, {}, {}, {}
+local Layer -- picks the overlay's layer (above Draw)
 local modeButtons, showButtons, menuRows, legendRows, rampBar = {}, {}, {}, {}, {}
 local ui = {}
 M.ui = ui -- read by tools/check.py
@@ -459,13 +460,20 @@ end
 local function Records(mapID, show, days)
     local since = (days and days > 0) and (time() - days * 86400) or nil
     local view = FN.View()
-    local events = (show == "community") and (view.community and view.community.events) or view.events
-    local list = events and events.skinning and events.skinning[mapID] or {}
+    -- Community: demo mode's sample layer and every imported share (Share.lua)
+    local lists
+    if show == "community" then
+        lists = FN.CommunityLists("skinning", mapID)
+    else
+        lists = { view.events.skinning and view.events.skinning[mapID] or {} }
+    end
     local me, out = FN.ViewChar(), {}
-    for _, str in ipairs(list) do
-        local r = FN.Decode(str)
-        if r and r.x and r.y and (show ~= "me" or r.char == me) and (not since or r.time >= since) then
-            out[#out + 1] = r
+    for _, list in ipairs(lists) do
+        for _, str in ipairs(list) do
+            local r = FN.Decode(str)
+            if r and r.x and r.y and (show ~= "me" or r.char == me) and (not since or r.time >= since) then
+                out[#out + 1] = r
+            end
         end
     end
     return out
@@ -855,8 +863,32 @@ local function DrawContinent(s, mapID, zoneType, inDemo)
     LayoutKey(line, "heat", {}, colorOf, inDemo, "Badge size and color: " .. unit .. " per zone  ·  click to open")
 end
 
+-- The layer above the map's own, for the continent badges and, over them, the bar, key and
+-- settings. The map changes layer when it is maximized or made small again, and takes every
+-- frame on it along, so this is picked again on every redraw (once, at the first open, left the
+-- bar behind a maximized map).
+local ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
+Layer = function()
+    -- the window, its scroll area and the map art can each be on a different layer after a
+    -- maximize (/fn debug, 2026-11-03: window MEDIUM, bar HIGH and hidden under the art), so
+    -- take the highest of them
+    local rank, top = {}, 1
+    for i, name in ipairs(ORDER) do rank[name] = i end
+    local container = WorldMapFrame.ScrollContainer
+    for _, f in ipairs({ WorldMapFrame, container, WorldMapFrame:GetCanvas() }) do
+        local r = f and rank[f:GetFrameStrata()]
+        if r and r > top then top = r end
+    end
+    M.strata = ORDER[top + 1] or "FULLSCREEN_DIALOG"
+    hud:SetFrameStrata(M.strata)
+    hud:SetFrameLevel(1000)
+    menu:SetFrameLevel(bar:GetFrameLevel() + 10)
+    for _, b in ipairs(badges) do b:SetFrameStrata(M.strata) end
+end
+
 local function Draw()
     local s = S()
+    Layer()
     HidePool(blobs)
     HidePool(dots)
     HidePool(rings)
@@ -1076,13 +1108,44 @@ function M.Refresh()
     -- once per frame at most: map changes, resizes and data can all arrive together
     C_Timer.After(0, function()
         queued = false
-        if WorldMapFrame:IsShown() then Draw() end
+        if not WorldMapFrame:IsShown() then return end
+        -- an error while drawing is said once in chat, so it shows even with Lua errors hidden
+        local ok, err = pcall(Draw)
+        if not ok then
+            M.lastError = tostring(err)
+            if not M.errorSaid then
+                M.errorSaid = true
+                FN.Print("The map overlay hit an error: " .. M.lastError)
+            end
+        end
     end)
 end
 FN.OnData(M.Refresh)
 
+-- /fn debug: what the overlay is doing, for when it doesn't show
+function M.Debug()
+    local function Size(f)
+        if not f then return "missing" end
+        local w, h = f:GetSize()
+        return string.format("%s %dx%d level %d %s", f:IsShown() and "shown" or "hidden", w or 0, h or 0,
+            f:GetFrameLevel() or 0, f:GetFrameStrata() or "?")
+    end
+    FN.Print("Map debug: WorldMapFrame " .. (WorldMapFrame and Size(WorldMapFrame) or "missing")
+        .. ", map " .. tostring(WorldMapFrame and WorldMapFrame:GetMapID()))
+    FN.Print("  scroll area " .. Size(WorldMapFrame.ScrollContainer) .. "; map art "
+        .. Size(WorldMapFrame.GetCanvas and WorldMapFrame:GetCanvas()))
+    FN.Print("  overlay " .. Size(overlay) .. "; bar layer " .. tostring(M.strata))
+    FN.Print("  hud " .. Size(hud) .. "; bar " .. Size(bar) .. "; key " .. Size(key))
+    local s = S()
+    FN.Print(string.format("  settings: on %s, %s, %s; last error: %s", tostring(s.on), s.mode, s.show,
+        M.lastError or "none"))
+end
+
 local function Init()
-    if overlay or not WorldMapFrame or not WorldMapFrame.GetCanvas then return end
+    if overlay or not WorldMapFrame or not WorldMapFrame.GetCanvas then
+        M.initSkipped = true
+        return
+    end
     local canvas = WorldMapFrame:GetCanvas()
     local container = WorldMapFrame.ScrollContainer or WorldMapFrame
 
@@ -1094,28 +1157,23 @@ local function Init()
     mute:SetAllPoints()
     mute:SetColorTexture(0.08, 0.06, 0.04, 0.18)
 
-    -- the layer above the map's own: continent badges, and over them the bar, key and settings
-    local ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
-    local mapStrata, next = WorldMapFrame:GetFrameStrata(), nil
-    for i, name in ipairs(ORDER) do
-        if name == mapStrata then next = ORDER[i + 1] end
-    end
-    M.strata = next or "FULLSCREEN_DIALOG"
-
     hud = CreateFrame("Frame", nil, container)
     hud:SetAllPoints(container)
-    hud:SetFrameStrata(M.strata)
-    hud:SetFrameLevel(1000)
     hud:EnableMouse(false)
 
     BuildBar()
     BuildKey()
+    Layer()
 
     if WorldMapFrame.OnMapChanged then hooksecurefunc(WorldMapFrame, "OnMapChanged", M.Refresh) end
     WorldMapFrame:HookScript("OnShow", M.Refresh)
     WorldMapFrame:HookScript("OnHide", CloseMenu)
     menu:SetScript("OnHide", function() if ui.gear then ui.gear:Tint() end end)
     overlay:SetScript("OnSizeChanged", M.Refresh)
+    -- maximizing or shrinking the map changes its layer: redraw so the bar follows
+    for _, name in ipairs({ "Maximize", "Minimize", "SetFrameStrata" }) do
+        if type(WorldMapFrame[name]) == "function" then pcall(hooksecurefunc, WorldMapFrame, name, M.Refresh) end
+    end
 
     local ev = CreateFrame("Frame")
     pcall(ev.RegisterEvent, ev, "GET_ITEM_INFO_RECEIVED") -- leather names arriving after the first draw
