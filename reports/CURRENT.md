@@ -117,3 +117,27 @@
   of 32 stops in sRGB). A saved Ember choice reads as Solar. Checks pass (28), copied to Era.
 - Color swatches show each scheme's whole ramp (8 slices of the round texture, most at the top),
   2026-11-03. Checks pass (28), copied to Era.
+- Session tracker pass (2026-11-03, Karl): per-minute bars removed; a Skill row (rank / cap, "+N this
+  session", a slim bar toward the cap); at a rank's cap (below 300) an orange note to see a trainer
+  for the next rank, and once per cap a chat line, on-screen words and the raid warning sound
+  (settings.capAlerted). The dot's green glow breathes while running (a game animation group).
+  Pause / Resume carry icons; gold follows the likely next step (Resume while paused), End session
+  stays neutral. A chevron folds the tracker to one line (settings.trackerCompact) with pause and
+  end as icons. Checks pass (29), copied to Era. Not yet seen in game.
+- Tracker refinements from Karl's recording (2026-11-03): the running dot's glow uses the soft heat
+  texture (Media/blob, added light), starts fainter (0.35), swells to 1.8x and breathes every 2.4 s
+  (a hard disc at 1.6x / 1.6 s read as busy). Folded, the tracker keeps its header and the three
+  numbers; pause and end become header icons; at the skill cap one orange line stays. Checks pass
+  (29), copied to Era. Not yet seen in game.
+- Tracker, Karl's second recording (2026-11-03): glow brighter but still soft (0.7 start, 2.1x,
+  2 s breath); the panel hangs from its top-left corner (re-anchored once, never mid-drag, saved
+  that way), so folding moves only its bottom edge; the cap note is "Capped · train Journeyman"
+  (chat keeps the fuller line). Checks pass (29), copied to Era. Not yet seen in game.
+- Tracker, Karl's third recording (2026-11-03): the header groups status left (dot, title, clock)
+  and controls right (pause, stop, fold), so the clock's width no longer nudges the icons. End is a
+  stop square (Media/icons/stop-white.tga, new) wherever it is an icon: tracker, dock session row,
+  full-screen toolbar; the settings close stays an X. The glow runs on GetTime like the map pins
+  (the game's looping animation stuttered when the refresh restarted it). Checks pass (29), copied
+  to Era. Needs a full client restart (new icon). Not yet seen in game.
+- Session glow shared (St.Glow in Style.lua): the dock's Session row dot breathes like the tracker's
+  while a session runs (2026-11-03). Checks pass (29), copied to Era. Not yet seen in game.

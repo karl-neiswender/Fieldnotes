@@ -291,6 +291,38 @@ do
     end
 end
 
+-- The running session's breathing glow, the same wherever a session dot shows (the tracker, the
+-- map dock's session row): a soft halo (Media/blob, added light) under the dot, swelling to about
+-- twice its size and fading, one calm breath every 2 s. It runs on the game's clock (GetTime), like
+-- the map's pins, and only while on: the game's own looping animation stuttered when a refresh
+-- restarted it (seen in game). g:SetOn(on) starts or stops it.
+local BREATH, GLOW_SIZE = 2.0, 18
+St.BREATH = BREATH
+function St.Glow(parent, dot, color)
+    local g = CreateFrame("Frame", nil, parent)
+    g:Hide()
+    g.halo = parent:CreateTexture(nil, "ARTWORK", nil, 1)
+    g.halo:SetTexture(St.Media("blob"))
+    g.halo:SetBlendMode("ADD")
+    g.halo:SetSize(GLOW_SIZE, GLOW_SIZE)
+    g.halo:SetPoint("CENTER", dot, "CENTER", 0, 0)
+    g.halo:SetVertexColor(color[1], color[2], color[3], 1)
+    g.halo:Hide()
+    g:SetScript("OnUpdate", function()
+        local t = (GetTime() % BREATH) / BREATH
+        local e = 1 - (1 - t) ^ 3
+        local d = GLOW_SIZE * (1 + 1.1 * e)
+        g.halo:SetSize(d, d)
+        g.halo:SetAlpha(0.7 * (1 - e))
+    end)
+    function g:SetOn(on)
+        on = on and true or false
+        self.halo:SetShown(on)
+        self:SetShown(on)
+    end
+    return g
+end
+
 -- a window that can be dragged anywhere and remembers where it was left (settings[key])
 function St.Movable(frame, key)
     frame:SetMovable(true)

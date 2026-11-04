@@ -46,11 +46,12 @@ local function Remember(unit)
     seen[guid] = { name = UnitName(unit), type = UnitCreatureType(unit), level = UnitLevel(unit) }
 end
 
+-- the skinning rank, and the most the current rank allows (75 for Apprentice, and so on)
 local function SkinningSkill()
     if not skinName or not GetNumSkillLines then return 0 end
     for i = 1, GetNumSkillLines() do
-        local name, isHeader, _, rank = GetSkillLineInfo(i)
-        if not isHeader and name == skinName then return rank or 0 end
+        local name, isHeader, _, rank, _, _, maxRank = GetSkillLineInfo(i)
+        if not isHeader and name == skinName then return rank or 0, maxRank end
     end
     return 0
 end

@@ -676,10 +676,11 @@ local function SessionCard(parent, width)
     St.Etch(sc, STYLE.row, 12)
     sc:SetSize(width, 34)
     sc:EnableMouse(true)
-    sc.dot = sc:CreateTexture(nil, "ARTWORK")
+    sc.dot = sc:CreateTexture(nil, "ARTWORK", nil, 2) -- above its glow
     sc.dot:SetTexture(CIRCLE)
     sc.dot:SetSize(8, 8)
     sc.dot:SetPoint("LEFT", 11, 0)
+    sc.glow = St.Glow(sc, sc.dot, GREEN) -- breathes while the session runs, as on the tracker
     sc.title = St.Title(sc, 12)
     sc.title:SetPoint("LEFT", sc.dot, "RIGHT", 7, 0)
     -- beside the clock: "Paused" or the skins so far, stopping short of the pause and end icons
@@ -694,7 +695,7 @@ local function SessionCard(parent, width)
     sc.start.tip = "A session also starts by itself with your first skin."
     sc.start:SetSize(70, 22)
     sc.start:SetPoint("RIGHT", -6, 0)
-    sc.stop = St.IconButton(sc, "close-white", 11, function()
+    sc.stop = St.IconButton(sc, "stop-white", 10, function() -- stop, not close: it ends the session
         FN.SessionEnd()
         sc:Update()
     end)
@@ -737,6 +738,7 @@ local function SessionCard(parent, width)
         self.pause:SetShown(running)
         self.stop:SetShown(running)
         self.detail:SetShown(running)
+        self.glow:SetOn(running and not paused)
         if not running then
             self.dot:SetVertexColor(0.36, 0.35, 0.33)
             self.title:SetText("Session")
@@ -1391,7 +1393,7 @@ local function BuildToolbar()
     bar.session.icon:SetPoint("LEFT", 9, 0)
     bar.session.text:ClearAllPoints()
     bar.session.text:SetPoint("LEFT", 24, 0)
-    bar.stop = St.IconButton(bar, "close-white", 10, function()
+    bar.stop = St.IconButton(bar, "stop-white", 9, function() -- stop, not close: it ends the session
         FN.SessionEnd()
         MapUI.Render(model)
     end)

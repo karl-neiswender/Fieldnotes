@@ -98,7 +98,7 @@ function UnitCreatureType(u) return "Beast" end
 function UnitLevel(u) return units[u] and units[u].level or 0 end
 function GetSpellInfo(id) if id == 8613 or id == 8618 then return "Skinning" end return "Other" end
 function GetNumSkillLines() return 1 end
-function GetSkillLineInfo() return "Skinning", false, false, 225 end
+function GetSkillLineInfo() return "Skinning", false, false, skillRank or 225, 0, 0, skillMax or 300 end
 C_Map = {
   GetBestMapForUnit = function() return 1434 end,
   GetPlayerMapPosition = function() return { GetXY = function() return 0.4712, 0.2201 end } end,
@@ -165,6 +165,19 @@ Fire("LOOT_READY"); Fire("LOOT_CLOSED")
 SlashCmdList.FIELDNOTES("summary")
 SlashCmdList.FIELDNOTES("")
 local trackerShown = ns.session.count == 1
+-- the skill cap: one trainer alert in chat, not two; the tracker folds and opens without an error
+skillRank, skillMax = 75, 75
+local said = 0
+local before = #chat
+Fire("SKILL_LINES_CHANGED")
+Fire("SKILL_LINES_CHANGED")
+for i = before + 1, #chat do if chat[i]:find("trainer to learn Journeyman") then said = said + 1 end end
+FieldnotesDB.settings.trackerCompact = true
+ns.UpdateTracker()
+FieldnotesDB.settings.trackerCompact = false
+ns.UpdateTracker()
+skillRank, skillMax = nil, nil
+local capAlert = said == 1
 SlashCmdList.FIELDNOTES("chat")
 SlashCmdList.FIELDNOTES("help")
 
@@ -296,7 +309,7 @@ mapError = ns.Map.lastError -- a draw error is caught (and said in chat), so che
 
 local list = FieldnotesDB.events.skinning[1434]
 return #list, list[1], FieldnotesDB.creatures[682].name, FieldnotesDB.creatures[682].minLevel, table.concat(chat, "\n"),
-  refused, demoCount, faked, realAfter == realBefore, cleared, mapResult, stats, meSkins, trackerShown, demoShare, realShare
+  refused, demoCount, faked, realAfter == realBefore, cleared, mapResult, stats, meSkins, trackerShown, demoShare, realShare, capAlert
 """
 
 ok = True
@@ -316,7 +329,7 @@ if ok:
     g = rt.globals()
     g.FILES = rt.table_from(FILES)
     g.SOURCES = rt.table_from(sources)
-    count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result, stats, me_skins, tracker, demo_share, real_share = rt.execute(PLAY)
+    count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result, stats, me_skins, tracker, demo_share, real_share, cap_alert = rt.execute(PLAY)
     print("share      real: %s" % real_share)
     print("stats      tiles %s, Me %s" % (stats, me_skins))
     layouts, continent, spot, hides, settings_open, recent, heat, p_me, p_all, p_comm, empty, off, spots_listed, heat_dots = [int(v) for v in map_result.split(",")]
@@ -350,6 +363,7 @@ if ok:
         ("map: drew without an error", rt.globals().mapError is None),
         ("every /fn command runs, in demo mode and with real records", len(list(rt.globals().commandErrors.values())) == 0),
         ("session tracker counts the real skin", bool(tracker)),
+        ("skill cap: one trainer alert, the tracker folds and opens", bool(cap_alert)),
         ("share: demo text reads back whole, a cut-off paste is caught, import adds to Community", bool(demo_share)),
         ("share: demo text and your own text are refused; someone else's joins Community", real_share == "ok"),
         ("stats window fills its tiles", stats.split("|")[0].replace(",", "").isdigit() and stats.split("|")[1] != "-"),
