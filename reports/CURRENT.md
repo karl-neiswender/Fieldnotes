@@ -322,3 +322,24 @@
   either side of every divider (measured from button edges), 14 at both ends; the material list takes the
   room that is left (96 to 150) before Stats and Share give way. New check for (1) and (2). Checks pass
   (40), copied to Era. Not yet seen in game.
+- Lua error "invalid key to 'next'" at Style.lua St.Animate's driver (Karl, 2026-11-04): a tween's apply or
+  done started another tween (a dock fold sets the rail tabs gliding) while pairs() walked `tweens`. The
+  driver now walks a snapshot of the ids and leaves a tween replaced mid-run alone. Checks pass (40), copied
+  to Era. The harness does not run the driver's OnUpdate, so this is verified by reading, not by a check.
+- Dashboard redesign (2026-11-04, Karl approved the review, no mockup): Show and When are two compact rows
+  with no section labels (about 48 units back for the rows); Community stays dimmed with its "Coming soon"
+  tooltip. Rows: "68 skins" with its unit; the line under the name is "41 here" (the map you are on:
+  M.Summary now carries `here`, keyed by map), else "most in <zone>", "No gathers yet" or "Not learned";
+  the right-hand line is "Skill 75 / 75", an orange "Capped, train next rank" (rank at its cap, below 300),
+  or cloth's drop rate; skill is a 3 px rounded bar (St.Pill). Every row opens its page (a profession with
+  nothing yet gets its tab and a page saying "You haven't learned X yet."); a chevron slides in on hover.
+  A totals line under the card ("73 gathers across 2 professions"); the Session card says "Idle" beside its
+  grey dot; small grey text (C.SUBTEXT) lifted from 0.541 to 0.60. Checks pass (41), copied to Era. Not seen.
+- Dashboard fix (2026-11-04, Karl's screenshot): the Show row (Me, Account, Community) was missing, pushed
+  above the scroll area by a +38 offset. The controls now start where the old SHOW label sat.
+- Dashboard dropdowns (2026-11-04, Karl: spacing felt tight; the totals line was cut off by the Session card):
+  Show and When are two dropdowns on one row (Dropdown in MapUI.lua), about 28 units back. The leather list is
+  now the add-on's one dropdown list: the opening button hands it a provider (items, chosen key, pick action,
+  rule after "All"); items can be plain (no dot) or disabled. Community is in the Show menu, dimmed, with
+  "Coming soon" beside it, and ignores clicks. The profession pages keep their button rows. Checks pass (41),
+  copied to Era. Not yet seen in game.

@@ -264,13 +264,14 @@ M.Records = Records
 local summary, summaryKey
 FN.OnData(function() summary = nil end)
 function M.Summary(show, days)
-    local key = tostring(show) .. ":" .. tostring(days) .. ":" .. tostring(FN.View() ~= FN.db)
+    local cur = WorldMapFrame and WorldMapFrame.GetMapID and WorldMapFrame:GetMapID() or 0
+    local key = tostring(show) .. ":" .. tostring(days) .. ":" .. tostring(FN.View() ~= FN.db) .. ":" .. tostring(cur)
     if summary and summaryKey == key then return summary end
     local since = (days and days > 0) and (time() - days * 86400) or nil
     local view, me = FN.View(), FN.ViewChar()
     summary, summaryKey = {}, key
     for _, p in ipairs(M.PROFS) do
-        local n, loots, best, bestN = 0, 0, nil, 0
+        local n, loots, best, bestN, onMap = 0, 0, nil, 0, 0
         if show ~= "community" or p.key == "skinning" then
             for mapID, list in pairs(view.events[p.key] or {}) do
                 local here = 0
@@ -282,11 +283,13 @@ function M.Summary(show, days)
                     end
                 end
                 n = n + here
+                if mapID == cur then onMap = here end
                 if here > bestN then best, bestN = mapID, here end
             end
         end
         local info = best and best ~= 0 and C_Map.GetMapInfo(best)
-        summary[p.key] = { n = n, loots = loots, bestZone = info and info.name }
+        -- here: the gathers on the map you are looking at (the dashboard's "41 here")
+        summary[p.key] = { n = n, loots = loots, bestZone = info and info.name, here = onMap }
     end
     return summary
 end
@@ -920,7 +923,10 @@ local function Draw()
 
     if #recs == 0 then
         local verb = model.p.verb
-        if #all > 0 then
+        local learned = s.prof == "cloth" or not FN.ProfessionSkill or (FN.ProfessionSkill(s.prof) or 0) > 0
+        if not learned and s.show == "me" then
+            model.message = "You haven't learned " .. model.p.label .. " yet."
+        elseif #all > 0 then
             model.message = "Nothing here matches that " .. model.p.material .. "."
         elseif s.when > 0 then
             model.message = string.format("Nothing %s here in the last %d days.", verb, s.when)

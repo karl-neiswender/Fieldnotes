@@ -16,7 +16,7 @@ local C = {
     GOLD2   = { 0.784, 0.608, 0.102 }, -- deep gold
     TEXT    = { 0.91, 0.91, 0.91 },
     INK2    = { 0.741, 0.741, 0.741 },
-    SUBTEXT = { 0.541, 0.541, 0.541 },
+    SUBTEXT = { 0.600, 0.600, 0.600 }, -- (was 0.541: small grey labels on brown read faint)
 }
 St.C = C
 
@@ -466,22 +466,34 @@ function St.Animate(id, to, seconds, ease, apply, done)
     end
     if not driver then
         driver = CreateFrame("Frame")
+        -- A tween's apply or done can start another (a fold sets the rail tabs gliding), which adds
+        -- a key to `tweens`; adding a key while pairs() walks the table is an error ("invalid key
+        -- to 'next'"). So each frame walks a snapshot of the ids, and a tween replaced while it
+        -- ran (same id) is left alone.
+        local ids = {}
         driver:SetScript("OnUpdate", function(self, dt)
-            local any = false
-            for key, t in pairs(tweens) do
-                t.t = t.t + dt
-                local p = math.min(1, t.t / t.dur)
-                local v = t.from + (t.to - t.from) * (EASE[t.ease] or EASE.both)(p)
-                values[key] = v
-                t.apply(v)
-                if p >= 1 then
-                    tweens[key] = nil
-                    if t.done then t.done() end
-                else
-                    any = true
+            local n = 0
+            for key in pairs(tweens) do
+                n = n + 1
+                ids[n] = key
+            end
+            for i = 1, n do
+                local key = ids[i]
+                ids[i] = nil
+                local t = tweens[key]
+                if t then
+                    t.t = t.t + dt
+                    local p = math.min(1, t.t / t.dur)
+                    local v = t.from + (t.to - t.from) * (EASE[t.ease] or EASE.both)(p)
+                    values[key] = v
+                    t.apply(v)
+                    if p >= 1 and tweens[key] == t then
+                        tweens[key] = nil
+                        if t.done then t.done() end
+                    end
                 end
             end
-            if not any and not next(tweens) then self:Hide() end
+            if not next(tweens) then self:Hide() end
         end)
     end
     tweens[id] = { from = from, to = to, t = 0, dur = seconds, ease = ease, apply = apply, done = done }

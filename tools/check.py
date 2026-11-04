@@ -333,6 +333,11 @@ skinTab.scripts.OnClick(skinTab) -- a tab never folds the dock
 local toSkinning = FieldnotesDB.settings.map.prof == "skinning" and FieldnotesDB.settings.dockOpen ~= false
 ns.MapUI.home.scripts.OnClick(ns.MapUI.home)
 local toDash = FieldnotesDB.settings.map.prof == "all"
+-- a dashboard row opens its page even for a profession with nothing yet
+local miningRow = ns.MapUI.dock.dash.rows[2]
+miningRow.scripts.OnClick(miningRow)
+rowOpens = FieldnotesDB.settings.map.prof == "mining"
+ns.MapUI.home.scripts.OnClick(ns.MapUI.home)
 skinTab.scripts.OnClick(skinTab)
 ns.MapUI.tab.scripts.OnClick(ns.MapUI.tab) -- the Fieldnotes tab only folds and opens
 local folded = FieldnotesDB.settings.dockOpen == false and FieldnotesDB.settings.map.prof == "skinning"
@@ -461,6 +466,7 @@ if ok:
         ("dashboard: hovering a row lights its dots", rt.globals().dashResult[1] == "l"),
         ("dashboard: another row lights its own dots instead", rt.globals().dashResult[2] == "o"),
         ("tabs: a tab opens its page, Home the dashboard; Fieldnotes only folds and opens (on Home)", rt.globals().dashResult[4] == "t"),
+        ("dashboard: every row opens its page, even a profession with nothing yet", rt.globals().rowOpens == True),
         ("session: with auto start off, only Start begins one", rt.globals().dashResult[5] == "a"),
         ("/fn summary runs", "1 skins on this account" in chat),
         ("/fn fake refused outside demo mode", bool(refused)),

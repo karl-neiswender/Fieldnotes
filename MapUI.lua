@@ -224,14 +224,20 @@ local function Switch(parent)
 end
 
 -- ------------------------------------------------------------
--- The leather list: one dropdown shared by the dock and the toolbar. It lists this map's
--- leathers, most first, with how many; past six it scrolls (mouse wheel, thin bar).
+-- The dropdown list: one, shared by every dropdown in the add-on. The button that opens it hands
+-- over a provider: function() return items, chosenKey, onPick, ruleAfterZero end. An item is
+-- { key, label, count?, color?, plain?, disabled? }: a color gives it a dot, plain gives it none,
+-- disabled dims it and ignores clicks (Community: "Coming soon"). The leather list is the biggest
+-- user: this map's leathers, most first, with how many; past six it scrolls (wheel, thin bar).
 -- ------------------------------------------------------------
 local list
 local ROW_H, LIST_PAD, SPLIT = 22, 4, 9 -- row height, inner padding, the room the divider takes
 
 local function FillList()
-    local items = model.leathers or {}
+    local items, chosenKey, pick, ruleAfterZero = {}, nil, nil, false
+    if list.provider then items, chosenKey, pick, ruleAfterZero = list.provider() end
+    items = items or {}
+    list.pick = pick
     local maxOffset = math.max(0, #items - LIST_ROWS)
     list.offset = math.max(0, math.min(list.offset or 0, maxOffset))
     local y = -LIST_PAD
@@ -241,8 +247,13 @@ local function FillList()
         row:SetShown(item ~= nil)
         if item then
             row.key = item.key
+            row.disabled = item.disabled and true or false
             row.text:SetText(item.label)
             row.count:SetText(item.count or "")
+            row.dot:SetShown(not item.plain)
+            row.text:ClearAllPoints()
+            row.text:SetPoint("LEFT", item.plain and 12 or 25, 0)
+            row.text:SetPoint("RIGHT", -44, 0)
             if item.color then
                 row.dot:SetVertexColor(item.color[1], item.color[2], item.color[3], 1)
             else
@@ -251,10 +262,10 @@ local function FillList()
             row:ClearAllPoints()
             row:SetPoint("TOPLEFT", list, "TOPLEFT", LIST_PAD, y)
             row:SetPoint("TOPRIGHT", list, "TOPRIGHT", -LIST_PAD - (#items > LIST_ROWS and 6 or 0), y)
-            row:SetChosen(item.key == model.leather)
+            row:SetChosen(item.key == chosenKey)
             y = y - ROW_H
             -- a thin rule between "All leather" and the leathers themselves
-            if item.key == 0 and items[list.offset + i + 1] then
+            if ruleAfterZero and item.key == 0 and items[list.offset + i + 1] then
                 list.split:ClearAllPoints()
                 list.split:SetPoint("TOPLEFT", list, "TOPLEFT", LIST_PAD + 8, y - (SPLIT - 1) / 2)
                 list.split:SetPoint("TOPRIGHT", list, "TOPRIGHT", -LIST_PAD - 8, y - (SPLIT - 1) / 2)
@@ -302,6 +313,12 @@ local function ListRow(parent, onClick)
     row.count:SetPoint("RIGHT", -8, 0)
     row.count:SetJustifyH("RIGHT")
     function row:Paint()
+        if self.disabled then
+            self.text:SetTextColor(C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
+            self.bar:Hide()
+            self.wash:SetVertexColor(1, 0.92, 0.70, 0)
+            return
+        end
         local c = self.chosen and C.TITLE or (self.hover and C.TEXT or C.INK2)
         self.text:SetTextColor(c[1], c[2], c[3])
         self.bar:SetShown(self.chosen)
@@ -312,7 +329,7 @@ local function ListRow(parent, onClick)
         end
     end
     function row:SetChosen(on)
-        self.chosen = on
+        self.chosen = on and not self.disabled
         self:Paint()
     end
     row:SetScript("OnEnter", function(self)
@@ -338,9 +355,10 @@ local function BuildList()
     list.rows = {}
     for i = 1, LIST_ROWS do
         list.rows[i] = ListRow(list, function(self)
-            M.S().leather = self.key
+            if self.disabled then return end
+            local pick = list.pick
             list:Hide()
-            Refresh()
+            if pick then pick(self.key) end
         end)
     end
     list.split = Rule(list)
@@ -363,13 +381,14 @@ local function BuildList()
     end)
 end
 
-local function ToggleList(owner)
+local function ToggleList(owner, provider)
     if list:IsShown() and list.owner == owner then
         list:Hide()
         return
     end
     if list:IsShown() then list:Hide() end
     list.owner = owner
+    list.provider = provider
     list.offset = 0
     -- the list lives on UIParent but must match the button on the map, whose window has its own
     -- scale: same scale, same width, just under it
@@ -386,8 +405,15 @@ local function ToggleList(owner)
 end
 
 -- the button that opens the list: the chosen leather's dot and name, and a chevron
+local function LeatherProvider()
+    return model.leathers or {}, model.leather, function(key)
+        M.S().leather = key
+        Refresh()
+    end, true
+end
+
 local function LeatherButton(parent)
-    local b = Choice(parent, "All leather", function(self) ToggleList(self) end)
+    local b = Choice(parent, "All leather", function(self) ToggleList(self, LeatherProvider) end)
     b.text:ClearAllPoints()
     b.text:SetPoint("LEFT", 24, 0)
     b.text:SetPoint("RIGHT", -22, 0)
@@ -416,6 +442,49 @@ local function LeatherButton(parent)
         end
     end
     return b
+end
+
+-- a plain dropdown button (no dot): the chosen item's label and a chevron
+local function Dropdown(parent, provider)
+    local b = Choice(parent, "", function(self) ToggleList(self, provider) end)
+    b.text:ClearAllPoints()
+    b.text:SetPoint("LEFT", 11, 0)
+    b.text:SetPoint("RIGHT", -22, 0)
+    b.text:SetJustifyH("LEFT")
+    b.text:SetWordWrap(false)
+    b.arrow = b:CreateTexture(nil, "OVERLAY")
+    b.arrow:SetTexture(St.Icon("chevron-white"))
+    b.arrow:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
+    b.arrow:SetSize(9, 9)
+    b.arrow:SetPoint("RIGHT", -8, 0)
+    function b:Update()
+        local items, chosen = provider()
+        for _, it in ipairs(items) do
+            if it.key == chosen then self.text:SetText(it.label) end
+        end
+    end
+    return b
+end
+
+local function ShowProvider()
+    local items = {}
+    for i, sh in ipairs(SHOWS) do
+        items[i] = { key = sh.key, label = sh.label, plain = true, disabled = sh.soon,
+            count = sh.soon and "Coming soon" or nil }
+    end
+    return items, M.S().show, function(key)
+        M.S().show = key
+        Refresh()
+    end
+end
+
+local function WhenProvider()
+    local items = {}
+    for i, wh in ipairs(WHENS) do items[i] = { key = wh[1], label = wh[2], plain = true } end
+    return items, M.S().when, function(key)
+        M.S().when = key
+        Refresh()
+    end
 end
 
 -- ------------------------------------------------------------
@@ -954,13 +1023,18 @@ local function SessionCard(parent, width)
         self.start:SetShown(not running)
         self.pause:SetShown(running)
         self.stop:SetShown(running)
-        self.detail:SetShown(running)
+        self.detail:SetShown(true)
         self.glow:SetOn(running and not paused)
         if not running then
             self.dot:SetVertexColor(0.36, 0.35, 0.33)
             self.title:SetText("Session")
             self.title:SetTextColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
+            -- the grey dot says "off"; a word beside it says so too
+            self.detail:SetText("Idle")
+            self.detail:SetTextColor(C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
+            self.detail:SetWidth(40)
         else
+            self.detail:SetTextColor(C.INK2[1], C.INK2[2], C.INK2[3])
             if paused then
                 self.dot:SetVertexColor(C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
                 self.title:SetTextColor(C.INK2[1], C.INK2[2], C.INK2[3])
@@ -1376,7 +1450,7 @@ local function TabProfs()
     for _, p in ipairs(M.PROFS) do
         local known = p.key == "cloth" or (FN.ProfessionSkill and (FN.ProfessionSkill(p.key) or 0) > 0)
         local any = sum[p.key] and sum[p.key].n > 0
-        if known or (s.show ~= "me" and any) or (FN.View() ~= FN.db and any) then out[#out + 1] = p end
+        if known or (s.show ~= "me" and any) or (FN.View() ~= FN.db and any) or s.prof == p.key then out[#out + 1] = p end
     end
     return out
 end
@@ -1439,9 +1513,11 @@ end
 -- many, where most, and the skill toward its cap. Hovering a row lights that profession's dots
 -- on the map; a click opens its tab.
 -- ------------------------------------------------------------
-local DASH_ROW = 34
+local DASH_ROW = 40
 local ROW_GAP = 4 -- between rows
 local CARD_PAD = 6 -- the card's inner edge to its rows
+local ROW_RIGHT = 22 -- the right text stops here, leaving room for the chevron
+local ORANGE = { 0.95, 0.60, 0.22 }
 local function DashRow(parent, p, width)
     local r = CreateFrame("Button", nil, parent)
     r:SetSize(width, DASH_ROW)
@@ -1460,65 +1536,96 @@ local function DashRow(parent, p, width)
     r.bar:SetWidth(2)
     r.bar:SetAlpha(0.7)
     r.name = St.Text(r, 11, C.TEXT)
-    r.name:SetPoint("TOPLEFT", 12, -5)
+    r.name:SetPoint("TOPLEFT", 12, -6)
     r.name:SetText(p.label)
     r.count = St.Text(r, 11, C.TEXT)
-    r.count:SetPoint("TOPRIGHT", -8, -5)
+    r.count:SetPoint("TOPRIGHT", -ROW_RIGHT, -6)
     r.count:SetJustifyH("RIGHT")
     r.sub = St.Text(r, 9, C.SUBTEXT)
-    r.sub:SetPoint("TOPLEFT", 12, -19)
-    r.sub:SetWidth(width - 12 - 58)
+    r.sub:SetPoint("TOPLEFT", 12, -21)
+    r.sub:SetWidth(width - 12 - ROW_RIGHT - 66)
     r.sub:SetWordWrap(false)
     r.skill = St.Text(r, 9, C.SUBTEXT)
-    r.skill:SetPoint("TOPRIGHT", -8, -19)
+    r.skill:SetPoint("TOPRIGHT", -ROW_RIGHT, -21)
     r.skill:SetJustifyH("RIGHT")
-    -- the skill toward its cap, a hairline under the row
-    r.track = r:CreateTexture(nil, "ARTWORK")
-    r.track:SetColorTexture(0.18, 0.165, 0.14, 1)
-    r.track:SetHeight(1)
-    r.track:SetPoint("BOTTOMLEFT", 12, 2)
-    r.track:SetPoint("BOTTOMRIGHT", -8, 2)
-    r.fill = r:CreateTexture(nil, "ARTWORK", nil, 1)
-    r.fill:SetColorTexture(p.color[1], p.color[2], p.color[3], 0.9)
-    r.fill:SetHeight(1)
-    r.fill:SetPoint("BOTTOMLEFT", r.track, "BOTTOMLEFT")
+    -- the skill toward its cap, a slim rounded bar at the row's foot
+    local barY = -(DASH_ROW / 2) + 5
+    r.track = St.Pill(r, 3, "ARTWORK")
+    r.track:Anchor(r, 12, ROW_RIGHT, barY)
+    r.track:SetColor(0.20, 0.185, 0.16, 1)
+    r.fill = St.Pill(r, 3, "ARTWORK", 1)
+    -- a chevron that arrives on hover: this row opens something
+    r.chev = r:CreateTexture(nil, "OVERLAY")
+    r.chev:SetTexture(St.Icon("chevron-white"))
+    r.chev:SetSize(10, 10)
+    r.chev:SetRotation(math.pi / 2) -- the icon points down; this turns it to point right
+    r.chev:SetPoint("RIGHT", -7, 0)
+    r.chev:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
+    r.chev:SetAlpha(0)
     local function Lit(on)
         r.wash:SetShown(on)
         r.bar:SetAlpha(on and 1 or 0.7)
+        St.Animate("fn-chev-" .. p.key, on and 1 or 0, St.DUR.quick, "soft", function(v)
+            r.chev:SetAlpha(v)
+            r.chev:ClearAllPoints()
+            r.chev:SetPoint("RIGHT", -7 - 4 * (1 - v), 0)
+        end)
         M.SetLit(on and p.key or nil)
     end
     r:SetScript("OnEnter", function() Lit(true) end)
     r:SetScript("OnLeave", function() Lit(false) end)
-    r:SetScript("OnClick", function(self) if self.tabbed then GoTo(p.key) end end)
+    -- every row opens its page, even a profession with nothing yet (the page says so)
+    r:SetScript("OnClick", function() GoTo(p.key) end)
 
     function r:Update(sum)
         local n = sum and sum.n or 0
+        local here = sum and sum.here or 0
         local rank, cap = 0, nil
         if p.key ~= "cloth" and FN.ProfessionSkill then rank, cap = FN.ProfessionSkill(p.key) end
         rank = rank or 0
-        self.count:SetText(n > 0 and FormatCount(n) or "-")
+        local learned = p.key == "cloth" or rank > 0
+        -- the count, with its unit
+        self.count:SetText(n > 0 and (FormatCount(n) .. " " .. (n == 1 and p.unit or p.units)) or "")
+        -- the line under the name: what is on this map, else where you gather most, else why not
         local sub
         if n == 0 then
-            sub = "nothing yet"
-        elseif p.key == "cloth" and sum.loots > 0 then
-            sub = string.format("%d%% drop rate", math.floor(n / sum.loots * 100 + 0.5))
+            sub = learned and "No gathers yet" or "Not learned"
+        elseif here > 0 then
+            sub = FormatCount(here) .. " here"
         else
             sub = sum.bestZone and ("most in " .. sum.bestZone) or ""
         end
         self.sub:SetText(sub)
+        -- and its right-hand twin: skill toward the cap, a capped note, or cloth's drop rate
+        local frac, capped = 0, false
+        local text, color = "", C.SUBTEXT
         if p.key == "cloth" then
-            self.skill:SetText(sum and sum.loots > 0 and (FormatCount(sum.loots) .. " loots") or "")
+            if n > 0 and sum.loots > 0 then
+                text = string.format("%d%% drop rate", math.floor(n / sum.loots * 100 + 0.5))
+            end
         elseif rank > 0 then
-            self.skill:SetText(cap and (rank .. " / " .. cap) or tostring(rank))
-        else
-            self.skill:SetText("not learned")
+            capped = (cap and cap > 0 and cap < 300 and rank >= cap) and true or false
+            if capped then
+                text, color = "Capped, train next rank", ORANGE
+            else
+                text = cap and ("Skill " .. rank .. " / " .. cap) or ("Skill " .. rank)
+            end
+            frac = (cap and cap > 0) and math.min(1, rank / cap) or 0
         end
-        local frac = (rank > 0 and cap and cap > 0) and math.min(1, rank / cap) or 0
-        self.track:SetShown(frac > 0)
-        self.fill:SetShown(frac > 0)
-        if frac > 0 then self.fill:SetWidth(math.max(1, (width - 20) * frac)) end
-        self.name:SetAlpha(n > 0 and 1 or 0.5)
-        self.count:SetAlpha(n > 0 and 1 or 0.5)
+        self.skill:SetText(text)
+        self.skill:SetTextColor(color[1], color[2], color[3])
+        for _, t in ipairs({ self.track.l, self.track.m, self.track.r, self.fill.l, self.fill.m, self.fill.r }) do
+            t:SetShown(frac > 0)
+        end
+        if frac > 0 then
+            local full = width - 12 - ROW_RIGHT
+            self.fill:Anchor(self, 12, width - 12 - math.max(3, full * frac), barY)
+            local c = capped and ORANGE or p.color
+            self.fill:SetColor(c[1], c[2], c[3], 0.95)
+        end
+        local live = n > 0
+        self.name:SetAlpha(live and 1 or (learned and 0.7 or 0.5))
+        self.count:SetAlpha(live and 1 or 0.5)
     end
     return r
 end
@@ -1547,30 +1654,16 @@ Dashboard = function(parent)
     holder:Hide()
     holder.area = DockScroll(holder)
     local d = holder.area.content
-    local w3 = (INNER - 6) / 3
+    -- Show and When: two dropdowns on one row, no section labels (they say what they are)
+    local w2 = (INNER - 6) / 2
     local y = FIRST_Y + SCROLL_TOP
-    Label(d, "SHOW"):SetPoint("TOPLEFT", PAD, y)
-    d.shows = {}
-    for i, sh in ipairs(SHOWS) do
-        local b = ShowChoice(d, sh)
-        b:SetSize(w3, CTRL_H)
-        b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - LABEL_GAP)
-        d.shows[i] = b
-    end
-    y = y - STEP
-    Label(d, "WHEN"):SetPoint("TOPLEFT", PAD, y)
-    d.whens = {}
-    for i, wh in ipairs(WHENS) do
-        local b = Choice(d, wh[2], function()
-            M.S().when = wh[1]
-            Refresh()
-        end)
-        b.key = wh[1]
-        b:SetSize(w3, CTRL_H)
-        b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - LABEL_GAP)
-        d.whens[i] = b
-    end
-    y = y - STEP
+    d.show = Dropdown(d, ShowProvider)
+    d.show:SetSize(w2, CTRL_H)
+    d.show:SetPoint("TOPLEFT", PAD, y)
+    d.when = Dropdown(d, WhenProvider)
+    d.when:SetSize(w2, CTRL_H)
+    d.when:SetPoint("TOPLEFT", PAD + w2 + 6, y)
+    y = y - CTRL_H - 16
     d.card = St.Frame("Frame", d)
     St.Etch(d.card, STYLE.card or STYLE.row, 4)
     d.card:SetPoint("TOPLEFT", PAD, y)
@@ -1583,19 +1676,28 @@ Dashboard = function(parent)
     end
     local cardH = CARD_PAD * 2 + #M.PROFS * (DASH_ROW + ROW_GAP) - ROW_GAP
     d.card:SetHeight(cardH)
+    -- a line under the card: the whole, in one sentence
+    d.total = St.Text(d, 10, C.SUBTEXT)
+    d.total:SetPoint("TOPLEFT", d.card, "BOTTOMLEFT", 2, -8)
+    d.total:SetWidth(INNER - 4)
+    d.total:SetJustifyH("LEFT")
 
-    d.bottom = -y + cardH + 12
+    d.bottom = -y + cardH + 8 + 12 + 12
     function holder:Update()
         local s = M.S()
-        for _, b in ipairs(d.shows) do b:SetChosen(b.key == s.show) end
-        for _, b in ipairs(d.whens) do b:SetChosen(b.key == s.when) end
+        d.show:Update()
+        d.when:Update()
         local sum = M.Summary(s.show, s.when)
-        local tabbed = {}
-        for _, p in ipairs(TabProfs()) do tabbed[p.key] = true end
+        local total, pros = 0, 0
         for _, r in ipairs(d.rows) do
-            r.tabbed = tabbed[r.p.key]
             r:Update(sum[r.p.key])
+            local n = sum[r.p.key] and sum[r.p.key].n or 0
+            total = total + n
+            if n > 0 then pros = pros + 1 end
         end
+        d.total:SetText(total > 0
+            and (FormatCount(total) .. " gathers across " .. pros .. (pros == 1 and " profession" or " professions"))
+            or "Nothing gathered yet. Your first gather starts a session.")
         self.area:SetHeight(d.bottom)
     end
     holder.rows = d.rows
