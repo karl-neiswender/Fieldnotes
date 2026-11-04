@@ -49,6 +49,36 @@ function FN.SessionLeatherRate()
     return n / math.max(1 / 60, Active() / 3600)
 end
 
+-- Start, pause and end, for the tracker's buttons and the map's session controls
+function FN.SessionRunning() return session.start ~= nil end
+function FN.SessionPaused() return session.pausedAt ~= nil end
+
+function FN.SessionStart()
+    local now = GetTime()
+    Reset(now)
+    session.last = now -- a session started by hand is not idle yet
+    FN.ShowTracker()
+end
+
+function FN.SessionTogglePause()
+    if not session.start then return end
+    local now = GetTime()
+    if session.pausedAt then
+        session.paused = session.paused + (now - session.pausedAt)
+        session.pausedAt = nil
+        session.last = now -- a resumed session is not idle
+    else
+        session.pausedAt = now
+    end
+    FN.UpdateTracker()
+end
+
+function FN.SessionEnd()
+    Reset(nil)
+    session.start = nil
+    FN.HideTracker()
+end
+
 -- ------------------------------------------------------------
 -- The panel
 -- ------------------------------------------------------------
@@ -117,22 +147,8 @@ local function Build()
         ui.loot[i] = row
     end
 
-    ui.pause = St.ChoiceButton(frame, function()
-        local now = GetTime()
-        if session.pausedAt then
-            session.paused = session.paused + (now - session.pausedAt)
-            session.pausedAt = nil
-            session.last = now -- a resumed session is not idle
-        else
-            session.pausedAt = now
-        end
-        FN.UpdateTracker()
-    end)
-    ui.finish = St.ChoiceButton(frame, function()
-        Reset(nil)
-        session.start = nil
-        frame:Hide()
-    end)
+    ui.pause = St.ChoiceButton(frame, function() FN.SessionTogglePause() end)
+    ui.finish = St.ChoiceButton(frame, function() FN.SessionEnd() end)
     ui.finish.text:SetText("End session")
     ui.finish:SetChosen(true)
     ui.finish:SetScript("OnLeave", function(self) self:SetChosen(true) end)

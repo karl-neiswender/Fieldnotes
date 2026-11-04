@@ -201,9 +201,9 @@ local off = Open("heat", "account")
 FieldnotesDB.settings.map.on = true
 -- settings: Spotlight, Heat by Hides, every color scheme, the settings panel open
 local spot = Open("spotlight", "account")
-FieldnotesDB.settings.map.heatBy = "hides"
+FieldnotesDB.settings.map.leather = "hides" -- hides are an entry in the leather list now
 local hides = Open("heat", "account")
-FieldnotesDB.settings.map.heatBy = "skins"
+FieldnotesDB.settings.map.leather = 0
 for _, c in ipairs({ "thermal", "frost", "verdant", "gold", "ember" }) do
   FieldnotesDB.settings.map.colors = c
   Open("heat", "account")
@@ -219,7 +219,20 @@ WorldMapFrame.mapID = 1415 -- the continent: a badge per zone with notes
 Open("heat", "account")
 local continentBadges = ns.Map.ui.badgeCount
 WorldMapFrame.mapID = 1426
-local mapResult = continentBadges .. "," .. spot .. "," .. hides .. "," .. settingsOpen .. "," .. recent .. "," .. heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off
+-- the small map: a dock beside it (room on the right), the toolbar when maximized
+local toolbarLayout = ns.Map.ui.layout
+WorldMapFrame.IsMaximized = function() return false end
+function WorldMapFrame:GetLeft() return 300 end
+function WorldMapFrame:GetRight() return 1300 end
+function UIParent:GetRight() return 1920 end
+Open("points", "account")
+local dockLayout = ns.Map.ui.layout
+ns.SessionStart()
+local sessionOn = ns.SessionRunning()
+ns.SessionEnd()
+print("map        layouts: maximized " .. tostring(toolbarLayout) .. ", small " .. tostring(dockLayout))
+local layouts = (toolbarLayout == "toolbar" and dockLayout == "dock" and sessionOn and not ns.SessionRunning()) and 1 or 0
+local mapResult = layouts .. "," .. continentBadges .. "," .. spot .. "," .. hides .. "," .. settingsOpen .. "," .. recent .. "," .. heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off
 
 -- 7. the stats window on the demo
 SlashCmdList.FIELDNOTES("")
@@ -249,6 +262,12 @@ print("share      window: " .. words)
 local demoShare = roundTrip and cutOff and imported and after > before
   and words:find("skins", 1, true) and not words:lower():find("character", 1, true)
 
+-- every command, in demo mode
+commandErrors = {}
+for _, cmd in ipairs({ "", "", "stats", "summary", "tracker", "tracker", "chat", "chat", "share", "import", "debug", "fake", "help" }) do
+  local ok, err = pcall(SlashCmdList.FIELDNOTES, cmd)
+  if not ok then commandErrors[#commandErrors + 1] = "/fn " .. cmd .. " (demo): " .. tostring(err) end
+end
 SlashCmdList.FIELDNOTES("demo off")
 local cleared = FieldnotesDB.demo == nil and not FieldnotesDB.settings.demo
 
@@ -262,6 +281,13 @@ local communityReal = 0
 for _, l in ipairs(ns.CommunityLists("skinning", 1434)) do communityReal = communityReal + #l end
 local realShare = (refusedDemo and refusedOwn and addedTheirs and communityReal == 1) and "ok"
   or ("demo " .. tostring(refusedDemo) .. " own " .. tostring(refusedOwn) .. " theirs " .. tostring(addedTheirs) .. " n " .. communityReal)
+
+-- every command again, with your own records
+for _, cmd in ipairs({ "", "", "stats", "summary", "tracker", "tracker", "chat", "chat", "share", "import", "debug", "fake", "help" }) do
+  local ok, err = pcall(SlashCmdList.FIELDNOTES, cmd)
+  if not ok then commandErrors[#commandErrors + 1] = "/fn " .. cmd .. " (real): " .. tostring(err) end
+end
+mapError = ns.Map.lastError -- a draw error is caught (and said in chat), so check it here
 
 local list = FieldnotesDB.events.skinning[1434]
 return #list, list[1], FieldnotesDB.creatures[682].name, FieldnotesDB.creatures[682].minLevel, table.concat(chat, "\n"),
@@ -288,7 +314,7 @@ if ok:
     count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result, stats, me_skins, tracker, demo_share, real_share = rt.execute(PLAY)
     print("share      real: %s" % real_share)
     print("stats      tiles %s, Me %s" % (stats, me_skins))
-    continent, spot, hides, settings_open, recent, heat, p_me, p_all, p_comm, empty, off = [int(v) for v in map_result.split(",")]
+    layouts, continent, spot, hides, settings_open, recent, heat, p_me, p_all, p_comm, empty, off = [int(v) for v in map_result.split(",")]
     print("map        continent badges %d" % continent)
     print("map        spotlight %d, hides %d, last 7 days %d, settings panel %s" % (spot, hides, recent, "open" if settings_open else "closed"))
     print("map        heat %d, points me %d / account %d / community %d, empty map %d, off %d" % (heat, p_me, p_all, p_comm, empty, off))
@@ -309,10 +335,13 @@ if ok:
         ("map: a map without notes draws nothing but the dimming", empty <= 1),
         ("map: switched off draws nothing", off == 0),
         ("map: the continent shows a badge for each zone with notes", continent == 6),
+        ("map: toolbar on the full-screen map, dock beside the small one; sessions start and end", layouts == 1),
         ("map: Spotlight dims the map", spot > heat),
-        ("map: Heat by Hides draws fewer areas than skins", 0 < hides < heat),
+        ("map: the Hides leather filter draws fewer areas than all skins", 0 < hides < heat),
         ("map: the settings panel opens", settings_open == 1),
         ("map: Last 7 days draws less than All time", recent < heat),
+        ("map: drew without an error", rt.globals().mapError is None),
+        ("every /fn command runs, in demo mode and with real records", len(list(rt.globals().commandErrors.values())) == 0),
         ("session tracker counts the real skin", bool(tracker)),
         ("share: demo text reads back whole, a cut-off paste is caught, import adds to Community", bool(demo_share)),
         ("share: demo text and your own text are refused; someone else's joins Community", real_share == "ok"),
@@ -323,6 +352,8 @@ if ok:
     for label, passed in checks:
         ok = ok and passed
         print(("ok         " if passed else "FAIL       ") + label)
+    for e in rt.globals().commandErrors.values():
+        print("COMMAND    " + e)
     if not ok:
         print("record: " + str(first))
         print(chat)

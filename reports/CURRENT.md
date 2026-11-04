@@ -42,3 +42,17 @@
   header, no "characters" wording). Checks pass (23).
 - Not built yet: a community form link (needs Karl's form), shipping a merged community
   dataset with releases.
+- Map v2 mockups (design/map-v2-2026-11-03, canvas bottom row): dock outside the small map with a
+  profession switcher, leather dropdown, labelled key, session play/pause; centred toolbar on
+  the full-screen map; settings cut to Colors and When. Motion spec in that folder's README.
+- v0.6.0 builds it: Map.lua (drawing + model, auto spread/thin), MapUI.lua (dock, tab, sheet,
+  toolbar, key, session controls), St.Animate in Style.lua, play/pause icons. Reviewed in game
+  on Era (2026-11-03): dock fits at Karl's UI scale (slim session row, key gives up its last
+  lines when short), dock measured from the map's border frame, Strength and Spread sliders
+  (50-250%), smoother heat (72-wide grid, soft edge fade, alpha from zero). Checks pass (26),
+  including every /fn command and no map draw errors.
+- Heat and dots hidden under explored map art (2026-11-03): only a sliver of heat showed in a gap
+  between explored areas. Map.lua's Layer() now puts the overlay one level above the map's
+  exploration art (pin level manager + MapExplorationPinTemplate pins), under Blizzard's pins.
+  Checks pass, copied to Era. Not yet confirmed in game.
+- Known: a stray "ke" text shows past the right end of the map bar (seen 2026-11-03, not traced).

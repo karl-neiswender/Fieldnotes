@@ -268,3 +268,95 @@ function St.PlaceSaved(frame, key, point, relPoint, x, y)
         frame:SetPoint(point, UIParent, relPoint, x, y)
     end
 end
+
+-- A slider in the house style: a recessed track, a gold fill up to the knob, and Forever Goal
+-- Tracker's knob. s:Set(v) places it without calling back; dragging calls onChange(v).
+function St.Slider(parent, width, min, max, step, onChange)
+    local s = CreateFrame("Slider", nil, parent)
+    s:SetSize(width, 16)
+    s:SetOrientation("HORIZONTAL")
+    s:SetMinMaxValues(min, max)
+    s:SetValueStep(step)
+    if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
+    s.track = s:CreateTexture(nil, "BACKGROUND")
+    s.track:SetColorTexture(0.012, 0.012, 0.012, 1)
+    s.track:SetHeight(6)
+    s.track:SetPoint("LEFT", 0, 0)
+    s.track:SetPoint("RIGHT", 0, 0)
+    s.fill = s:CreateTexture(nil, "BORDER")
+    s.fill:SetTexture(SOLID)
+    s.fill:SetHeight(4)
+    s.fill:SetPoint("LEFT", s.track, "LEFT", 1, 0)
+    St.HGradient(s.fill, { 0.32, 0.18, 0.01 }, { 1.00, 0.86, 0.30 })
+    local knob = s:CreateTexture(nil, "OVERLAY")
+    knob:SetTexture(St.Media("knob"))
+    knob:SetSize(14, 14)
+    St.VGradient(knob, { 1.00, 0.96, 0.78 }, { 0.92, 0.70, 0.22 })
+    s:SetThumbTexture(knob)
+    local quiet = false
+    local function Fill(v)
+        s.fill:SetWidth(math.max(1, (width - 2) * (v - min) / (max - min)))
+    end
+    s:SetScript("OnValueChanged", function(_, v)
+        Fill(v)
+        if not quiet then onChange(v) end
+    end)
+    function s:Set(v)
+        quiet = true
+        self:SetValue(v)
+        quiet = false
+        Fill(v)
+    end
+    return s
+end
+
+-- ------------------------------------------------------------
+-- Motion: one small driver for every slide and fade
+-- ------------------------------------------------------------
+-- St.Animate(id, to, seconds, ease, apply, done): moves a number from where it is now (its last
+-- value, or `to` the first time) to `to`, calling apply(value) every frame. A new call with the
+-- same id takes over from wherever the old one had got to, so a second click mid-way reverses
+-- smoothly instead of snapping. ease: "out" (fast then settling: opening) or "in" (gentle start:
+-- closing). The driver runs only while something is moving.
+local tweens, values, driver = {}, {}, nil
+local EASE = {
+    out = function(p) return 1 - (1 - p) ^ 3 end,
+    ["in"] = function(p) return p * p * p end,
+    both = function(p) return p < 0.5 and 4 * p * p * p or 1 - (-2 * p + 2) ^ 3 / 2 end,
+}
+function St.Animate(id, to, seconds, ease, apply, done)
+    local from = values[id]
+    if from == nil then from = to end
+    if not seconds or seconds <= 0 or from == to then
+        tweens[id] = nil
+        values[id] = to
+        apply(to)
+        if done then done() end
+        return
+    end
+    if not driver then
+        driver = CreateFrame("Frame")
+        driver:SetScript("OnUpdate", function(self, dt)
+            local any = false
+            for key, t in pairs(tweens) do
+                t.t = t.t + dt
+                local p = math.min(1, t.t / t.dur)
+                local v = t.from + (t.to - t.from) * (EASE[t.ease] or EASE.both)(p)
+                values[key] = v
+                t.apply(v)
+                if p >= 1 then
+                    tweens[key] = nil
+                    if t.done then t.done() end
+                else
+                    any = true
+                end
+            end
+            if not any and not next(tweens) then self:Hide() end
+        end)
+    end
+    tweens[id] = { from = from, to = to, t = 0, dur = seconds, ease = ease, apply = apply, done = done }
+    driver:Show()
+end
+
+-- where an animation last left its value (nil before the first)
+function St.AnimValue(id) return values[id] end

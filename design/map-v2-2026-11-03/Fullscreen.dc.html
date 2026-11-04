@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fieldnotes full-screen map</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffd75e}a:hover{color:#ffe9a6}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1600px; height: 1000px; position: relative; overflow: hidden; background: #0d0b08; font-family: Marcellus, Georgia, serif; color: #e8e8e8">
+  <div style="height: 30px; display: flex; align-items: center; justify-content: center; background: linear-gradient(#2a241a, #120f0a); border-bottom: 1px solid #5a4a2a; font-size: 17px; color: #ffd75e">World Map</div>
+  <div style="height: 58px; display: flex; align-items: flex-end; justify-content: center; gap: 26px; padding-bottom: 8px; box-sizing: border-box; background: linear-gradient(#1c1913, #0b0a08)">
+    <sc-for list="{{drops}}" as="d" hint-placeholder-count="3">
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <span style="font-size: 12px; color: #ffd75e">{{d.label}}</span>
+        <span style="width: 210px; height: 26px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #4a4133; border-radius: 4px; background: #0e0d0b; font-size: 13px">{{d.value}}<span style="color: #ffd100">▾</span></span>
+      </div>
+    </sc-for>
+    <span style="height: 26px; padding: 0 22px; display: flex; align-items: center; border: 1px solid #7a1a12; border-radius: 4px; background: linear-gradient(#a01d12, #4a0a06); color: #ffd75e; font-size: 15px">Zoom Out</span>
+  </div>
+
+  <div style="position: absolute; left: 12px; top: 94px; right: 12px; bottom: 12px; overflow: hidden; border-radius: 3px; box-shadow: 0 0 0 2px #5a4a2a">
+    <svg width="1576" height="894" viewBox="0 0 1576 894" style="position: absolute; inset: 0" aria-hidden="true">
+      <defs>
+        <radialGradient id="fparch" cx="50%" cy="50%" r="70%">
+          <stop offset="0%" stop-color="#d9bd7c"></stop>
+          <stop offset="100%" stop-color="#a27d44"></stop>
+        </radialGradient>
+        <pattern id="fpeaks" width="34" height="20" patternUnits="userSpaceOnUse">
+          <path d="M1 19 L10 5 L17 13 L24 4 L33 19" fill="none" stroke="#6e5530" stroke-width="1.6"></path>
+        </pattern>
+        <radialGradient id="fg1" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#b3402b" stop-opacity="0.8"></stop>
+          <stop offset="45%" stop-color="#de7a3a" stop-opacity="0.5"></stop>
+          <stop offset="100%" stop-color="#eeb35c" stop-opacity="0"></stop>
+        </radialGradient>
+        <radialGradient id="fg2" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#de7a3a" stop-opacity="0.65"></stop>
+          <stop offset="100%" stop-color="#f3e2a6" stop-opacity="0"></stop>
+        </radialGradient>
+      </defs>
+      <rect width="1576" height="894" fill="url(#fparch)"></rect>
+      <path d="M100 170 C 320 90, 700 110, 980 120 S 1430 150, 1500 280 L 1470 640 C 1240 700, 900 760, 600 800 S 180 850, 110 740 Z" fill="url(#fpeaks)" opacity="0.75"></path>
+      <path d="M400 320 C 540 250, 840 260, 1000 330 S 1130 520, 980 590 S 540 640, 420 550 Z" fill="#e7d3a1" opacity="0.85"></path>
+      <path d="M1040 340 C 1140 310, 1260 340, 1280 410 S 1170 500, 1080 460 Z" fill="#e7d3a1" opacity="0.8"></path>
+      <path d="M260 650 C 360 610, 480 620, 520 690 S 420 780, 300 760 Z" fill="#e7d3a1" opacity="0.8"></path>
+      <ellipse cx="580" cy="380" rx="60" ry="36" fill="#8fa4a8" stroke="#6e5530"></ellipse>
+      <path d="M1210 330 C 1240 360, 1255 420, 1215 450 C 1185 420, 1195 370, 1210 330 Z" fill="#8fa4a8" stroke="#6e5530"></path>
+      <circle cx="760" cy="440" r="120" fill="url(#fg1)"></circle>
+      <circle cx="715" cy="410" r="80" fill="url(#fg2)"></circle>
+      <circle cx="420" cy="690" r="70" fill="url(#fg2)"></circle>
+      <text x="790" y="250" text-anchor="middle" font-family="Marcellus, serif" font-size="34" letter-spacing="6" fill="#ffd75e" stroke="#4a3412" stroke-width="0.8">IRONFORGE</text>
+      <text x="740" y="480" text-anchor="middle" font-family="Marcellus, serif" font-size="15" letter-spacing="3" fill="#4a3a22">KHARANOS</text>
+      <text x="390" y="730" text-anchor="middle" font-family="Marcellus, serif" font-size="15" letter-spacing="3" fill="#4a3a22">COLDRIDGE VALLEY</text>
+      <text x="1170" y="790" text-anchor="middle" font-family="Marcellus, serif" font-size="40" letter-spacing="8" fill="#5c4527" opacity="0.8">THE SEARING GORGE</text>
+      <text x="1300" y="130" text-anchor="middle" font-family="Marcellus, serif" font-size="34" letter-spacing="7" fill="#5c4527" opacity="0.8">WETLANDS</text>
+      <circle cx="758" cy="438" r="9" fill="#fff4dc"></circle>
+      <circle cx="758" cy="438" r="4.5" fill="#1b140c"></circle>
+      <circle cx="420" cy="690" r="7" fill="#fff4dc"></circle>
+      <circle cx="420" cy="690" r="3.5" fill="#1b140c"></circle>
+    </svg>
+
+    <div style="position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 14px; border-radius: 10px; background: linear-gradient(#1b1813, #070707); border: 1px solid #54492f; box-shadow: inset 0 1px 0 rgba(255,235,180,0.07), 0 10px 24px rgba(0,0,0,0.45); white-space: nowrap">
+      <span style="font-size: 16px; color: #ffd75e; text-shadow: 1px -1px 0 #33240a">Fieldnotes</span>
+      <span style="position: relative; width: 36px; height: 18px; border-radius: 9px; border: 1px solid #d9ad33; background: linear-gradient(#8c6b19, #382908)"><span style="position: absolute; top: 1.5px; left: 19px; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(#fff5c7, #ebb338)"></span></span>
+      <span style="width: 1px; height: 20px; background: #54492f"></span>
+      <sc-for list="{{views}}" as="v" hint-placeholder-count="3"><span style="{{v.style}}">{{v.label}}</span></sc-for>
+      <span style="width: 1px; height: 20px; background: #54492f"></span>
+      <sc-for list="{{shows}}" as="v" hint-placeholder-count="3"><span style="{{v.style}}">{{v.label}}</span></sc-for>
+      <span style="width: 1px; height: 20px; background: #54492f"></span>
+      <span style="{{leatherStyle}}"><span style="width: 8px; height: 8px; border-radius: 50%; background: #e39a3b; box-shadow: 0 0 0 1px #000"></span>Light Leather <span style="color: #8a8a8a">▾</span></span>
+      <span style="width: 1px; height: 20px; background: #54492f"></span>
+      <span style="{{sessionStyle}}"><span style="width: 8px; height: 8px; border-radius: 50%; background: #4fbf3b"></span>4:20  ·  12 skins</span>
+      <span style="{{btnStyle}}">Stats</span>
+      <span style="{{btnStyle}}">Share</span>
+      <span style="{{gearStyle}}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffd75e" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg>
+      </span>
+    </div>
+
+    <div style="position: absolute; left: 50%; top: 62px; transform: translateX(-50%); margin-left: 300px; width: 290px; box-sizing: border-box; padding: 14px; display: flex; flex-direction: column; gap: 12px; border-radius: 10px; background: linear-gradient(#1b1813, #070707); border: 1px solid #54492f; box-shadow: 0 12px 28px rgba(0,0,0,0.5)">
+      <span style="font-size: 10px; letter-spacing: 1px; color: #8a8a8a">COLORS</span>
+      <div style="display: flex; justify-content: space-between">
+        <sc-for list="{{schemes}}" as="c" hint-placeholder-count="5">
+          <span style="display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 10px; color: #bdbdbd">
+            <span style="{{c.swatch}}"></span>{{c.label}}
+          </span>
+        </sc-for>
+      </div>
+      <span style="font-size: 10px; letter-spacing: 1px; color: #8a8a8a">WHEN</span>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px">
+        <sc-for list="{{whens}}" as="w" hint-placeholder-count="3"><span style="{{w.style}}">{{w.label}}</span></sc-for>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #8a8a8a">
+        <span>Strength, spread and thin areas adjust themselves</span>
+      </div>
+    </div>
+
+    <div style="position: absolute; left: 14px; bottom: 14px; width: 280px; box-sizing: border-box; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; border-radius: 8px; background: linear-gradient(rgba(27,24,19,0.94), rgba(7,7,7,0.94)); border: 1px solid #54492f">
+      <span style="font-size: 13px">3 skins  ·  Large Crag Boar  ·  Light Leather</span>
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: #8a8a8a">
+        <span>Fewer</span>
+        <span style="flex-grow: 1; height: 8px; border-radius: 2px; background: linear-gradient(90deg, #f3e2a6, #eeb35c 30%, #de7a3a 55%, #b3402b 80%, #6a1c22)"></span>
+        <span>More</span>
+      </div>
+      <span style="font-size: 10px; color: #8a8a8a">Up to 2 skins in one area</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":1000}}'>
+var GOLD = 'border: 1px solid #ffd100; background: linear-gradient(#614a0f, #1c1404); color: #ffd75e';
+var OFF = 'border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #bdbdbd';
+function chip(on, extra) { return 'height: 24px; box-sizing: border-box; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border-radius: 4px; font-size: 12px; ' + (on ? GOLD : OFF) + (extra || ''); }
+var RAMPS = {
+  Ember: 'linear-gradient(135deg, #f3e2a6, #de7a3a 55%, #6a1c22)',
+  Thermal: 'linear-gradient(135deg, #294cd9, #26b3d9 30%, #73d94d 55%, #ffd926 78%, #e62e1a)',
+  Frost: 'linear-gradient(135deg, #d9edff, #408cff 55%, #0a2966)',
+  Verdant: 'linear-gradient(135deg, #f7eda6, #73b859 55%, #0d472e)',
+  Gold: 'linear-gradient(135deg, #fff2bf, #f2b326 55%, #734705)'
+};
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      drops: [{ label: 'Battle Map', value: 'Never Show' }, { label: 'Continent', value: 'Eastern Kingdoms' }, { label: 'Zone', value: 'Dun Morogh' }],
+      views: [['Heat', true], ['Points', false], ['Spotlight', false]].map(function (v) { return { label: v[0], style: chip(v[1]) }; }),
+      shows: [['Me', true], ['Account', false], ['Community', false]].map(function (v) { return { label: v[0], style: chip(v[1]) }; }),
+      leatherStyle: chip(false),
+      sessionStyle: chip(false, '; color: #e8e8e8'),
+      btnStyle: chip(false),
+      gearStyle: chip(true, '; padding: 0 6px'),
+      schemes: Object.keys(RAMPS).map(function (k, i) {
+        return { label: k, swatch: 'width: 34px; height: 34px; border-radius: 50%; background: ' + RAMPS[k] + '; box-shadow: 0 0 0 ' + (i === 0 ? '2px #ffd100, 0 0 0 4px #1b1813' : '1px #000') };
+      }),
+      whens: [['All time', true], ['30 days', false], ['7 days', false]].map(function (v) { return { label: v[0], style: chip(v[1], '; justify-content: center') }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

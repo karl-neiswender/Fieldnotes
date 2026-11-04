@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fieldnotes small map dock</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffd75e}a:hover{color:#ffe9a6}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid #ffd75e;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 860px; position: relative; overflow: hidden; background: radial-gradient(ellipse at 40% 40%, #2a3138 0%, #11161b 70%); font-family: Marcellus, Georgia, serif; color: #e8e8e8">
+
+  <div style="position: absolute; left: 120px; top: 70px; width: 980px; height: 720px; box-sizing: border-box; border-radius: 6px; background: #17140f; box-shadow: 0 0 0 2px #5a4a2a, 0 0 0 4px #1a160f, 0 18px 50px rgba(0,0,0,0.6)">
+    <div style="height: 30px; display: flex; align-items: center; justify-content: center; background: linear-gradient(#2a241a, #120f0a); border-bottom: 1px solid #5a4a2a; font-size: 17px; color: #ffd75e">Dun Morogh</div>
+    <div style="position: absolute; left: 8px; top: 38px; right: 8px; bottom: 8px; overflow: hidden; border-radius: 3px">
+      <svg width="964" height="674" viewBox="0 0 964 674" style="position: absolute; inset: 0" aria-hidden="true">
+        <defs>
+          <radialGradient id="parch" cx="50%" cy="50%" r="70%">
+            <stop offset="0%" stop-color="#d9bd7c"></stop>
+            <stop offset="100%" stop-color="#a98349"></stop>
+          </radialGradient>
+          <pattern id="peaks" width="26" height="16" patternUnits="userSpaceOnUse">
+            <path d="M1 15 L8 4 L13 10 L18 3 L25 15" fill="none" stroke="#6e5530" stroke-width="1.4"></path>
+          </pattern>
+          <radialGradient id="g1" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#b3402b" stop-opacity="0.75"></stop>
+            <stop offset="45%" stop-color="#de7a3a" stop-opacity="0.45"></stop>
+            <stop offset="100%" stop-color="#eeb35c" stop-opacity="0"></stop>
+          </radialGradient>
+          <radialGradient id="g2" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#de7a3a" stop-opacity="0.6"></stop>
+            <stop offset="100%" stop-color="#f3e2a6" stop-opacity="0"></stop>
+          </radialGradient>
+        </defs>
+        <rect width="964" height="674" fill="url(#parch)"></rect>
+        <path d="M60 120 C 200 60, 420 80, 600 90 S 880 110, 920 200 L 900 470 C 760 520, 560 560, 380 600 S 120 640, 70 560 Z" fill="url(#peaks)" opacity="0.75"></path>
+        <path d="M250 230 C 330 180, 520 190, 620 240 S 700 380, 600 430 S 330 470, 260 400 Z" fill="#e7d3a1" opacity="0.85"></path>
+        <path d="M640 250 C 700 230, 780 250, 790 300 S 720 360, 660 330 Z" fill="#e7d3a1" opacity="0.8"></path>
+        <path d="M160 470 C 220 440, 300 450, 320 500 S 260 570, 190 550 Z" fill="#e7d3a1" opacity="0.8"></path>
+        <ellipse cx="350" cy="275" rx="38" ry="24" fill="#8fa4a8" stroke="#6e5530"></ellipse>
+        <path d="M740 240 C 760 260, 770 300, 745 320 C 725 300, 730 270, 740 240 Z" fill="#8fa4a8" stroke="#6e5530"></path>
+        <path d="M300 300 C 380 320, 430 300, 470 330 S 520 400, 470 450 S 380 470, 330 500" fill="none" stroke="#7b5f35" stroke-width="2" stroke-dasharray="5 4"></path>
+        <sc-if value="{{showHeat}}" hint-placeholder-val="{{ true }}">
+          <circle cx="468" cy="318" r="70" fill="url(#g1)"></circle>
+          <circle cx="440" cy="300" r="46" fill="url(#g2)"></circle>
+        </sc-if>
+        <text x="482" y="180" text-anchor="middle" font-family="Marcellus, serif" font-size="22" letter-spacing="4" fill="#ffd75e" stroke="#4a3412" stroke-width="0.6">IRONFORGE</text>
+        <text x="455" y="345" text-anchor="middle" font-family="Marcellus, serif" font-size="11" letter-spacing="2" fill="#4a3a22">KHARANOS</text>
+        <text x="300" y="320" text-anchor="middle" font-family="Marcellus, serif" font-size="11" letter-spacing="2" fill="#4a3a22">BREWNALL VILLAGE</text>
+        <text x="240" y="515" text-anchor="middle" font-family="Marcellus, serif" font-size="11" letter-spacing="2" fill="#4a3a22">COLDRIDGE VALLEY</text>
+        <text x="720" y="560" text-anchor="middle" font-family="Marcellus, serif" font-size="26" letter-spacing="5" fill="#5c4527" opacity="0.8">THE SEARING GORGE</text>
+        <text x="800" y="60" text-anchor="middle" font-family="Marcellus, serif" font-size="22" letter-spacing="5" fill="#5c4527" opacity="0.8">WETLANDS</text>
+        <sc-if value="{{showPins}}" hint-placeholder-val="{{ true }}">
+          <circle cx="466" cy="316" r="8" fill="#fff4dc"></circle>
+          <circle cx="466" cy="316" r="4" fill="#1b140c"></circle>
+        </sc-if>
+        <path d="M478 300 l8 18 l-8 -5 l-8 5 z" fill="#c9d6e6" stroke="#2c3a4a"></path>
+      </svg>
+      <sc-if value="{{showSpot}}" hint-placeholder-val="{{ false }}">
+        <div style="position: absolute; inset: 0; background: radial-gradient(circle at 466px 316px, rgba(5,4,3,0) 50px, rgba(5,4,3,0.74) 170px)"></div>
+      </sc-if>
+      <sc-for list="{{dots}}" as="d" hint-placeholder-count="3">
+        <div style="{{d.style}}"></div>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{collapsed}}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{toggleDock}}" aria-label="Open Fieldnotes" style="position: absolute; left: 1100px; top: 164px; width: 30px; height: 120px; border: 1px solid #54492f; border-left: 0; border-radius: 0 8px 8px 0; background: linear-gradient(#1f1b15, #070707); color: #ffd75e; font-size: 14px; writing-mode: vertical-rl; letter-spacing: 2px">Fieldnotes <span style="text-orientation: upright; font-size: 16px">›</span></button>
+  </sc-if>
+
+  <sc-if value="{{open}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; left: 1100px; top: 100px; width: 250px; height: 680px; box-sizing: border-box; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 12px; overflow: visible; background: linear-gradient(#1b1813, #070707); border: 1px solid #54492f; border-left: 0; border-radius: 0 10px 10px 0; box-shadow: inset 0 1px 0 rgba(255,235,180,0.07), 12px 14px 30px rgba(0,0,0,0.5)">
+      <div style="{{dockContent}}">
+      <button onClick="{{toggleDock}}" aria-label="Fold the dock away" style="position: absolute; right: -31px; top: 64px; width: 30px; height: 120px; border: 1px solid #54492f; border-left: 0; border-radius: 0 8px 8px 0; background: linear-gradient(#1f1b15, #070707); color: #ffd75e; font-size: 14px; writing-mode: vertical-rl; letter-spacing: 2px">Fieldnotes <span style="text-orientation: upright; font-size: 16px">‹</span></button>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <div role="group" aria-label="Profession" style="display: flex; gap: 4px">
+            <sc-for list="{{profs}}" as="p" hint-placeholder-count="4">
+              <button onClick="{{p.pick}}" aria-pressed="{{p.pressed}}" aria-label="{{p.label}}" title="{{p.tip}}" style="{{p.style}}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{p.icon}}"></path></svg>
+              </button>
+            </sc-for>
+          </div>
+          <button onClick="{{toggleOn}}" aria-pressed="{{onPressed}}" aria-label="Show Fieldnotes on the map" style="{{switchStyle}}"><span style="{{knobStyle}}"></span></button>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <span style="font-size: 17px; color: #ffd75e; text-shadow: 1px -1px 0 #33240a">{{profName}}</span>
+          <span style="font-size: 11px; color: #8a8a8a">Dun Morogh</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 5px">
+        <span style="font-size: 10px; letter-spacing: 1px; color: #8a8a8a">VIEW</span>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px">
+          <sc-for list="{{modes}}" as="m" hint-placeholder-count="3">
+            <button onClick="{{m.pick}}" aria-pressed="{{m.pressed}}" style="{{m.style}}">{{m.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 5px">
+        <span style="font-size: 10px; letter-spacing: 1px; color: #8a8a8a">SHOW</span>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px">
+          <sc-for list="{{shows}}" as="s" hint-placeholder-count="3">
+            <button onClick="{{s.pick}}" aria-pressed="{{s.pressed}}" style="{{s.style}}">{{s.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 5px">
+        <span style="font-size: 10px; letter-spacing: 1px; color: #8a8a8a">LEATHER</span>
+        <div style="position: relative">
+          <button onClick="{{toggleLeather}}" aria-expanded="{{leatherExpanded}}" aria-haspopup="listbox" style="width: 100%; height: 28px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 7px; border-radius: 4px; border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #e8e8e8; font-size: 12px">
+            <span style="{{chosenDot}}"></span>
+            <span style="flex-grow: 1; text-align: left">{{chosenLabel}}</span>
+            <span style="color: #bdbdbd; font-size: 11px">{{chevron}}</span>
+          </button>
+          <sc-if value="{{leatherOpen}}" hint-placeholder-val="{{ false }}">
+            <div role="listbox" aria-label="Leather" style="position: absolute; left: 0; right: 0; top: 32px; z-index: 5; max-height: 168px; overflow-y: auto; box-sizing: border-box; padding: 4px; border-radius: 6px; border: 1px solid #54492f; background: linear-gradient(#1b1813, #070707); box-shadow: 0 10px 22px rgba(0,0,0,0.6); scrollbar-color: #6b5e42 #0d0c0b; scrollbar-width: thin">
+              <sc-for list="{{leathers}}" as="l" hint-placeholder-count="8">
+                <button role="option" aria-selected="{{l.pressed}}" onClick="{{l.pick}}" style="{{l.style}}"><span style="{{l.dot}}"></span><span style="flex-grow: 1; text-align: left">{{l.label}}</span><span style="color: #8a8a8a; font-size: 11px">{{l.count}}</span></button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="padding: 10px 11px; border-radius: 6px; background: linear-gradient(#26241f, #0d0c0b); border: 1px solid #47422f; display: flex; flex-direction: column; gap: 7px">
+        <span style="font-size: 10px; letter-spacing: 1px; color: #8a8a8a">ON THIS MAP</span>
+        <span style="font-size: 20px; color: #e8e8e8">3 skins</span>
+        <div style="display: flex; justify-content: space-between; font-size: 11px"><span style="color: #8a8a8a">Most skinned</span><span>Large Crag Boar</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px"><span style="color: #8a8a8a">Main leather</span><span>Light Leather</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: #8a8a8a">
+          <span>Fewer</span>
+          <span style="flex-grow: 1; height: 8px; border-radius: 2px; background: linear-gradient(90deg, #f3e2a6, #eeb35c 30%, #de7a3a 55%, #b3402b 80%, #6a1c22)"></span>
+          <span>More</span>
+        </div>
+        <span style="font-size: 10px; color: #8a8a8a">{{scaleLine}}</span>
+      </div>
+
+      <div style="padding: 10px 11px; border-radius: 6px; background: linear-gradient(#26241f, #0d0c0b); border: 1px solid #47422f; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <span style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: #ffd75e"><span style="{{sessionDot}}"></span>{{sessionTitle}}</span>
+          <span style="font-size: 12px; color: #bdbdbd">{{sessionClock}}</span>
+        </div>
+        <sc-if value="{{running}}" hint-placeholder-val="{{ false }}">
+          <span style="font-size: 11px; color: #bdbdbd">12 skins  ·  3.1 per min  ·  8% ruined</span>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px">
+            <button onClick="{{pause}}" style="height: 26px; border-radius: 4px; border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #bdbdbd; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px">
+              <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1 L9 5 L2 9 Z" fill="currentColor"></path></svg></sc-if>
+              <sc-if value="{{notPaused}}" hint-placeholder-val="{{ true }}"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="1.5" y="1" width="2.5" height="8" fill="currentColor"></rect><rect x="6" y="1" width="2.5" height="8" fill="currentColor"></rect></svg></sc-if>
+              {{pauseLabel}}
+            </button>
+            <button onClick="{{endSession}}" style="height: 26px; border-radius: 4px; border: 1px solid #ffd100; background: linear-gradient(#614a0f, #1c1404); color: #ffd75e; font-size: 12px">End</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{idle}}" hint-placeholder-val="{{ true }}">
+          <span style="font-size: 11px; color: #8a8a8a">Starts by itself with your first skin.</span>
+          <button onClick="{{start}}" style="height: 28px; border-radius: 4px; border: 1px solid #ffd100; background: linear-gradient(#614a0f, #1c1404); color: #ffd75e; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 7px"><svg width="11" height="11" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1 L9 5 L2 9 Z" fill="currentColor"></path></svg>Start session</button>
+        </sc-if>
+      </div>
+
+      <div style="margin-top: auto; display: flex; gap: 4px; align-items: center">
+        <button style="flex: 1 1 0; height: 28px; border-radius: 4px; border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #bdbdbd; font-size: 12px">Stats</button>
+        <button style="flex: 1 1 0; height: 28px; border-radius: 4px; border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #bdbdbd; font-size: 12px">Share</button>
+        <button onClick="{{openSettings}}" aria-label="Colors and time range" style="width: 30px; height: 28px; border-radius: 4px; border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #bdbdbd; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg></button>
+      </div>
+      </div>
+    </div>
+    <div aria-hidden="{{sheetHidden}}" style="{{sheetStyle}}">
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <span style="font-size: 16px; color: #ffd75e; text-shadow: 1px -1px 0 #33240a">Map settings</span>
+        <button onClick="{{closeSettings}}" aria-label="Close settings" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #bdbdbd; font-size: 14px">✕</button>
+      </div>
+      <span style="font-size: 10px; letter-spacing: 1px; color: #8a8a8a">COLORS</span>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px">
+        <sc-for list="{{schemes}}" as="c" hint-placeholder-count="5">
+          <button onClick="{{c.pick}}" aria-pressed="{{c.pressed}}" style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: #bdbdbd; font-size: 10px"><span style="{{c.swatch}}"></span>{{c.label}}</button>
+        </sc-for>
+      </div>
+      <span style="font-size: 10px; letter-spacing: 1px; color: #8a8a8a">WHEN</span>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px">
+        <sc-for list="{{whens}}" as="w" hint-placeholder-count="3"><button onClick="{{w.pick}}" aria-pressed="{{w.pressed}}" style="{{w.style}}">{{w.label}}</button></sc-for>
+      </div>
+      <span style="font-size: 11px; color: #8a8a8a; line-height: 1.5">Strength, spread and thin areas adjust themselves to how much you have skinned.</span>
+      <button onClick="{{resetSettings}}" style="margin-top: auto; height: 28px; border-radius: 4px; border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #bdbdbd; font-size: 12px">Reset to defaults</button>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":860}}'>
+var GOLD_ON = 'border: 1px solid #ffd100; background: linear-gradient(#614a0f, #1c1404); color: #ffd75e';
+var OFF = 'border: 1px solid #6b5e42; background: linear-gradient(#3d3933, #141311); color: #bdbdbd';
+function btn(on) { return 'height: 26px; border-radius: 4px; font-size: 12px; padding: 0 6px; ' + (on ? GOLD_ON : OFF); }
+var SCHEMES = [
+  ['Ember', 'linear-gradient(135deg, #f3e2a6, #de7a3a 55%, #6a1c22)'],
+  ['Thermal', 'linear-gradient(135deg, #294cd9, #26b3d9 30%, #73d94d 55%, #ffd926 78%, #e62e1a)'],
+  ['Frost', 'linear-gradient(135deg, #d9edff, #408cff 55%, #0a2966)'],
+  ['Verdant', 'linear-gradient(135deg, #f7eda6, #73b859 55%, #0d472e)'],
+  ['Gold', 'linear-gradient(135deg, #fff2bf, #f2b326 55%, #734705)']
+];
+// every leather found on this map, most first; the list scrolls once it outgrows its height
+var LEATHERS = [
+  ['All', null, ''], ['Light Leather', '#e39a3b', '214'], ['Medium Leather', '#f3dfa8', '96'],
+  ['Light Hide', '#3f8f8a', '12'], ['Heavy Leather', '#8a3526', '8'], ['Medium Hide', '#c9a46a', '4'],
+  ['Thick Leather', '#6d8fbf', '2'], ['Heavy Hide', '#9a6fb0', '1'], ['Ruined scraps', '#8f8a80', '31']
+];
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { settings: false, scheme: 'Ember', when: 'All time', prof: 'skinning', on: true, mode: 'heat', show: 'me', leather: 'All', session: 'idle', paused: false, collapsed: false };
+  }
+  renderVals() {
+    var self = this, st = this.state;
+    var pick = function (key, val) { return function () { var o = {}; o[key] = val; self.setState(o); }; };
+    var dots = [];
+    if (st.on && st.mode === 'points') {
+      dots = [[458, 308], [472, 320], [452, 324]].map(function (p) {
+        return { style: 'position: absolute; left: ' + p[0] + 'px; top: ' + p[1] + 'px; width: 8px; height: 8px; border-radius: 50%; background: #e39a3b; box-shadow: 0 0 0 1.5px #1b140c' };
+      });
+    }
+    return {
+      profs: [
+        ['skinning', 'Skinning', 'M4 20 L14 10 M14 10 C 16 6, 20 4, 21 3 C 20 7, 18 10, 14 10 Z M7 17 L5 15', true],
+        ['mining', 'Mining', 'M5 20 L15 10 M9 6 C 13 3, 18 4, 21 8 C 17 6, 13 7, 11 9 Z', false],
+        ['herbalism', 'Herbalism', 'M12 21 V11 M12 11 C 7 11, 5 7, 6 3 C 10 4, 12 7, 12 11 Z M12 14 C 16 14, 19 11, 18 7 C 14 8, 12 11, 12 14 Z', false],
+        ['fishing', 'Fishing', 'M15 3 V13 A 4 4 0 0 1 7 13 V11 M7 11 L5 13 M15 3 L18 3', false]
+      ].map(function (p) {
+        var on = st.prof === p[0];
+        return {
+          label: p[1], icon: p[2], pressed: on ? 'true' : 'false',
+          tip: p[3] ? p[1] : p[1] + ': coming later',
+          pick: p[3] ? pick('prof', p[0]) : function () {},
+          style: 'width: 34px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 5px; ' +
+            (on ? 'border: 1px solid #ffd100; background: linear-gradient(#614a0f, #1c1404); color: #ffd75e'
+              : 'border: 1px solid #4a4133; background: linear-gradient(#26231e, #0d0c0b); color: #6e6a62' + (p[3] ? '' : '; opacity: 0.55; cursor: default'))
+        };
+      }),
+      profName: ({ skinning: 'Skinning', mining: 'Mining', herbalism: 'Herbalism', fishing: 'Fishing' })[st.prof],
+      // the settings sheet slides up from the bottom over the dock while the dock's content fades
+      dockContent: 'display: flex; flex-direction: column; gap: 12px; flex-grow: 1; transition: opacity 260ms ease, transform 260ms ease; ' +
+        (st.settings ? 'opacity: 0; transform: translateY(10px); pointer-events: none' : 'opacity: 1; transform: none'),
+      sheetStyle: 'position: absolute; left: 1100px; top: 100px; width: 250px; height: 680px; box-sizing: border-box; padding: 16px 14px 14px; display: flex; flex-direction: column; gap: 12px; z-index: 10; ' +
+        'background: linear-gradient(#211d17, #080808); border: 1px solid #c79c1a; border-left: 0; border-radius: 0 10px 10px 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.55); ' +
+        'clip-path: inset(0 0 0 0 round 0 10px 10px 0); transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 260ms ease; ' +
+        (st.settings ? 'transform: translateY(0); opacity: 1' : 'transform: translateY(40px); opacity: 0; pointer-events: none'),
+      sheetHidden: st.settings ? 'false' : 'true',
+      openSettings: function () { self.setState({ settings: true, leatherOpen: false }); },
+      closeSettings: function () { self.setState({ settings: false }); },
+      resetSettings: function () { self.setState({ scheme: 'Ember', when: 'All time' }); },
+      schemes: SCHEMES.map(function (c) {
+        var on = st.scheme === c[0];
+        return { label: c[0], pressed: on ? 'true' : 'false', pick: pick('scheme', c[0]),
+          swatch: 'width: 30px; height: 30px; border-radius: 50%; background: ' + c[1] + '; box-shadow: 0 0 0 ' + (on ? '2px #ffd100, 0 0 0 4px #1b1813' : '1px #000') };
+      }),
+      whens: ['All time', '30 days', '7 days'].map(function (w) {
+        return { label: w, pressed: st.when === w ? 'true' : 'false', pick: pick('when', w), style: btn(st.when === w) };
+      }),
+      collapsed: st.collapsed,
+      open: !st.collapsed,
+      toggleDock: function () { self.setState({ collapsed: !st.collapsed }); },
+      toggleOn: function () { self.setState({ on: !st.on }); },
+      onPressed: st.on ? 'true' : 'false',
+      switchStyle: 'position: relative; width: 40px; height: 20px; border-radius: 10px; padding: 0; border: 1px solid ' + (st.on ? '#d9ad33' : '#524c42') + '; background: ' + (st.on ? 'linear-gradient(#8c6b19, #382908)' : 'linear-gradient(#2b2926, #0d0d0d)'),
+      knobStyle: 'position: absolute; top: 2px; left: ' + (st.on ? 21 : 2) + 'px; width: 15px; height: 15px; border-radius: 50%; background: ' + (st.on ? 'linear-gradient(#fff5c7, #ebb338)' : 'linear-gradient(#a8a69e, #5c5a54)') + '; box-shadow: 0 1px 2px rgba(0,0,0,0.6)',
+      showPins: st.on && st.mode !== 'points',
+      showHeat: st.on && st.mode === 'heat',
+      showSpot: st.on && st.mode === 'spotlight',
+      dots: dots,
+      modes: [['heat', 'Heat'], ['points', 'Points'], ['spotlight', 'Spotlight']].map(function (m) {
+        return { label: m[1], pressed: st.mode === m[0] ? 'true' : 'false', style: btn(st.mode === m[0]), pick: pick('mode', m[0]) };
+      }),
+      shows: [['me', 'Me'], ['account', 'Account'], ['community', 'Community']].map(function (m) {
+        return { label: m[1], pressed: st.show === m[0] ? 'true' : 'false', style: btn(st.show === m[0]), pick: pick('show', m[0]) };
+      }),
+      leathers: LEATHERS.map(function (l) {
+        var on = st.leather === l[0];
+        return {
+          label: l[0], count: l[2], pressed: on ? 'true' : 'false',
+          pick: function () { self.setState({ leather: l[0], leatherOpen: false }); },
+          style: 'width: 100%; height: 26px; margin: 1px 0; box-sizing: border-box; padding: 0 8px; display: flex; align-items: center; gap: 7px; border-radius: 4px; font-size: 12px; ' +
+            (on ? 'border: 1px solid #ffd100; background: linear-gradient(#614a0f, #1c1404); color: #ffd75e' : 'border: 1px solid transparent; background: transparent; color: #d8d8d8'),
+          dot: 'width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; ' + (l[1] ? 'background: ' + l[1] + '; box-shadow: 0 0 0 1px #000' : 'background: transparent; box-shadow: inset 0 0 0 1px #8a8a8a')
+        };
+      }),
+      leatherOpen: !!st.leatherOpen,
+      leatherExpanded: st.leatherOpen ? 'true' : 'false',
+      toggleLeather: function () { self.setState({ leatherOpen: !st.leatherOpen }); },
+      chevron: st.leatherOpen ? '▲' : '▼',
+      chosenLabel: st.leather === 'All' ? 'All leather' : st.leather,
+      chosenDot: (function () {
+        var c = LEATHERS.filter(function (l) { return l[0] === st.leather; })[0];
+        return 'width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; ' + (c && c[1] ? 'background: ' + c[1] + '; box-shadow: 0 0 0 1px #000' : 'background: transparent; box-shadow: inset 0 0 0 1px #8a8a8a');
+      })(),
+      scaleLine: 'Up to 2 skins in one area',
+      running: st.session === 'running',
+      idle: st.session === 'idle',
+      sessionTitle: st.session === 'idle' ? 'Session' : (st.paused ? 'Paused' : 'Skinning'),
+      sessionClock: st.session === 'idle' ? '' : '4:20',
+      sessionDot: 'width: 8px; height: 8px; border-radius: 50%; background: ' + (st.session === 'idle' ? '#5c5a54' : (st.paused ? '#8a8a8a' : '#4fbf3b')),
+      pauseLabel: st.paused ? 'Resume' : 'Pause',
+      paused: st.paused,
+      notPaused: !st.paused,
+      start: function () { self.setState({ session: 'running', paused: false }); },
+      pause: function () { self.setState({ paused: !st.paused }); },
+      endSession: function () { self.setState({ session: 'idle', paused: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

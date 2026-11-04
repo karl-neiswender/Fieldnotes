@@ -1,5 +1,21 @@
 # Fieldnotes changelog
 
+## 0.6.0
+
+- **The map stays clear.** On the small map, Fieldnotes moves into a dock beside the map (on the
+  left when there's no room on the right), with a Fieldnotes tab to fold it away. On the
+  full-screen map it's one toolbar centred at the top, with the key in a bottom corner.
+- **Everything in one place:** the profession (Skinning now; Mining, Herbalism and Fishing to
+  come), the switch, View, Show, a leather list that scrolls as it grows (with Hides and Ruined
+  scraps), the key, Stats and Share.
+- **Start, pause and end a session from the map,** the same session as the tracker panel.
+- **Settings, simpler:** Colors, When, and Strength and Spread sliders. Glow size and thin areas
+  start from how much you have skinned, so a handful of skins shows straight away.
+- **Smoother heat:** a finer grid, and the faintest heat fades into the map instead of ending
+  at an edge.
+- Smooth slides and fades: the dock folding, the settings sheet rising over it, and the
+  toolbar narrowing to its centre as you switch Fieldnotes off.
+
 ## 0.5.0
 
 - **Share your notes** (`/fn share`, or Share in the stats window): one line of text with this
