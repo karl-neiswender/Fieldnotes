@@ -45,20 +45,24 @@ local SOFT = C.INK2
 local DIM = C.SUBTEXT
 
 -- Heat color schemes, fewest to most. Thermal (the default) is the familiar cool-to-warm heat
--- scale; Ember grows steadily darker, so it reads the same in grayscale and for color-blind players;
+-- scale; Solar (Karl's OKLCH gradient, 2026-11-03, replacing Ember) rises from deep indigo
+-- through violet, magenta, rose, orange and gold to pale butter yellow, its lightness climbing
+-- steadily, so it also reads in grayscale (11 of its 32 stops, converted to sRGB);
 -- Snowfall follows a weather service's snowfall map (Karl, 2026-11-03): grey and pale blue, deep
 -- blue, violet, magenta, hot pink, then teal and lavender at the very top (a saturated lavender:
 -- a pale top read as a gap in the heat on parchment, seen in game).
 local SCHEMES = {
     thermal = { { 0, 0.16, 0.30, 0.85 }, { 0.3, 0.15, 0.70, 0.85 }, { 0.55, 0.45, 0.85, 0.30 },
         { 0.78, 1.00, 0.85, 0.15 }, { 1, 0.90, 0.18, 0.10 } },
-    ember = { { 0, 0.953, 0.886, 0.651 }, { 0.3, 0.933, 0.702, 0.361 }, { 0.55, 0.871, 0.478, 0.227 },
-        { 0.8, 0.702, 0.251, 0.169 }, { 1, 0.416, 0.110, 0.133 } },
+    solar = { { 0, 0.143, 0.120, 0.399 }, { 0.097, 0.219, 0.185, 0.481 }, { 0.194, 0.336, 0.257, 0.574 },
+        { 0.29, 0.461, 0.286, 0.598 }, { 0.387, 0.586, 0.301, 0.573 }, { 0.484, 0.694, 0.314, 0.535 },
+        { 0.581, 0.806, 0.342, 0.463 }, { 0.677, 0.942, 0.489, 0.310 }, { 0.774, 0.972, 0.732, 0.246 },
+        { 0.871, 0.967, 0.873, 0.445 }, { 1, 1.000, 0.952, 0.674 } },
     snowfall = { { 0, 0.60, 0.62, 0.68 }, { 0.12, 0.52, 0.74, 0.96 }, { 0.24, 0.22, 0.42, 0.94 },
         { 0.38, 0.40, 0.18, 0.78 }, { 0.52, 0.84, 0.18, 0.74 }, { 0.66, 1.00, 0.36, 0.62 },
         { 0.78, 0.24, 0.80, 0.76 }, { 0.90, 0.56, 0.46, 0.92 }, { 1, 0.62, 0.36, 1.00 } },
 }
-M.SCHEME_ORDER = { "thermal", "ember", "snowfall" }
+M.SCHEME_ORDER = { "thermal", "solar", "snowfall" }
 local RAMP = SCHEMES.thermal -- the scheme in use, set by Draw
 
 -- Points colors, given to the map's leading leathers in order; each also differs in lightness.
@@ -85,6 +89,7 @@ function M.S()
     for k, v in pairs(DEFAULTS) do
         if s[k] == nil then s[k] = v end
     end
+    if s.colors == "ember" then s.colors = "solar" end -- Solar took Ember's place (2026-11-03)
     if not SCHEMES[s.colors] then s.colors = DEFAULTS.colors end
     if type(s.strength) ~= "number" then s.strength = DEFAULTS.strength end
     s.strength = math.max(0.5, math.min(2.5, s.strength))

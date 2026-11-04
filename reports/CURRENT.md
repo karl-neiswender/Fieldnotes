@@ -113,3 +113,7 @@
   and a second ring breathing outward every 1.6 s; the dock's numbered badge breathes on the same
   clock. A click on a row pings the pin with two eased-out ripples, 0.22 s apart (PinMotion in
   Map.lua). Nothing runs while nothing moves. Checks pass (28), copied to Era. Not yet seen in game.
+- Solar replaces Ember (2026-11-03, Karl's OKLCH gradient: deep indigo to pale butter yellow, 11
+  of 32 stops in sRGB). A saved Ember choice reads as Solar. Checks pass (28), copied to Era.
+- Color swatches show each scheme's whole ramp (8 slices of the round texture, most at the top),
+  2026-11-03. Checks pass (28), copied to Era.

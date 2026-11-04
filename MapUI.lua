@@ -52,7 +52,7 @@ local SHOWS = {
     { key = "account", label = "Account", tip = "Every character on this account" },
     { key = "community", label = "Community", tip = "Everyone who has shared, merged" },
 }
-local SCHEME_NAMES = { thermal = "Thermal", ember = "Ember", snowfall = "Snowfall" }
+local SCHEME_NAMES = { thermal = "Thermal", solar = "Solar", snowfall = "Snowfall" }
 local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
 
 local model = {}
@@ -784,13 +784,21 @@ local function SettingsBody(parent, width)
         sw.ring:SetTexture(CIRCLE)
         sw.ring:SetSize(32, 32)
         sw.ring:SetPoint("TOP", 0, 0)
-        sw.fill = sw:CreateTexture(nil, "ARTWORK", nil, 2)
-        sw.fill:SetTexture(CIRCLE)
-        sw.fill:SetSize(26, 26)
-        sw.fill:SetPoint("CENTER", sw.ring)
-        local r1, g1, b1 = M.SchemeColor(name, 0.1)
-        local r2, g2, b2 = M.SchemeColor(name, 0.95)
-        St.VGradient(sw.fill, { r1, g1, b1 }, { r2, g2, b2 })
+        -- the whole ramp, most at the top: the disc cut into thin slices of the same round
+        -- texture, each blended across its stretch of the scheme (two colours hid Solar's
+        -- orange and gold, seen in game)
+        local D, SLICES = 26, 8
+        for j = 1, SLICES do
+            local t = sw:CreateTexture(nil, "ARTWORK", nil, 2)
+            t:SetTexture(CIRCLE)
+            local y0, y1 = (j - 1) / SLICES, j / SLICES
+            t:SetTexCoord(0, 1, y0, y1)
+            t:SetSize(D, D / SLICES)
+            t:SetPoint("TOP", sw.ring, "TOP", 0, -(32 - D) / 2 - (j - 1) * D / SLICES)
+            local rt, gt, bt = M.SchemeColor(name, 1 - y0)
+            local rb, gb, bb = M.SchemeColor(name, 1 - y1)
+            St.VGradient(t, { rt, gt, bt }, { rb, gb, bb })
+        end
         sw.name = St.Text(sw, 10, C.INK2)
         sw.name:SetPoint("BOTTOM", 0, 0)
         sw.name:SetJustifyH("CENTER")
