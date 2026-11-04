@@ -331,7 +331,14 @@ function St.Movable(frame, key)
     -- windows on the same layer come to the front when opened or clicked, whole, so two of them
     -- (stats and share) never weave their pieces through each other
     frame:SetToplevel(true)
-    frame:HookScript("OnShow", function(self) self:Raise() end)
+    frame:HookScript("OnShow", function(self)
+        self:Raise()
+        -- a floating window fades in rather than appearing (closing stays instant, so a click on
+        -- its X never waits)
+        local function Apply(v) self:SetAlpha(v) end
+        St.Animate("fn-win-" .. key, 0, 0, nil, Apply) -- start from clear
+        St.Animate("fn-win-" .. key, 1, St.DUR.quick + 0.04, "soft", Apply)
+    end)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", function(self)
@@ -404,7 +411,16 @@ local EASE = {
     out = function(p) return 1 - (1 - p) ^ 3 end,
     ["in"] = function(p) return p * p * p end,
     both = function(p) return p < 0.5 and 4 * p * p * p or 1 - (-2 * p + 2) ^ 3 / 2 end,
+    -- a longer, softer settle than "out": things arrive quickly and come to rest without a thud
+    soft = function(p) return 1 - (1 - p) ^ 4 end,
+    -- the same, mirrored: a gentle departure that speeds up, and finishes without a lurch
+    leave = function(p) return p < 0.5 and 2 * p * p or 1 - (-2 * p + 2) ^ 2 / 2 end,
 }
+-- One set of durations for the whole add-on, so every motion has the same rhythm:
+--   quick: a state change you cause (a chosen button, a hover)
+--   base: something moving a short way (a list, a pop-over, the toolbar)
+--   slow: a panel or page arriving or leaving (the dock, settings)
+St.DUR = { quick = 0.16, base = 0.26, slow = 0.34 }
 function St.Animate(id, to, seconds, ease, apply, done)
     local from = values[id]
     if from == nil then from = to end

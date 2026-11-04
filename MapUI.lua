@@ -82,7 +82,7 @@ end
 local SHOWS = {
     { key = "me", label = "Me", tip = "This character only" },
     { key = "account", label = "Account", tip = "Every character on this account" },
-    { key = "community", label = "Community", tip = "Everyone who has shared, merged" },
+    { key = "community", label = "Community", tip = "Everyone who has shared, merged", soon = true },
 }
 local SCHEME_NAMES = { thermal = "Thermal", solar = "Solar", snowfall = "Snowfall" }
 local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
@@ -90,6 +90,7 @@ local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
 local model = {}
 local profTabs, shownTabs = {}, {}
 local PROF_TAB_H, PROF_TAB_GAP = 30, 4
+local dockClip -- the dock's clipping window (BuildDock)
 local ProfMark, GoTo, Dashboard, FormatCount, SetSheet, ApplyTab, Glide -- defined with the dock
 local homeTab
 local utilTabs = {} -- Stats and Settings, under the profession tabs after a little gap
@@ -121,6 +122,29 @@ local function Choice(parent, label, onClick, tip)
     b.text:SetText(label)
     b.tip = tip
     b:SetHeight(22)
+    return b
+end
+
+-- A Show button. Community is switched off until it ships ("Coming soon"): dimmed, never chosen,
+-- and its click does nothing. Flip `soon` off in SHOWS to bring it back.
+local function ShowChoice(parent, sh)
+    local b = Choice(parent, sh.label, function()
+        if sh.soon then return end
+        M.S().show = sh.key
+        Refresh()
+    end, sh.tip)
+    b.key = sh.key
+    if sh.soon then
+        b.soon = true
+        b.text:SetAlpha(0.4)
+        b:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:SetText(sh.label, 1, 1, 1)
+            GameTooltip:AddLine("Coming soon", C.TITLE[1], C.TITLE[2], C.TITLE[3])
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
     return b
 end
 
@@ -164,9 +188,9 @@ local function SetOn(on)
     s.on = on
     if on then
         Refresh() -- draw first, then fade it in
-        St.Animate("fn-overlay", 1, 0.3, "out", M.SetOverlayAlpha)
+        St.Animate("fn-overlay", 1, St.DUR.slow, "soft", M.SetOverlayAlpha)
     else
-        St.Animate("fn-overlay", 0, 0.3, "in", M.SetOverlayAlpha, Refresh)
+        St.Animate("fn-overlay", 0, St.DUR.base, "leave", M.SetOverlayAlpha, Refresh)
         MapUI.Render(model) -- the controls follow straight away
     end
 end
@@ -176,7 +200,15 @@ local function Switch(parent)
     b:SetSize(36, 18)
     b.toggle = St.Toggle(b)
     b.toggle:SetAllPoints()
-    b:SetScript("OnClick", function() SetOn(not M.S().on) end)
+    -- paint the switch from the saved state (called by every redraw, so it is right on load and
+    -- changes the moment it is clicked, not after the mouse leaves)
+    function b:Sync()
+        self.toggle:SetOn(M.S().on, MouseIsOver and MouseIsOver(self) or false)
+    end
+    b:SetScript("OnClick", function(self)
+        SetOn(not M.S().on)
+        self:Sync()
+    end)
     b:SetScript("OnEnter", function(self)
         self.toggle:SetOn(M.S().on, true)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
@@ -543,14 +575,54 @@ local function KeyCard(parent, width, withSpots)
     k.caption:SetJustifyH("CENTER")
     k.scale = St.Text(k, 10, C.SUBTEXT)
     k.scale:SetWidth(width - 22)
+    -- the legend's entries are buttons: a material shows only its own dots (click again for all,
+    -- the same choice as the material list); on Home a profession opens its page
     k.legend = {}
     for i = 1, 5 do
-        local d = k:CreateTexture(nil, "ARTWORK")
+        local b = CreateFrame("Button", nil, k)
+        b.wash = b:CreateTexture(nil, "BACKGROUND")
+        b.wash:SetAllPoints()
+        b.wash:SetTexture(St.SOLID)
+        b.wash:SetVertexColor(1, 0.82, 0, 0)
+        local d = b:CreateTexture(nil, "ARTWORK")
         d:SetTexture(CIRCLE)
         d:SetSize(8, 8)
-        local t = St.Text(k, 10, C.INK2)
+        local t = St.Text(b, 10, C.INK2)
         t:SetPoint("LEFT", d, "RIGHT", 5, 0)
-        k.legend[i] = { d = d, t = t }
+        b:SetScript("OnEnter", function(self)
+            local l = self.entry
+            if not l then return end
+            self.wash:SetVertexColor(1, 0.82, 0, 0.10)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            if l.prof then
+                M.SetLit(l.prof)
+                GameTooltip:SetText("Open " .. ((M.PROF[l.prof] and M.PROF[l.prof].label) or l.prof), 1, 1, 1)
+            elseif M.S().leather == l.key then
+                GameTooltip:SetText("Show all again", 1, 1, 1)
+            else
+                GameTooltip:SetText("Show only " .. l.label, 1, 1, 1)
+            end
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function(self)
+            self.wash:SetVertexColor(1, 0.82, 0, 0)
+            if self.entry and self.entry.prof then M.SetLit(nil) end
+            GameTooltip:Hide()
+        end)
+        b:SetScript("OnClick", function(self)
+            local l, st = self.entry, M.S()
+            if not l then return end
+            GameTooltip:Hide()
+            if list then list:Hide() end
+            if l.prof then
+                st.prof = l.prof
+                M.SetLit(nil)
+            else
+                st.leather = (st.leather == l.key) and 0 or l.key
+            end
+            Refresh()
+        end)
+        k.legend[i] = { b = b, d = d, t = t }
     end
     k.demo = St.Text(k, 10, C.SUBTEXT)
     k.demo:SetText("Sample data  ·  /fn demo off to hide it")
@@ -573,10 +645,10 @@ local function KeyCard(parent, width, withSpots)
             r.v:Hide()
         end
         for _, l in ipairs(self.legend) do
-            l.d:Hide()
-            l.t:Hide()
+            l.b:Hide()
+            l.b.entry = nil
         end
-        local showRamp = hasData and m.mode == "heat" or (hasData and m.kind == "continent")
+        local showRamp = hasData and m.kind ~= "dash" and m.mode == "heat" or (hasData and m.kind == "continent")
         local numbered = showRamp and m.peak ~= nil
         for _, t in ipairs(self.ramp) do t:SetShown(showRamp) end
         self.track:SetShown(numbered)
@@ -596,7 +668,7 @@ local function KeyCard(parent, width, withSpots)
             local p = m.p or {}
             if m.kind == "continent" then
                 rows = { { "Zones", m.zones and tostring(m.zones) }, { "Most " .. (p.units or ""), m.bestZone } }
-            elseif nSpots > 0 then
+            elseif nSpots > 0 or m.kind == "dash" then
                 rows = {} -- the hot spots below name the creatures instead
             elseif m.prof == "fishing" then
                 rows = { { "Main catch", m.topLoot } }
@@ -657,19 +729,29 @@ local function KeyCard(parent, width, withSpots)
                 y = y - 16
             elseif m.legend then
                 local x = 11
+                local chosen = m.leather and m.leather ~= 0 and m.kind ~= "dash" and m.leather or nil
                 for i, l in ipairs(m.legend) do
                     local row = self.legend[i]
+                    if not row then break end
+                    row.b.entry = l
                     row.d:SetVertexColor(l.color[1], l.color[2], l.color[3])
                     row.t:SetText(l.label)
+                    local on = chosen == l.key
+                    local c = on and C.TITLE or C.INK2
+                    row.t:SetTextColor(c[1], c[2], c[3])
+                    -- while one is chosen the rest step back, still there to click
+                    row.b:SetAlpha((chosen and not on) and 0.45 or 1)
                     local w = 13 + row.t:GetStringWidth() + 10
-                    if x > 11 and x + w > width - 8 then x, y = 11, y - 15 end
+                    if x > 11 and x + w > width - 8 then x, y = 11, y - 17 end
+                    row.b:ClearAllPoints()
+                    row.b:SetPoint("TOPLEFT", self, "TOPLEFT", x - 4, y + 2)
+                    row.b:SetSize(w - 4, 14)
                     row.d:ClearAllPoints()
-                    row.d:SetPoint("TOPLEFT", self, "TOPLEFT", x, y - 2)
-                    row.d:Show()
-                    row.t:Show()
+                    row.d:SetPoint("LEFT", row.b, "LEFT", 4, 0)
+                    row.b:Show()
                     x = x + w
                 end
-                y = y - 15
+                y = y - 17
             end
             if m.scale and self.scale:IsShown() then
                 self.scale:SetText(m.scale)
@@ -701,7 +783,20 @@ local function KeyCard(parent, width, withSpots)
             self.demo:SetPoint("TOPLEFT", self, "TOPLEFT", 11, y - 2)
             y = y - 16
         end
-        self:SetHeight(-y + 8)
+        -- a fixed card (the full-screen key) keeps one height while you switch views, filters and
+        -- pages, so it never jumps; the sample-data note sits on its bottom edge. Only content
+        -- taller than that (a continent's long scale line) still grows it.
+        local fixedH = rawget(self, "fixedH")
+        if type(fixedH) == "number" then
+            local h = math.max(-y + 8, fixedH)
+            if self.demo:IsShown() then
+                self.demo:ClearAllPoints()
+                self.demo:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 11, 8)
+            end
+            self:SetHeight(h)
+        else
+            self:SetHeight(-y + 8)
+        end
         self.lastRoom, self.lastSpots = maxH, nSpots -- for /fn debug
         if maxH and -y + 8 > maxH then
             if not compact then return self:Update(m, maxH, true, spotCap) end
@@ -1191,7 +1286,7 @@ end
 -- glide a tab toward its state: active 1, hovered 0.4, else 0
 Glide = function(t, instant)
     local target = t.active and 1 or (t.hover and 0.4 or 0)
-    St.Animate(t.id, target, instant and 0 or 0.22, "out", function(v)
+    St.Animate(t.id, target, instant and 0 or St.DUR.base, "soft", function(v)
         t.out = v
         ApplyTab(t)
     end)
@@ -1249,7 +1344,7 @@ SetSheet = function(open)
     end
     -- one panel, two pages: the settings slide in from the dock's left edge inside the same panel
     -- (the dock clips them), pushing the dock's own content right as it fades; back reverses it
-    St.Animate("fn-sheet", open and 1 or 0, 0.3, open and "out" or "in", function(v)
+    St.Animate("fn-sheet", open and 1 or 0, St.DUR.slow, open and "soft" or "leave", function(v)
         local x = -DOCK_W * (1 - v)
         sheet:SetAlpha(0.3 + 0.7 * v)
         sheet:ClearAllPoints()
@@ -1382,11 +1477,7 @@ Dashboard = function(parent)
     Label(d, "SHOW"):SetPoint("TOPLEFT", PAD, y)
     d.shows = {}
     for i, sh in ipairs(SHOWS) do
-        local b = Choice(d, sh.label, function()
-            M.S().show = sh.key
-            Refresh()
-        end, sh.tip)
-        b.key = sh.key
+        local b = ShowChoice(d, sh)
         b:SetSize(w3, CTRL_H)
         b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - LABEL_GAP)
         d.shows[i] = b
@@ -1437,7 +1528,15 @@ Dashboard = function(parent)
 end
 
 local function BuildDock()
-    dock = St.Frame("Frame", WorldMapFrame)
+    -- The dock, its tab and the rail live inside a clipping window that starts at the dock's resting
+    -- edge and runs outward. Sliding toward the map, they are cut off there, as if they came out
+    -- from behind the map window, rather than crossing its gold border and parchment.
+    -- (Placed on the dock's side by LayoutDock.)
+    dockClip = CreateFrame("Frame", nil, WorldMapFrame)
+    dockClip:SetClipsChildren(true)
+    dockClip:EnableMouse(false)
+    dockClip:SetSize(DOCK_W + TAB_W + 80, 1000)
+    dock = St.Frame("Frame", dockClip)
     St.Etch(dock, STYLE.dock, 12)
     St.Grime(dock, 0.25, 12, 0, 150, 220) -- as on Forever Goal Tracker's window: strongest at the top
     -- a profession page's glow: a large, soft radial light of its color, centred on the title's icon
@@ -1540,11 +1639,7 @@ local function BuildDock()
     dock.showLabel:SetPoint("TOPLEFT", PAD, y)
     dock.shows = {}
     for i, sh in ipairs(SHOWS) do
-        local b = Choice(body, sh.label, function()
-            M.S().show = sh.key
-            Refresh()
-        end, sh.tip)
-        b.key = sh.key
+        local b = ShowChoice(body, sh)
         b:SetSize(w3, CTRL_H)
         b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - LABEL_GAP)
         dock.shows[i] = b
@@ -1594,7 +1689,7 @@ local function BuildDock()
 
     -- the tab that folds the dock away and back: "Fieldnotes" down its length, and a chevron
     -- pointing the way it will go (out when folded, back toward the map when open)
-    tab = St.Frame("Button", WorldMapFrame)
+    tab = St.Frame("Button", dockClip)
     St.Etch(tab, STYLE.dock, 12)
     St.Grime(tab, 0.25, 12, 0.53, 150, 220)
     tab:SetSize(TAB_W, TAB_H)
@@ -1656,7 +1751,7 @@ local function BuildDock()
     -- across the tab. Nothing glows around the icon (it muddied the icon, Karl). One value per tab (out: 0 at
     -- rest, 0.4 hovered, 1 active) drives all of it, eased, so every change glides.
     local function RailTab(icon, color, name, tipText, onClick)
-        local t = St.Frame("Button", WorldMapFrame)
+        local t = St.Frame("Button", dockClip)
         St.Etch(t, STYLE.dock, 8)
         t:SetSize(TAB_W, PROF_TAB_H)
         t.color = color
@@ -1784,6 +1879,15 @@ local function LayoutDock()
     local edge = side == "RIGHT" and "TOPLEFT" or "TOPRIGHT"
     local mapEdge = side == "RIGHT" and "TOPRIGHT" or "TOPLEFT"
     local dir = side == "RIGHT" and 1 or -1
+    -- the clipping window: from where the dock rests, outward and well past the screen's edge,
+    -- taller than the dock so nothing is cut top or bottom
+    dockClip:SetHeight(container:GetHeight() + 400)
+    dockClip:ClearAllPoints()
+    if side == "RIGHT" then
+        dockClip:SetPoint("LEFT", container, "RIGHT", -gap - 1, 0)
+    else
+        dockClip:SetPoint("RIGHT", container, "LEFT", gap + 1, 0)
+    end
 
     -- the rail: Fieldnotes, then the profession tabs, a gap, Stats and Settings. Only the
     -- Fieldnotes tab shows while the dock is folded; the rest arrive and leave with the dock.
@@ -1803,10 +1907,14 @@ local function LayoutDock()
     -- (only a fold or unfold animates; any other redraw just places it)
     local moving = dock.wasOpen ~= nil and dock.wasOpen ~= open
     dock.wasOpen = open
-    St.Animate("fn-dock", open and 1 or 0, moving and 0.28 or 0, open and "out" or "in", function(v)
-        dock:SetAlpha(v)
+    -- The dock, its tab and the rail are one piece: they slide together, the whole width, so the
+    -- tab never sweeps across the dock's words. The content fades faster than it moves (v cubed),
+    -- so it is mostly gone before it reaches the map's edge, and arrives already solid.
+    St.Animate("fn-dock", open and 1 or 0, moving and (open and St.DUR.slow or St.DUR.base) or 0, open and "soft" or "leave", function(v)
+        local fade = v * v * v -- cubed: the panel is fully clear before the slide ends (no ghost)
+        dock:SetAlpha(fade)
         dock:ClearAllPoints()
-        dock:SetPoint(edge, container, mapEdge, dir * (-gap + 24 * (v - 1)), dy)
+        dock:SetPoint(edge, container, mapEdge, dir * (-gap + (DOCK_W - TAB_TUCK) * (v - 1)), dy)
         -- open, the tab grows by what hides under the dock, and its word and chevron stay centred
         -- on the part that shows
         local tuck = TAB_TUCK * v
@@ -1839,7 +1947,7 @@ local function LayoutDock()
             below = below - PROF_TAB_GAP
             t.tuck = tuck
             ApplyTab(t)
-            t:SetAlpha(v)
+            t:SetAlpha(fade)
             t:ClearAllPoints()
             if side == "RIGHT" then
                 t:SetPoint("TOPLEFT", tab, "BOTTOMLEFT", 0, below)
@@ -1896,7 +2004,7 @@ end
 
 local function RenderDock(m)
     local s = M.S()
-    dock.switch.toggle:SetOn(s.on)
+    dock.switch:Sync()
     local dash = s.prof == "all"
     local p = M.PROF[s.prof]
     dock.icon:Set(p)
@@ -1967,7 +2075,7 @@ local function SetPop(open)
         pop:SetHeight(-bottom + 14)
     end
     -- drops from the gear: a short slide down and a fade
-    St.Animate("fn-pop", open and 1 or 0, 0.22, open and "out" or "in", function(v)
+    St.Animate("fn-pop", open and 1 or 0, St.DUR.base, open and "soft" or "leave", function(v)
         pop:SetAlpha(v)
         pop:ClearAllPoints()
         pop:SetPoint("TOPRIGHT", bar.gear, "BOTTOMRIGHT", 14, -14 + 8 * (1 - v))
@@ -1990,6 +2098,35 @@ local function BuildToolbar()
     bar.title = St.Title(bar, 14)
     bar.title:SetText("Fieldnotes")
     bar.switch = Switch(bar)
+    -- the pages, as on the dock's rail: Home (the dashboard), then each profession. The chosen
+    -- one takes its color (gold for Home); the rest rest in silver.
+    bar.profs = {}
+    local function PageButton(key, icon, color, tip)
+        -- not GoTo: that opens the small map's dock as well
+        local b = Choice(bar, "", function()
+            local s = M.S()
+            if list then list:Hide() end
+            if s.prof ~= key then
+                s.prof = key
+                M.SetLit(nil)
+                Refresh()
+            end
+        end, tip)
+        b.key, b.color = key, color
+        b.icon = b:CreateTexture(nil, "OVERLAY")
+        b.icon:SetTexture(St.Icon(icon))
+        b.icon:SetSize(15, 15)
+        b.icon:SetPoint("CENTER")
+        function b:Paint(on)
+            self:SetChosen(on)
+            local c = on and self.color or REST
+            self.icon:SetVertexColor(c[1], c[2], c[3])
+        end
+        bar.profs[#bar.profs + 1] = b
+        return b
+    end
+    PageButton("all", "book-white", C.TITLE, "Home: all your professions")
+    for _, p in ipairs(M.PROFS) do PageButton(p.key, PROF_ICONS[p.key], p.color, p.label) end
     bar.modes, bar.shows = {}, {}
     for i, m in ipairs(MODES) do
         local b = Choice(bar, m.label, function()
@@ -2000,11 +2137,7 @@ local function BuildToolbar()
         bar.modes[i] = b
     end
     for i, sh in ipairs(SHOWS) do
-        local b = Choice(bar, sh.label, function()
-            M.S().show = sh.key
-            Refresh()
-        end, sh.tip)
-        b.key = sh.key
+        local b = ShowChoice(bar, sh)
         bar.shows[i] = b
     end
     bar.leather = LeatherButton(bar)
@@ -2032,7 +2165,7 @@ local function BuildToolbar()
     bar.share = Choice(bar, "Share", function() FN.ShowShare() end, "Share your notes, or import someone else's")
     bar.gear = GearButton(bar, function() SetPop(not pop.open) end)
     bar.dividers = {}
-    for i = 1, 4 do
+    for i = 1, 5 do
         local d = Rule(bar)
         d:SetSize(1, 18)
         bar.dividers[i] = d
@@ -2046,7 +2179,10 @@ local function BuildToolbar()
         end
     end)
 
-    hudKey = KeyCard(hud, 260)
+    hudKey = KeyCard(hud, 280, true) -- with the hot spots, as in the dock
+    -- tall enough for the busiest layout: count, numbered ramp and caption, three hot spots and
+    -- the sample-data note (Points' two legend lines need less)
+    hudKey.fixedH = 156
 
     pop = St.Frame("Frame", hud)
     St.Etch(pop, STYLE.panel, 12)
@@ -2056,46 +2192,92 @@ local function BuildToolbar()
     pop.body = SettingsBody(pop, 272)
 end
 
--- lay the toolbar out left to right; switched off it narrows to the name and switch, keeping
--- its centre (the centre of the map)
+-- The toolbar spans the map's full width, flush under the map window's title band: on the left
+-- the name, switch and pages, then View, Show and the material list; the session, Stats, Share
+-- and the gear sit at the right end. Switched off it narrows to the name and switch, snapped to
+-- the map's top left corner.
+local BAR_H = 36
 local function LayoutToolbar(m)
     local s = M.S()
-    local x = 12
+    local dash = s.prof == "all"
+    local x = 14
     bar.title:ClearAllPoints()
     bar.title:SetPoint("LEFT", bar, "LEFT", x, 0)
     x = x + bar.title:GetStringWidth() + 10
     bar.switch:ClearAllPoints()
     bar.switch:SetPoint("LEFT", bar, "LEFT", x, 0)
-    x = x + 36 + 10
+    bar.switch:Sync()
+    x = x + 36 + 12
     local closedW = x
     local function Place(f, w)
         f:SetWidth(w)
         f:ClearAllPoints()
         f:SetPoint("LEFT", bar, "LEFT", x, 0)
+        f:Show()
         x = x + w + 3
     end
     local function Divider(i)
         bar.dividers[i]:ClearAllPoints()
         bar.dividers[i]:SetPoint("LEFT", bar, "LEFT", x + 3, 0)
+        bar.dividers[i]:Show()
         x = x + 10
     end
     Divider(1)
-    for _, b in ipairs(bar.modes) do
-        Place(b, math.ceil(b.text:GetStringWidth()) + 18)
-        b:SetChosen(b.key == s.mode)
+    -- the pages: Home, then the professions the dock's rail would show
+    local shown = { all = true }
+    for _, p in ipairs(TabProfs()) do shown[p.key] = true end
+    if not shown[s.prof] then shown[s.prof] = true end
+    for _, b in ipairs(bar.profs) do
+        if shown[b.key] then
+            Place(b, 28)
+            b:Paint(b.key == s.prof)
+        else
+            b:Hide()
+        end
     end
     x = x + 3
     Divider(2)
+    -- View and the material list mean nothing on Home (every gather is a dot there)
+    for _, b in ipairs(bar.modes) do
+        if dash then
+            b:Hide()
+        else
+            Place(b, math.ceil(b.text:GetStringWidth()) + 18)
+            b:SetChosen(b.key == s.mode)
+        end
+    end
+    if dash then bar.dividers[3]:Hide() else x = x + 3; Divider(3) end
     for _, b in ipairs(bar.shows) do
         Place(b, math.ceil(b.text:GetStringWidth()) + 18)
         b:SetChosen(b.key == s.show)
     end
     x = x + 3
-    Divider(3)
-    bar.leather:Update()
-    Place(bar.leather, 150)
-    x = x + 3
-    Divider(4)
+    if dash then
+        bar.dividers[4]:Hide()
+        bar.leather:Hide()
+    else
+        Divider(4)
+        bar.leather:Update()
+        Place(bar.leather, 150)
+    end
+    local leftEnd = x
+
+    -- the right end, laid right to left but anchored from the left at the full width, so when the
+    -- bar narrows they are clipped away with the rest rather than sliding over the name
+    local barW = hud:GetWidth() or 0
+    local fullW = math.max(closedW, barW)
+    local r = 14
+    bar.gear:ClearAllPoints()
+    bar.gear:SetPoint("LEFT", bar, "LEFT", fullW - r - 16, 0)
+    bar.gear:Tint()
+    r = r + 16 + 10
+    local function PlaceR(f, w)
+        f:SetWidth(w)
+        f:ClearAllPoints()
+        f:SetPoint("LEFT", bar, "LEFT", fullW - r - w, 0)
+        f:Show()
+        r = r + w + 3
+    end
     local running, paused = FN.SessionRunning(), FN.SessionPaused()
     if running then
         bar.session.text:SetText(Clock(FN.SessionSeconds()) .. "  ·  " .. FN.SessionLabel())
@@ -2105,42 +2287,55 @@ local function LayoutToolbar(m)
         bar.session.icon:SetTexture(St.Icon("play-white"))
     end
     bar.session.icon:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
-    Place(bar.session, math.ceil(bar.session.text:GetStringWidth()) + 34)
+    local sessionW = math.ceil(bar.session.text:GetStringWidth()) + 34
+    local statsW = math.ceil(bar.stats.text:GetStringWidth()) + 18
+    local shareW = math.ceil(bar.share.text:GetStringWidth()) + 18
+    -- on a narrow map Stats and Share give way first (both stay in /fn and the gear's settings)
+    local need = leftEnd + 10 + sessionW + (running and 18 or 0) + r
+    local roomy = barW <= 0 or need + statsW + shareW + 6 <= barW
+    if roomy then
+        PlaceR(bar.share, shareW)
+        PlaceR(bar.stats, statsW)
+    else
+        bar.share:Hide()
+        bar.stats:Hide()
+    end
     bar.stop:SetShown(running)
     if running then
         bar.stop:ClearAllPoints()
-        bar.stop:SetPoint("LEFT", bar, "LEFT", x + 2, 0)
-        x = x + 18
+        bar.stop:SetPoint("LEFT", bar, "LEFT", fullW - r - 16, 0)
+        r = r + 18
     end
-    Place(bar.stats, math.ceil(bar.stats.text:GetStringWidth()) + 18)
-    Place(bar.share, math.ceil(bar.share.text:GetStringWidth()) + 18)
-    bar.gear:ClearAllPoints()
-    bar.gear:SetPoint("LEFT", bar, "LEFT", x + 6, 0)
-    bar.gear:Tint()
-    local openW = x + 6 + 16 + 12
-    -- narrow from both sides about the centre when switched off; widen back when on
+    PlaceR(bar.session, sessionW)
+    bar.dividers[5]:ClearAllPoints()
+    bar.dividers[5]:SetPoint("LEFT", bar, "LEFT", fullW - r - 7, 0)
+    bar.dividers[5]:Show()
+
     -- only switching on or off animates; a redraw (the session clock, a filter) just resizes
     local moving = bar.wasOn ~= nil and bar.wasOn ~= s.on
     bar.wasOn = s.on
-    St.Animate("fn-bar", s.on and openW or closedW, moving and 0.3 or 0, s.on and "out" or "in", function(v)
-        bar:SetWidth(v)
-        local inner = (v - closedW) / math.max(1, openW - closedW)
-        for _, f in ipairs({ bar.modes[1], bar.modes[2], bar.modes[3], bar.shows[1], bar.shows[2], bar.shows[3],
-            bar.leather, bar.session, bar.stop, bar.stats, bar.share, bar.gear,
-            bar.dividers[1], bar.dividers[2], bar.dividers[3], bar.dividers[4] }) do
-            f:SetAlpha(inner)
-        end
-    end)
     bar:ClearAllPoints()
-    bar:SetPoint("TOP", hud, "TOP", 0, -10)
+    bar:SetPoint("TOPLEFT", hud, "TOPLEFT", 0, 0)
+    bar:SetHeight(BAR_H)
+    local inner = {}
+    for _, f in ipairs(bar.profs) do inner[#inner + 1] = f end
+    for _, f in ipairs({ bar.modes[1], bar.modes[2], bar.modes[3], bar.shows[1], bar.shows[2], bar.shows[3],
+        bar.leather, bar.session, bar.stop, bar.stats, bar.share, bar.gear }) do
+        inner[#inner + 1] = f
+    end
+    for _, d in ipairs(bar.dividers) do inner[#inner + 1] = d end
+    St.Animate("fn-bar", s.on and 1 or 0, moving and St.DUR.slow or 0, s.on and "soft" or "leave", function(v)
+        bar:SetWidth(closedW + (fullW - closedW) * v)
+        for _, f in ipairs(inner) do f:SetAlpha(v) end
+    end)
 
-    -- the key: bottom corner, fading and drifting down when switched off
-    hudKey:Update(m)
+    -- the key: snapped into a bottom corner, fading and drifting down when switched off
+    hudKey:Update(m, (hud:GetHeight() or 600) - BAR_H - 24)
     local corner = m.keyCorner or "BOTTOMLEFT"
-    St.Animate("fn-key", s.on and 1 or 0, moving and 0.3 or 0, s.on and "out" or "in", function(v)
+    St.Animate("fn-key", s.on and 1 or 0, moving and St.DUR.slow or 0, s.on and "soft" or "leave", function(v)
         hudKey:SetAlpha(v)
         hudKey:ClearAllPoints()
-        hudKey:SetPoint(corner, hud, corner, corner == "BOTTOMRIGHT" and -10 or 10, 10 - 12 * (1 - v))
+        hudKey:SetPoint(corner, hud, corner, 0, -12 * (1 - v))
     end)
     if pop.open then
         local bottom = pop.body:Layout(14, -14)
@@ -2230,6 +2425,8 @@ function MapUI.Init()
     M = FN.Map
     ui = M.ui
     St.Animate("fn-overlay", M.S().on and 1 or 0, 0, nil, M.SetOverlayAlpha) -- where the fade starts from
+    -- Community is switched off for now: a saved choice of it falls back to Account
+    if M.S().show == "community" then M.S().show = "account" end
     BuildList()
     BuildDock()
     MapUI.tab, MapUI.tabs, MapUI.home = tab, profTabs, homeTab -- for /fn debug and the checks

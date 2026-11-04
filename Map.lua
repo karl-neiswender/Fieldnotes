@@ -70,6 +70,17 @@ local RAMP = SCHEMES.thermal -- the scheme in use, set by Draw
 local PALETTE = {
     { 0.890, 0.604, 0.231 }, { 0.953, 0.875, 0.659 }, { 0.247, 0.561, 0.541 }, { 0.541, 0.208, 0.149 },
 }
+-- the other professions' materials keep to their profession's hue (Karl, 2026-11-04): mining
+-- yellows, herbs greens, fish blues, cloth purples. Strongest first, then pale, deep, and a
+-- neighbouring hue, so each still reads apart from the others.
+local PALETTES = {
+    skinning = PALETTE,
+    mining = { { 0.95, 0.80, 0.15 }, { 0.99, 0.93, 0.60 }, { 0.70, 0.52, 0.08 }, { 0.84, 0.66, 0.30 } },
+    herbalism = { { 0.40, 0.76, 0.27 }, { 0.74, 0.90, 0.54 }, { 0.18, 0.48, 0.20 }, { 0.62, 0.70, 0.24 } },
+    fishing = { { 0.27, 0.62, 0.92 }, { 0.64, 0.85, 0.98 }, { 0.14, 0.36, 0.70 }, { 0.30, 0.70, 0.74 } },
+    cloth = { { 0.66, 0.45, 0.90 }, { 0.86, 0.75, 0.98 }, { 0.42, 0.25, 0.66 }, { 0.82, 0.46, 0.78 } },
+}
+M.PALETTES = PALETTES
 local RUINED_COLOR = { 0.56, 0.54, 0.50 }
 local OTHER_COLOR = { 0.80, 0.78, 0.74 }
 local HIDE_COLOR = { 0.76, 0.62, 0.40 }
@@ -297,8 +308,9 @@ local function LeatherList(all, prof)
     end
     local material = M.PROF[prof or "skinning"] and M.PROF[prof or "skinning"].material or "leather"
     local list, colorOf, rank = { { key = 0, label = "All " .. material } }, { [RUINED] = RUINED_COLOR }, {}
+    local palette = PALETTES[prof or "skinning"] or PALETTE
     for i, id in ipairs(Top(counts, 12)) do
-        local color = PALETTE[i] or OTHER_COLOR
+        local color = palette[i] or OTHER_COLOR
         colorOf[id], rank[id] = color, i
         list[#list + 1] = { key = id, label = ItemName(id), count = counts[id], color = color }
     end
@@ -770,6 +782,15 @@ local function DrawDashboard(s, mapID, model)
         model.message = s.show == "community" and "Nothing shared for this zone yet." or "Nothing gathered here yet."
         return
     end
+    -- the full-screen key: each profession's color and count on this map
+    local per = {}
+    for _, r in ipairs(recs) do per[r.prof] = (per[r.prof] or 0) + 1 end
+    model.legend = {}
+    for _, p in ipairs(M.PROFS) do
+        if per[p.key] then
+            model.legend[#model.legend + 1] = { color = p.color, label = p.label .. "  " .. per[p.key], prof = p.key }
+        end
+    end
     local w, h = overlay:GetSize()
     if not w or w <= 0 or not h or h <= 0 then return end
     local lit = M.lit
@@ -1050,8 +1071,17 @@ local function Draw()
     else
         model.legend = {}
         for _, l in ipairs(list) do
-            if l.key ~= 0 and #model.legend < 5 and (s.leather == 0 or s.leather == l.key) then
+            -- every material, even while one is chosen: the key's entries are its filter too
+            if l.key ~= 0 and (#model.legend < 5 or l.key == s.leather) then
                 model.legend[#model.legend + 1] = l
+            end
+        end
+        model.legend[6] = nil -- the key has five places; a chosen sixth takes the fifth
+        if #model.legend == 5 and s.leather ~= 0 then
+            local seen = false
+            for i = 1, 5 do if model.legend[i].key == s.leather then seen = true end end
+            if not seen then
+                for _, l in ipairs(list) do if l.key == s.leather then model.legend[5] = l end end
             end
         end
     end

@@ -256,3 +256,48 @@
 - Gallery taken and checked (2026-11-04): all ten shots cropped into Screenshots/ (contact sheet
   design/Gallery-0.7.0-contact-sheet.png); every sample spot on walkable ground; session shot has the tracker
   beside the dock. Not uploaded yet (CurseForge Media tab, titles in reports/CurseForge-gallery-0.7.0.md).
+- Full-screen map pass (2026-11-04, Karl's notes): the heat seemed broken because the toolbar had no
+  profession switch and sat on Home (the dashboard draws dots, never heat). The toolbar now spans the
+  map's full width flush under the title band: name, switch and page buttons (Home plus each profession,
+  as on the rail) on the left, then View, Show and the material list (View and the list hide on Home);
+  session, Stats, Share and the gear at the right end. Switched off it narrows to name and switch in the
+  top left corner. The key snaps into the bottom corner and lists the hot spots (rank, count, creature,
+  coordinates; hover lights the pin, click pings it); on Home it shows each profession's color and count.
+  Checks pass, copied to Era. Not yet seen in game.
+- Key legend and material colors (2026-11-04, Karl): the key's legend entries are buttons. In Points a
+  material shows only its own dots (click again for all; the same setting as the material list), the
+  others step back while one is chosen, and all five stay listed. On Home a profession entry lights its
+  dots on hover and opens its page on click. Materials keep to their profession's hue (M.PALETTES in
+  Map.lua): mining yellows, herbs greens, fish blues, cloth purples; skinning keeps its palette. Checks pass
+  (39), copied to Era. Not yet seen in game.
+- Full-screen key keeps one height (2026-11-04, Karl: it jumped while switching views): hudKey.fixedH 156,
+  room for the count, numbered ramp, three hot spots and the sample note, which now sits on the card's
+  bottom edge. Taller content (a continent's scale line) still grows it. The dock's key is unchanged.
+  Checks pass (39), copied to Era. Not yet seen in game.
+- Switch fix (2026-11-04, Karl): after /reload the full-screen toolbar's switch was a blank white pill
+  until hovered, and a click only showed its new state after the mouse left. The toolbar never painted
+  it (only the dock did). Switch now has Sync() (state from settings, hover lift from MouseIsOver),
+  called by both layouts on every draw and on click. Checks pass (39), copied to Era. Not yet seen.
+- Community switched off (2026-11-04, Karl): the Show row's Community button (dock, Home dashboard and
+  full-screen toolbar, via ShowChoice in MapUI.lua) is dimmed with a "Coming soon" tooltip and does
+  nothing; a saved Community choice falls back to Account on load. The Community layer, imports and
+  /fn shots still work underneath. To bring it back, drop `soon = true` from SHOWS. Checks pass (39),
+  copied to Era. Not yet seen in game.
+- Motion pass (2026-11-04, Karl's recording of the dock folding): the dock moved 24 while its tab and
+  rail moved 220, so the tab and icons swept across the dock's words before the tab snapped into place.
+  Now dock, tab and rail slide as one piece, the whole width (St.DUR.slow 0.34 s, "soft" arriving,
+  "leave" departing), and the content fades as v squared, so it is gone before it reaches the map edge.
+  Style.lua: St.DUR (quick 0.16, base 0.26, slow 0.34), easings "soft" and "leave"; movable windows
+  (stats, share, tracker) fade in on open (closing stays instant). Settings slide, pop-over, toolbar,
+  key, heat fade and rail glide use the shared durations and easings. Checks pass (39), copied to Era
+  (/reload). Not yet seen in game; needs a new recording to judge.
+- Motion pass, second look (2026-11-04, Karl's recording, read frame by frame at 30 fps): the dock, tab and
+  rail now slide as one piece (fold takes about 0.23 s). A faint grey ghost of the dock's fill lingered for
+  2 to 3 frames after its text was gone, so the fade is cubed (v^3) and folding takes St.DUR.base (0.26)
+  while opening keeps St.DUR.slow (0.34). Checks pass (39), copied to Era. Not yet seen.
+- Dock clipping (2026-11-04, Karl: sliding pieces lingered over the map): the dock, the Fieldnotes tab and
+  every rail tab are now children of one clipping window (dockClip, SetClipsChildren) that starts at the
+  dock's resting edge (the tab's folded position, 1 px of margin) and runs outward, taller than the dock.
+  Sliding toward the map, everything is cut off at that edge, as if emerging from behind the map window.
+  LayoutDock places it per side. Checks pass (39), copied to Era. Not yet seen in game (frame levels moved
+  up by one; watch the tab and rail tabs' layering and tooltips).
