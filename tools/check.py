@@ -288,6 +288,27 @@ local continentBadges = ns.Map.ui.badgeCount
 WorldMapFrame.mapID = 1426
 -- the small map: a dock beside it (room on the right), the toolbar when maximized
 local toolbarLayout = ns.Map.ui.layout
+-- the full-screen Home key: clicking a profession's row opens its page, with all of its material
+-- (a leather filter left over from another page must not carry across)
+FieldnotesDB.settings.map.prof = "all"
+FieldnotesDB.settings.map.leather = "hides"
+Open("heat", "account")
+local homeKey = ns.MapUI.key
+local miningRow
+for _, l in ipairs(homeKey.legend) do
+  if l.b.entry and l.b.entry.prof == "mining" then miningRow = l.b end
+end
+miningRow.scripts.OnEnter(miningRow)
+miningRow.scripts.OnClick(miningRow)
+keyOpens = FieldnotesDB.settings.map.prof == "mining" and FieldnotesDB.settings.map.leather == 0
+-- a leather filter (Hides) chosen on Skinning does not follow you back to it
+FieldnotesDB.settings.map.prof = "all"
+FieldnotesDB.settings.map.leather = "hides"
+ns.Map.SetProf("skinning")
+keyOpens = keyOpens and FieldnotesDB.settings.map.leather == 0 and FieldnotesDB.settings.map.prof == "skinning"
+FieldnotesDB.settings.map.prof = "skinning"
+FieldnotesDB.settings.map.leather = 0
+Open("heat", "account")
 WorldMapFrame.IsMaximized = function() return false end
 function WorldMapFrame:GetLeft() return 300 end
 function WorldMapFrame:GetRight() return 1300 end
@@ -455,6 +476,7 @@ if ok:
         ("map: switched off draws nothing", off == 0),
         ("map: the continent shows a badge for each zone with notes", continent == 6),
         ("map: toolbar on the full-screen map, dock beside the small one; sessions start and end", layouts == 1),
+        ("full-screen Home key: a profession row opens its page and starts on all of its material", rt.globals().keyOpens == True),
         ("map: Spotlight dims the map", spot > heat),
         ("map: the Hides leather filter draws fewer areas than all skins", 0 < hides < heat),
         ("map: the settings panel opens", settings_open == 1),

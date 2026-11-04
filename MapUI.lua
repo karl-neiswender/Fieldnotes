@@ -424,19 +424,20 @@ end
 -- withSpots: the card also lists the hot spots the map pins, one line each (the dock's key); a
 -- row and its pin light together (hover either), and a click on a row pings its pin
 local SPOT_ROW = 17
+-- Tooltips for the key's items go above the card, so they never cover its numbers
+local function CardTip(owner, card)
+    GameTooltip:SetOwner(owner, "ANCHOR_NONE")
+    GameTooltip:ClearAllPoints()
+    GameTooltip:SetPoint("BOTTOMLEFT", card, "TOPLEFT", 0, 6)
+end
+
 local function SpotRow(k, i, width)
     local row = CreateFrame("Button", nil, k)
     row:SetSize(width - 10, SPOT_ROW)
     row.rank = i
-    row.wash = row:CreateTexture(nil, "BACKGROUND")
-    row.wash:SetAllPoints()
-    row.wash:SetTexture(St.SOLID)
-    row.bar = row:CreateTexture(nil, "ARTWORK")
-    row.bar:SetTexture(St.SOLID)
-    row.bar:SetVertexColor(C.ACCENT[1], C.ACCENT[2], C.ACCENT[3], 1)
-    row.bar:SetWidth(2)
-    row.bar:SetPoint("TOPLEFT", 0, -2)
-    row.bar:SetPoint("BOTTOMLEFT", 0, 2)
+    row.wash = St.Pill(row, SPOT_ROW - 1)
+    row.wash:Anchor(row, 1, 1)
+    row.wash:SetColor(1, 0.82, 0, 0)
     row.badge = row:CreateTexture(nil, "ARTWORK")
     row.badge:SetTexture(CIRCLE)
     row.badge:SetSize(13, 13)
@@ -475,8 +476,7 @@ local function SpotRow(k, i, width)
     end
     function row:Paint()
         local on = self.hover or self.lit
-        self.bar:SetShown(on)
-        self.wash:SetVertexColor(1, 0.82, 0, on and 0.10 or 0)
+        self.wash:SetColor(1, 0.82, 0, on and 0.14 or 0)
         self.halo:SetShown(on and true or false)
         if on then
             Breathe(self)
@@ -490,7 +490,7 @@ local function SpotRow(k, i, width)
         self:Paint()
         M.LightPin(self.rank, true)
         if self.whoFull and self.who:IsTruncated() then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            CardTip(self, self:GetParent())
             GameTooltip:SetText(self.whoFull, 1, 1, 1, 1, true)
             GameTooltip:Show()
         end
@@ -506,9 +506,29 @@ local function SpotRow(k, i, width)
     return row
 end
 
-local function KeyCard(parent, width, withSpots)
+-- glass: the full-screen key lets the map show through, most at the top right, solid at the
+-- bottom left where it meets the corner (a fill at GLASS alpha, and a radial of the same dark
+-- centred on that corner bringing it back up to nearly solid)
+local GLASS = 0.74
+local GLASS_LIFT = 0.8
+local function KeyCard(parent, width, withSpots, glass)
     local k = St.Frame("Frame", parent)
-    St.Etch(k, STYLE.row, 12)
+    St.Etch(k, STYLE.row, 12, glass and GLASS or nil)
+    if glass then
+        k.lift = k:CreateTexture(nil, "BACKGROUND", nil, -5)
+        k.lift:SetTexture(St.Media("radial"))
+        k.lift:SetVertexColor(0.045, 0.043, 0.04, GLASS_LIFT)
+        k.lift:SetPoint("TOPLEFT", 3, -3)
+        k.lift:SetPoint("BOTTOMRIGHT", -3, 3)
+        -- the radial's centre sits on the card's bottom-left corner; cut to the card by its texture
+        -- coordinates (so it cannot spill), and redone whenever the height changes
+        function k:FitLift()
+            local w, h = (self:GetWidth() or 0) - 6, (self:GetHeight() or 0) - 6
+            if w <= 0 or h <= 0 then return end
+            local R = math.max(w, h) * 1.15
+            self.lift:SetTexCoord(0.5, 0.5 + w / (2 * R), 0.5 - h / (2 * R), 0.5)
+        end
+    end
     k:SetWidth(width)
     k.withSpots = withSpots == true
     if withSpots then
@@ -580,10 +600,9 @@ local function KeyCard(parent, width, withSpots)
     k.legend = {}
     for i = 1, 5 do
         local b = CreateFrame("Button", nil, k)
-        b.wash = b:CreateTexture(nil, "BACKGROUND")
-        b.wash:SetAllPoints()
-        b.wash:SetTexture(St.SOLID)
-        b.wash:SetVertexColor(1, 0.82, 0, 0)
+        b.wash = St.Pill(b, 16)
+        b.wash:Anchor(b, 0, 0)
+        b.wash:SetColor(1, 0.82, 0, 0)
         local d = b:CreateTexture(nil, "ARTWORK")
         d:SetTexture(CIRCLE)
         d:SetSize(8, 8)
@@ -592,8 +611,8 @@ local function KeyCard(parent, width, withSpots)
         b:SetScript("OnEnter", function(self)
             local l = self.entry
             if not l then return end
-            self.wash:SetVertexColor(1, 0.82, 0, 0.10)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            self.wash:SetColor(1, 0.82, 0, 0.14)
+            CardTip(self, k)
             if l.prof then
                 M.SetLit(l.prof)
                 GameTooltip:SetText("Open " .. ((M.PROF[l.prof] and M.PROF[l.prof].label) or l.prof), 1, 1, 1)
@@ -604,8 +623,9 @@ local function KeyCard(parent, width, withSpots)
             end
             GameTooltip:Show()
         end)
+        if b.RegisterForClicks then b:RegisterForClicks("LeftButtonDown") end -- act on press
         b:SetScript("OnLeave", function(self)
-            self.wash:SetVertexColor(1, 0.82, 0, 0)
+            self.wash:SetColor(1, 0.82, 0, 0)
             if self.entry and self.entry.prof then M.SetLit(nil) end
             GameTooltip:Hide()
         end)
@@ -615,14 +635,22 @@ local function KeyCard(parent, width, withSpots)
             GameTooltip:Hide()
             if list then list:Hide() end
             if l.prof then
-                st.prof = l.prof
-                M.SetLit(nil)
+                M.SetProf(l.prof)
             else
                 st.leather = (st.leather == l.key) and 0 or l.key
             end
             Refresh()
         end)
-        k.legend[i] = { b = b, d = d, t = t }
+        -- Home's bars: a faint track, the profession's color up to its share of the busiest one,
+        -- and its count at the right
+        local box = CreateFrame("Frame", nil, b)
+        box:SetHeight(5)
+        local track, fill = St.Pill(box, 5, "BACKGROUND"), St.Pill(box, 5, "ARTWORK")
+        local count = St.Text(b, 11, C.TEXT)
+        count:SetJustifyH("RIGHT")
+        box:Hide()
+        count:Hide()
+        k.legend[i] = { b = b, d = d, t = t, barBox = box, track = track, fill = fill, count = count }
     end
     k.demo = St.Text(k, 10, C.SUBTEXT)
     k.demo:SetText("Sample data  ·  /fn demo off to hide it")
@@ -644,8 +672,10 @@ local function KeyCard(parent, width, withSpots)
             r.l:Hide()
             r.v:Hide()
         end
+        -- (the legend's buttons are only hidden at the end, if still unused: hiding and showing the
+        -- one under the cursor on every redraw can swallow a click)
         for _, l in ipairs(self.legend) do
-            l.b:Hide()
+            l.b.keep = false
             l.b.entry = nil
         end
         local showRamp = hasData and m.kind ~= "dash" and m.mode == "heat" or (hasData and m.kind == "continent")
@@ -727,6 +757,41 @@ local function KeyCard(parent, width, withSpots)
                 self.more:ClearAllPoints()
                 self.more:SetPoint("TOPRIGHT", self, "TOPRIGHT", -11, y)
                 y = y - 16
+            elseif m.kind == "dash" and m.legend then
+                -- Home: one row per profession, its share as a bar
+                local btnW = width - 14
+                local barLeft = 8 + 8 + 5 + 64
+                local barW = btnW - barLeft - 8 - 30 - 6
+                for i, l in ipairs(m.legend) do
+                    local row = self.legend[i]
+                    if not row then break end
+                    row.b.entry = l
+                    row.b:ClearAllPoints()
+                    row.b:SetPoint("TOPLEFT", self, "TOPLEFT", 7, y - (i - 1) * 18)
+                    row.b:SetSize(btnW, 17)
+                    row.b:SetAlpha(1)
+                    row.d:SetVertexColor(l.color[1], l.color[2], l.color[3])
+                    row.d:ClearAllPoints()
+                    row.d:SetPoint("LEFT", row.b, "LEFT", 8, 0)
+                    row.t:SetText(l.label)
+                    row.t:SetTextColor(C.INK2[1], C.INK2[2], C.INK2[3])
+                    row.count:SetText(l.count)
+                    row.count:ClearAllPoints()
+                    row.count:SetPoint("RIGHT", row.b, "RIGHT", -8, 0)
+                    row.barBox:ClearAllPoints()
+                    row.barBox:SetPoint("LEFT", row.b, "LEFT", barLeft, 0)
+                    row.barBox:SetSize(barW, 5)
+                    row.track:Anchor(row.barBox, 0, 0)
+                    row.track:SetColor(1, 0.94, 0.82, 0.09)
+                    local fw = math.max(5, barW * (l.frac or 0))
+                    row.fill:Anchor(row.barBox, 0, barW - fw)
+                    row.fill:SetColor(l.color[1], l.color[2], l.color[3], 0.95)
+                    row.barBox:Show()
+                    row.count:Show()
+                    row.b:Show()
+                    row.b.keep = true
+                end
+                y = y - #m.legend * 18
             elseif m.legend then
                 local x = 11
                 local chosen = m.leather and m.leather ~= 0 and m.kind ~= "dash" and m.leather or nil
@@ -742,16 +807,19 @@ local function KeyCard(parent, width, withSpots)
                     -- while one is chosen the rest step back, still there to click
                     row.b:SetAlpha((chosen and not on) and 0.45 or 1)
                     local w = 13 + row.t:GetStringWidth() + 10
-                    if x > 11 and x + w > width - 8 then x, y = 11, y - 17 end
+                    if x > 11 and x + w + 6 > width - 8 then x, y = 11, y - 18 end
                     row.b:ClearAllPoints()
-                    row.b:SetPoint("TOPLEFT", self, "TOPLEFT", x - 4, y + 2)
-                    row.b:SetSize(w - 4, 14)
+                    row.b:SetPoint("TOPLEFT", self, "TOPLEFT", x - 8, y + 3)
+                    row.b:SetSize(w + 6, 16)
                     row.d:ClearAllPoints()
-                    row.d:SetPoint("LEFT", row.b, "LEFT", 4, 0)
+                    row.d:SetPoint("LEFT", row.b, "LEFT", 8, 0)
+                    row.barBox:Hide()
+                    row.count:Hide()
                     row.b:Show()
-                    x = x + w
+                    row.b.keep = true
+                    x = x + w + 8
                 end
-                y = y - 17
+                y = y - 18
             end
             if m.scale and self.scale:IsShown() then
                 self.scale:SetText(m.scale)
@@ -777,6 +845,13 @@ local function KeyCard(parent, width, withSpots)
                 y = y - SPOT_ROW
             end
         end
+        for _, l in ipairs(self.legend) do
+            if not l.b.keep then
+                l.b:Hide()
+                l.barBox:Hide()
+                l.count:Hide()
+            end
+        end
         self.demo:SetShown(m.inDemo and not compact)
         if m.inDemo and not compact then
             self.demo:ClearAllPoints()
@@ -797,6 +872,7 @@ local function KeyCard(parent, width, withSpots)
         else
             self:SetHeight(-y + 8)
         end
+        if self.FitLift then self:FitLift() end
         self.lastRoom, self.lastSpots = maxH, nSpots -- for /fn debug
         if maxH and -y + 8 > maxH then
             if not compact then return self:Update(m, maxH, true, spotCap) end
@@ -1318,8 +1394,7 @@ GoTo = function(key)
     end
     FN.db.settings.dockOpen = true
     if s.prof ~= key then
-        s.prof = key
-        M.SetLit(nil)
+        M.SetProf(key)
         Refresh()
     end
     MapUI.Render(model)
@@ -2091,7 +2166,7 @@ local function BuildToolbar()
     hud:EnableMouse(false)
 
     bar = St.Frame("Frame", hud)
-    St.Etch(bar, STYLE.panel, 12, 0.94)
+    St.Etch(bar, STYLE.panel, 12, 0.98) -- (0.94 let the map's own hint text show through)
     bar:SetHeight(36)
     bar:EnableMouse(true)
     bar:SetClipsChildren(true)
@@ -2104,11 +2179,9 @@ local function BuildToolbar()
     local function PageButton(key, icon, color, tip)
         -- not GoTo: that opens the small map's dock as well
         local b = Choice(bar, "", function()
-            local s = M.S()
             if list then list:Hide() end
-            if s.prof ~= key then
-                s.prof = key
-                M.SetLit(nil)
+            if M.S().prof ~= key then
+                M.SetProf(key)
                 Refresh()
             end
         end, tip)
@@ -2145,7 +2218,7 @@ local function BuildToolbar()
     bar.session = Choice(bar, "Start", function()
         if FN.SessionRunning() then FN.SessionTogglePause() else FN.SessionStart() end
         MapUI.Render(model)
-    end, "Start, pause or resume your session")
+    end, "Start a session: a timer and a tally of what you gather. Click again to pause.")
     bar.session.icon = bar.session:CreateTexture(nil, "OVERLAY")
     bar.session.icon:SetSize(9, 9)
     bar.session.icon:SetPoint("LEFT", 9, 0)
@@ -2161,8 +2234,18 @@ local function BuildToolbar()
         GameTooltip:Show()
     end)
     bar.stop:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    bar.stats = Choice(bar, "Stats", function() FN.ToggleStats() end, "Your skinning stats")
-    bar.share = Choice(bar, "Share", function() FN.ShowShare() end, "Share your notes, or import someone else's")
+    -- Stats and Share are icons, like the gear: they spend no room on words
+    local function IconChoice(icon, onClick, tip)
+        local b = Choice(bar, "", onClick, tip)
+        b.icon = b:CreateTexture(nil, "OVERLAY")
+        b.icon:SetTexture(St.Icon(icon))
+        b.icon:SetSize(14, 14)
+        b.icon:SetPoint("CENTER")
+        b.icon:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
+        return b
+    end
+    bar.stats = IconChoice("stats-white", function() FN.ToggleStats() end, "Stats")
+    bar.share = IconChoice("share-white", function() FN.ShowShare() end, "Share your notes, or import someone else's")
     bar.gear = GearButton(bar, function() SetPop(not pop.open) end)
     bar.dividers = {}
     for i = 1, 5 do
@@ -2179,7 +2262,7 @@ local function BuildToolbar()
         end
     end)
 
-    hudKey = KeyCard(hud, 280, true) -- with the hot spots, as in the dock
+    hudKey = KeyCard(hud, 280, true, true) -- with the hot spots, as in the dock, on glass
     -- tall enough for the busiest layout: count, numbered ramp and caption, three hot spots and
     -- the sample-data note (Points' two legend lines need less)
     hudKey.fixedH = 156
@@ -2200,27 +2283,32 @@ local BAR_H = 36
 local function LayoutToolbar(m)
     local s = M.S()
     local dash = s.prof == "all"
-    local x = 14
+    -- One rhythm: 4 between buttons in a group; a divider has 10 either side of it, always
+    -- measured from the buttons' edges; 14 at both ends of the bar.
+    local GAP, SEP, EDGE = 4, 10, 14
+    local x = EDGE
     bar.title:ClearAllPoints()
     bar.title:SetPoint("LEFT", bar, "LEFT", x, 0)
     x = x + bar.title:GetStringWidth() + 10
     bar.switch:ClearAllPoints()
     bar.switch:SetPoint("LEFT", bar, "LEFT", x, 0)
     bar.switch:Sync()
-    x = x + 36 + 12
-    local closedW = x
+    x = x + 36
+    local closedW = x + EDGE
+    x = x + GAP -- x is now where the next button would go, as after any button
     local function Place(f, w)
         f:SetWidth(w)
         f:ClearAllPoints()
         f:SetPoint("LEFT", bar, "LEFT", x, 0)
         f:Show()
-        x = x + w + 3
+        x = x + w + GAP
     end
     local function Divider(i)
+        local edge = x - GAP -- the last button's right edge
         bar.dividers[i]:ClearAllPoints()
-        bar.dividers[i]:SetPoint("LEFT", bar, "LEFT", x + 3, 0)
+        bar.dividers[i]:SetPoint("LEFT", bar, "LEFT", edge + SEP, 0)
         bar.dividers[i]:Show()
-        x = x + 10
+        x = edge + SEP + 1 + SEP
     end
     Divider(1)
     -- the pages: Home, then the professions the dock's rail would show
@@ -2235,67 +2323,79 @@ local function LayoutToolbar(m)
             b:Hide()
         end
     end
-    x = x + 3
-    Divider(2)
     -- View and the material list mean nothing on Home (every gather is a dot there)
-    for _, b in ipairs(bar.modes) do
-        if dash then
-            b:Hide()
-        else
+    if dash then
+        bar.dividers[2]:Hide()
+        for _, b in ipairs(bar.modes) do b:Hide() end
+        bar.dividers[3]:Hide()
+    else
+        Divider(2)
+        for _, b in ipairs(bar.modes) do
             Place(b, math.ceil(b.text:GetStringWidth()) + 18)
             b:SetChosen(b.key == s.mode)
         end
+        Divider(3)
     end
-    if dash then bar.dividers[3]:Hide() else x = x + 3; Divider(3) end
+    if dash then Divider(3) end -- (Home: pages, then Show, with one divider between)
     for _, b in ipairs(bar.shows) do
         Place(b, math.ceil(b.text:GetStringWidth()) + 18)
         b:SetChosen(b.key == s.show)
     end
-    x = x + 3
+    local leatherX
     if dash then
         bar.dividers[4]:Hide()
         bar.leather:Hide()
     else
         Divider(4)
-        bar.leather:Update()
-        Place(bar.leather, 150)
+        leatherX = x
     end
-    local leftEnd = x
 
-    -- the right end, laid right to left but anchored from the left at the full width, so when the
-    -- bar narrows they are clipped away with the rest rather than sliding over the name
-    local barW = hud:GetWidth() or 0
-    local fullW = math.max(closedW, barW)
-    local r = 14
-    bar.gear:ClearAllPoints()
-    bar.gear:SetPoint("LEFT", bar, "LEFT", fullW - r - 16, 0)
-    bar.gear:Tint()
-    r = r + 16 + 10
-    local function PlaceR(f, w)
-        f:SetWidth(w)
-        f:ClearAllPoints()
-        f:SetPoint("LEFT", bar, "LEFT", fullW - r - w, 0)
-        f:Show()
-        r = r + w + 3
-    end
+    -- the session chip, and what the right end needs
     local running, paused = FN.SessionRunning(), FN.SessionPaused()
     if running then
         bar.session.text:SetText(Clock(FN.SessionSeconds()) .. "  ·  " .. FN.SessionLabel())
         bar.session.icon:SetTexture(St.Icon(paused and "play-white" or "pause-white"))
     else
-        bar.session.text:SetText("Start session")
+        bar.session.text:SetText("Start")
         bar.session.icon:SetTexture(St.Icon("play-white"))
     end
     bar.session.icon:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
     local sessionW = math.ceil(bar.session.text:GetStringWidth()) + 34
-    local statsW = math.ceil(bar.stats.text:GetStringWidth()) + 18
-    local shareW = math.ceil(bar.share.text:GetStringWidth()) + 18
-    -- on a narrow map Stats and Share give way first (both stay in /fn and the gear's settings)
-    local need = leftEnd + 10 + sessionW + (running and 18 or 0) + r
-    local roomy = barW <= 0 or need + statsW + shareW + 6 <= barW
-    if roomy then
-        PlaceR(bar.share, shareW)
-        PlaceR(bar.stats, statsW)
+    local ICON_W = 28
+    local barW = hud:GetWidth() or 0
+    local fullW = math.max(closedW, barW)
+    -- right end, from the right edge in: gear, [Stats, Share], [stop], Start, then a divider
+    local rightBase = EDGE + 16 + GAP + (running and 16 + GAP or 0) + sessionW + SEP + 1 + SEP
+    local iconsW = 2 * (ICON_W + GAP)
+    -- the material list takes what is left (110 to 150); Stats and Share give way if even 110 is too much
+    local wantLeather = dash and 0 or 110
+    local leftMin = (leatherX or x) + wantLeather
+    local showIcons = barW <= 0 or leftMin + rightBase + iconsW <= barW
+    local leatherW = 0
+    if not dash then
+        local room = barW - rightBase - (showIcons and iconsW or 0) - leatherX
+        leatherW = barW <= 0 and 150 or math.max(96, math.min(150, room))
+        bar.leather:Update()
+        Place(bar.leather, leatherW)
+    end
+
+    -- anchored from the left at the full width, so when the bar narrows they are clipped away with
+    -- the rest rather than sliding over the name
+    local r = EDGE
+    bar.gear:ClearAllPoints()
+    bar.gear:SetPoint("LEFT", bar, "LEFT", fullW - r - 16, 0)
+    bar.gear:Tint()
+    r = r + 16 + GAP
+    local function PlaceR(f, w)
+        f:SetWidth(w)
+        f:ClearAllPoints()
+        f:SetPoint("LEFT", bar, "LEFT", fullW - r - w, 0)
+        f:Show()
+        r = r + w + GAP
+    end
+    if showIcons then
+        PlaceR(bar.share, ICON_W)
+        PlaceR(bar.stats, ICON_W)
     else
         bar.share:Hide()
         bar.stats:Hide()
@@ -2304,11 +2404,11 @@ local function LayoutToolbar(m)
     if running then
         bar.stop:ClearAllPoints()
         bar.stop:SetPoint("LEFT", bar, "LEFT", fullW - r - 16, 0)
-        r = r + 18
+        r = r + 16 + GAP
     end
     PlaceR(bar.session, sessionW)
     bar.dividers[5]:ClearAllPoints()
-    bar.dividers[5]:SetPoint("LEFT", bar, "LEFT", fullW - r - 7, 0)
+    bar.dividers[5]:SetPoint("LEFT", bar, "LEFT", fullW - (r - GAP) - SEP - 1, 0)
     bar.dividers[5]:Show()
 
     -- only switching on or off animates; a redraw (the session clock, a filter) just resizes
@@ -2438,6 +2538,7 @@ function MapUI.Init()
         MapUI.Render(model)
     end
     BuildToolbar()
+    MapUI.key = hudKey -- for the checks
     WorldMapFrame:HookScript("OnHide", function()
         if list then list:Hide() end
         if dock.sheetOpen then SetSheet(false) end

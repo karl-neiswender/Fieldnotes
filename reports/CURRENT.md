@@ -301,3 +301,24 @@
   Sliding toward the map, everything is cut off at that edge, as if emerging from behind the map window.
   LayoutDock places it per side. Checks pass (39), copied to Era. Not yet seen in game (frame levels moved
   up by one; watch the tab and rail tabs' layering and tooltips).
+- Full-screen polish (2026-11-04, Karl's screenshots): the key's tooltips (hot spots, legend) now sit above
+  the card (CardTip) instead of over its numbers; hot spot rows and legend entries hover as pills
+  (St.Pill in Style.lua: Media/pill in three slices, true round ends); the full-screen key is glass
+  (fill 0.74 plus a radial lift centred on the bottom-left corner, so the map shows through at the top
+  right; the dock's key stays solid); Stats and Share are icon buttons and the session chip reads "Start"
+  (the heat page ran out of room and dropped Stats and Share, and the leather list touched the session
+  chip); toolbar fill 0.98 (the map's own hint text ghosted through at 0.94); pin numbers are outlined
+  (lost in dense Points clusters). Checks pass (39), copied to Era. Not yet seen in game.
+- Home bar chart (2026-11-04, Karl approved): on Home the full-screen key's legend became five rows, each a
+  profession dot and name, a pill bar in its color sized to its share of the busiest profession (faint track
+  behind), and its count at the right. Rows stay buttons (hover lights that profession's dots, click opens
+  its page). Map.lua's dashboard legend carries count and frac. Checks pass (39), copied to Era. Not yet seen.
+- Karl's notes on the Home key and toolbar (2026-11-04): (1) a Home key row's tooltip said "Open Mining" but
+  the click did nothing in game (it passed in the harness, so likely an engine detail): the key no longer
+  hides and re-shows its legend buttons on every redraw (it hid the one under the cursor), and legend rows
+  act on press (RegisterForClicks LeftButtonDown). (2) Skinning opened on Hides because the leather filter
+  is one setting shared by every page: M.SetProf (Map.lua) now clears it whenever the page changes (dock
+  tabs, toolbar page buttons, key rows). (3) Toolbar spacing rebuilt on one rhythm: 4 between buttons, 10
+  either side of every divider (measured from button edges), 14 at both ends; the material list takes the
+  room that is left (96 to 150) before Stats and Share give way. New check for (1) and (2). Checks pass
+  (40), copied to Era. Not yet seen in game.

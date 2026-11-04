@@ -107,6 +107,39 @@ function St.Etch(frame, style, edgeSize, alpha)
     frame:SetEtch(style)
 end
 
+-- A pill: a fixed-height rounded bar, in three slices of Media/pill (round caps, a stretched
+-- middle), so a hover can be as wide as its row with true round ends.
+--   local p = St.Pill(frame, 15); p:Anchor(frame, 4, 4); p:SetColor(1, 0.82, 0, 0.14)
+function St.Pill(parent, h, layer, sub)
+    local p = {}
+    local file = St.Media("pill")
+    local function Slice(c0, c1)
+        local t = parent:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0)
+        t:SetTexture(file)
+        t:SetTexCoord(c0, c1, 0, 1)
+        t:SetHeight(h)
+        return t
+    end
+    p.l, p.m, p.r = Slice(0, 0.25), Slice(0.25, 0.75), Slice(0.75, 1)
+    p.l:SetWidth(h / 2)
+    p.r:SetWidth(h / 2)
+    function p:Anchor(frame, left, right, y)
+        self.l:ClearAllPoints()
+        self.l:SetPoint("LEFT", frame, "LEFT", left or 0, y or 0)
+        self.r:ClearAllPoints()
+        self.r:SetPoint("RIGHT", frame, "RIGHT", -(right or 0), y or 0)
+        self.m:ClearAllPoints()
+        self.m:SetPoint("LEFT", self.l, "RIGHT", 0, 0)
+        self.m:SetPoint("RIGHT", self.r, "LEFT", 0, 0)
+    end
+    function p:SetColor(r, g, b, a)
+        self.l:SetVertexColor(r, g, b, a)
+        self.m:SetVertexColor(r, g, b, a)
+        self.r:SetVertexColor(r, g, b, a)
+    end
+    return p
+end
+
 function St.Text(parent, size, color)
     local fs = parent:CreateFontString(nil, "OVERLAY")
     fs:SetFont(STANDARD_TEXT_FONT, size or 11, "")

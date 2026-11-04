@@ -786,9 +786,13 @@ local function DrawDashboard(s, mapID, model)
     local per = {}
     for _, r in ipairs(recs) do per[r.prof] = (per[r.prof] or 0) + 1 end
     model.legend = {}
+    local most = 1
+    for _, n in pairs(per) do most = math.max(most, n) end
     for _, p in ipairs(M.PROFS) do
         if per[p.key] then
-            model.legend[#model.legend + 1] = { color = p.color, label = p.label .. "  " .. per[p.key], prof = p.key }
+            -- count and frac (of the busiest profession) draw the Home key's bars
+            model.legend[#model.legend + 1] = { color = p.color, label = p.label, prof = p.key,
+                count = per[p.key], frac = per[p.key] / most }
         end
     end
     local w, h = overlay:GetSize()
@@ -833,6 +837,17 @@ local function DrawDashboard(s, mapID, model)
         d:SetSize(size, size)
         d:SetVertexColor(c[1], c[2], c[3], dim and 0.18 or 1)
     end
+end
+
+-- go to a page ("all" or a profession). Each page starts on all of its material: a leather
+-- filter chosen on another page (Hides, say) never follows you, which read as a nearly empty map.
+function M.SetProf(key)
+    local s = S()
+    if s.prof ~= key then
+        s.prof = key
+        s.leather = 0
+    end
+    M.lit = nil
 end
 
 -- light one profession's dots on the dashboard map (nil: none)
@@ -1035,7 +1050,7 @@ local function Draw()
             p:SetSize(pin, pin)
             p.dot:SetSize(pin / 2, pin / 2)
             p.k = k
-            p.num:SetFont(STANDARD_TEXT_FONT, 13 * k, "")
+            p.num:SetFont(STANDARD_TEXT_FONT, 13 * k, "OUTLINE")
             p.num:ClearAllPoints()
             p.num:SetPoint("BOTTOM", p, "TOP", 0, k)
             p:ClearAllPoints()
