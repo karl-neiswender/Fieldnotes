@@ -204,7 +204,7 @@ local spot = Open("spotlight", "account")
 FieldnotesDB.settings.map.leather = "hides" -- hides are an entry in the leather list now
 local hides = Open("heat", "account")
 FieldnotesDB.settings.map.leather = 0
-for _, c in ipairs({ "thermal", "frost", "verdant", "gold", "ember" }) do
+for _, c in ipairs({ "ember", "thermal" }) do
   FieldnotesDB.settings.map.colors = c
   Open("heat", "account")
 end

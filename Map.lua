@@ -33,22 +33,16 @@ local INK = { 0.106, 0.078, 0.047 }
 local SOFT = C.INK2
 local DIM = C.SUBTEXT
 
--- Heat color schemes, fewest to most. All but Thermal grow steadily darker, so they read the
--- same in grayscale and for color-blind players; Thermal is the familiar cool-to-warm scale.
+-- Heat color schemes, fewest to most. Thermal (the default) is the familiar cool-to-warm heat
+-- scale; Ember grows steadily darker, so it reads the same in grayscale and for color-blind players.
 local SCHEMES = {
-    ember = { { 0, 0.953, 0.886, 0.651 }, { 0.3, 0.933, 0.702, 0.361 }, { 0.55, 0.871, 0.478, 0.227 },
-        { 0.8, 0.702, 0.251, 0.169 }, { 1, 0.416, 0.110, 0.133 } },
     thermal = { { 0, 0.16, 0.30, 0.85 }, { 0.3, 0.15, 0.70, 0.85 }, { 0.55, 0.45, 0.85, 0.30 },
         { 0.78, 1.00, 0.85, 0.15 }, { 1, 0.90, 0.18, 0.10 } },
-    frost = { { 0, 0.85, 0.93, 1.00 }, { 0.3, 0.61, 0.79, 1.00 }, { 0.55, 0.25, 0.55, 1.00 },
-        { 0.8, 0.00, 0.30, 0.75 }, { 1, 0.04, 0.16, 0.40 } },
-    verdant = { { 0, 0.97, 0.93, 0.65 }, { 0.3, 0.78, 0.86, 0.45 }, { 0.55, 0.45, 0.72, 0.35 },
-        { 0.8, 0.18, 0.50, 0.28 }, { 1, 0.05, 0.28, 0.18 } },
-    gold = { { 0, 1.00, 0.95, 0.75 }, { 0.3, 1.00, 0.86, 0.45 }, { 0.55, 0.95, 0.70, 0.15 },
-        { 0.8, 0.75, 0.50, 0.05 }, { 1, 0.45, 0.28, 0.02 } },
+    ember = { { 0, 0.953, 0.886, 0.651 }, { 0.3, 0.933, 0.702, 0.361 }, { 0.55, 0.871, 0.478, 0.227 },
+        { 0.8, 0.702, 0.251, 0.169 }, { 1, 0.416, 0.110, 0.133 } },
 }
-M.SCHEME_ORDER = { "ember", "thermal", "frost", "verdant", "gold" }
-local RAMP = SCHEMES.ember -- the scheme in use, set by Draw
+M.SCHEME_ORDER = { "thermal", "ember" }
+local RAMP = SCHEMES.thermal -- the scheme in use, set by Draw
 
 -- Points colors, given to the map's leading leathers in order; each also differs in lightness.
 -- The leading leather gets the strongest color: the pale one vanishes on light parchment.
@@ -60,7 +54,7 @@ local OTHER_COLOR = { 0.80, 0.78, 0.74 }
 local HIDE_COLOR = { 0.76, 0.62, 0.40 }
 M.PALETTE, M.RUINED_COLOR, M.OTHER_COLOR = PALETTE, RUINED_COLOR, OTHER_COLOR -- the stats window's leather colors
 
-local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "ember", when = 0, strength = 1, spread = 1 }
+local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "thermal", when = 0, strength = 1, spread = 1 }
 M.DEFAULTS = DEFAULTS
 
 -- the map's settings. leather: 0 (all), an item ID, "hides" or "ruined"
@@ -100,7 +94,7 @@ M.Ramp = Ramp
 -- a scheme's colour at v (0..1), for swatches
 function M.SchemeColor(name, v)
     local keep = RAMP
-    RAMP = SCHEMES[name] or SCHEMES.ember
+    RAMP = SCHEMES[name] or SCHEMES.thermal
     local r, g, b = Ramp(v)
     RAMP = keep
     return r, g, b

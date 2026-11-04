@@ -56,3 +56,27 @@
   exploration art (pin level manager + MapExplorationPinTemplate pins), under Blizzard's pins.
   Checks pass, copied to Era. Not yet confirmed in game.
 - Known: a stray "ke" text shows past the right end of the map bar (seen 2026-11-03, not traced).
+- Dock refinement pass (2026-11-03, Karl's notes on the v0.6.0 dock): the tab's "Fieldnotes" turns a
+  quarter to read top to bottom (stacked letters only where text cannot turn); profession slots are
+  placeholders (initials) until Karl's icons; the dock tucks against the map window's gold edge and
+  runs down to its bottom edge (EDGE_TUCK in MapUI.lua, an estimate from a screenshot); Stats and
+  Share are icons beside the gear in a footer under a rule (Media/icons/stats-white, share-white are
+  placeholders); map settings rise inside the dock instead of a second panel; colors cut to Thermal
+  (default) and Ember. Checks pass, copied to Era. Not yet seen in game; new icon files need a full
+  client restart, not /reload. Saved color choices stay as they are: Reset to defaults picks Thermal.
+- Second dock pass (2026-11-03): the turned tab word is re-centred (the game turns text about the top
+  centre of its box); the leather list has flat rows (hover wash, gold bar and text for the chosen
+  one, a rule under All leather), matches the button's scale and width, and its chevron flips while
+  open; the dock's session row shows the clock, then "Paused" or the skins, clear of its icons.
+  Checks pass, copied to Era. Not yet seen in game.
+- Third dock pass (2026-11-03): the tab is as long as its word and chevron (about 100 instead of
+  150), tucks under the dock's edge so the two read as one, and its tooltip says Open or Close.
+  Movable windows (stats, share, tracker) now come to the front whole when opened or clicked, so
+  stats and share no longer weave through each other. Checks pass, copied to Era. Not yet seen in game.
+- Fourth dock pass (2026-11-03): tab padding evened (word one unit left, less room on top). The dock
+  and tab take Forever Goal Tracker's window look: its warm brown fill (STYLE.dock in Style.lua, with
+  a panel edge) and its grime texture (Media/grime.tga copied from FGT; St.Grime ports FGT.AddGrime,
+  strongest at the top, fading down). Checks pass, copied to Era. Needs a full client restart for the
+  new texture. Not yet seen in game.
+- Stats and share windows get the same grime over their brown window fill (2026-11-03). Checks
+  pass, copied to Era. Not yet seen in game.

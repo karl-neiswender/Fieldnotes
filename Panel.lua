@@ -160,6 +160,7 @@ local function Build()
     frame:SetSize(W, H)
     frame:SetFrameStrata("FULLSCREEN_DIALOG") -- above the map and its Fieldnotes bar
     St.Etch(frame, STYLE.window, 16)
+    St.Grime(frame, 0.25, 16, 0, 150, 220) -- Forever Goal Tracker's window texture, strongest at the top
     St.Movable(frame, "statsPos")
     St.PlaceSaved(frame, "statsPos", "CENTER", "CENTER", 0, 40)
     frame:Hide()

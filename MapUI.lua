@@ -25,15 +25,21 @@ local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local DOCK_W = 228
 local PAD = 12
 local INNER = DOCK_W - PAD * 2
-local TAB_W, TAB_H = 26, 150
+local TAB_W, TAB_H = 26, 150 -- TAB_H: the stacked-letter fallback; a turned word sets its own
+local TAB_TOP, TAB_GAP, TAB_BOTTOM = 8, 8, 8 -- room above the word, word to chevron, below it
+local TAB_TUCK = 8 -- how far the open tab slips under the dock's edge, so the two read as one
+local FOOTER_H = PAD + 2 + 16 + 12 -- the icon row and the space above it, up to its rule
+local EDGE_TUCK = 10 -- the map window's art stops this far inside its border frame's edge
 local LIST_ROWS = 6
 local GREEN = { 0.31, 0.75, 0.23 }
 
+-- icon: a file name in Media/icons (white on clear, like the others), tinted gold when chosen.
+-- Until Karl's profession icons land, each slot shows its initial as a placeholder.
 local PROFESSIONS = {
-    { key = "skinning", label = "Skinning", icon = "Interface\\Icons\\INV_Misc_Pelt_Wolf_01", ready = true },
-    { key = "mining", label = "Mining", icon = "Interface\\Icons\\Trade_Mining" },
-    { key = "herbalism", label = "Herbalism", icon = "Interface\\Icons\\Trade_Herbalism" },
-    { key = "fishing", label = "Fishing", icon = "Interface\\Icons\\Trade_Fishing" },
+    { key = "skinning", label = "Skinning", ready = true },
+    { key = "mining", label = "Mining" },
+    { key = "herbalism", label = "Herbalism" },
+    { key = "fishing", label = "Fishing" },
 }
 local MODES = {
     { key = "heat", label = "Heat", tip = "A glow where you skin most" },
@@ -45,7 +51,7 @@ local SHOWS = {
     { key = "account", label = "Account", tip = "Every character on this account" },
     { key = "community", label = "Community", tip = "Everyone who has shared, merged" },
 }
-local SCHEME_NAMES = { ember = "Ember", thermal = "Thermal", frost = "Frost", verdant = "Verdant", gold = "Gold" }
+local SCHEME_NAMES = { thermal = "Thermal", ember = "Ember" }
 local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
 
 local model = {}
@@ -150,11 +156,14 @@ end
 -- leathers, most first, with how many; past six it scrolls (mouse wheel, thin bar).
 -- ------------------------------------------------------------
 local list
+local ROW_H, LIST_PAD, SPLIT = 22, 4, 9 -- row height, inner padding, the room the divider takes
 
 local function FillList()
     local items = model.leathers or {}
     local maxOffset = math.max(0, #items - LIST_ROWS)
     list.offset = math.max(0, math.min(list.offset or 0, maxOffset))
+    local y = -LIST_PAD
+    local split = false
     for i, row in ipairs(list.rows) do
         local item = items[list.offset + i]
         row:SetShown(item ~= nil)
@@ -162,22 +171,88 @@ local function FillList()
             row.key = item.key
             row.text:SetText(item.label)
             row.count:SetText(item.count or "")
-            row.dot:SetShown(item.color ~= nil)
-            if item.color then row.dot:SetVertexColor(item.color[1], item.color[2], item.color[3]) end
+            if item.color then
+                row.dot:SetVertexColor(item.color[1], item.color[2], item.color[3], 1)
+            else
+                row.dot:SetVertexColor(0.3, 0.3, 0.3, 0.6) -- All: the same quiet dot as the button
+            end
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", list, "TOPLEFT", LIST_PAD, y)
+            row:SetPoint("TOPRIGHT", list, "TOPRIGHT", -LIST_PAD - (#items > LIST_ROWS and 6 or 0), y)
             row:SetChosen(item.key == model.leather)
+            y = y - ROW_H
+            -- a thin rule between "All leather" and the leathers themselves
+            if item.key == 0 and items[list.offset + i + 1] then
+                list.split:ClearAllPoints()
+                list.split:SetPoint("TOPLEFT", list, "TOPLEFT", LIST_PAD + 8, y - (SPLIT - 1) / 2)
+                list.split:SetPoint("TOPRIGHT", list, "TOPRIGHT", -LIST_PAD - 8, y - (SPLIT - 1) / 2)
+                split = true
+                y = y - SPLIT
+            end
         end
     end
-    local shown = math.min(#items, LIST_ROWS)
-    list:SetHeight(shown * 24 + 8)
-    list.track:SetShown(#items > LIST_ROWS)
-    list.thumb:SetShown(#items > LIST_ROWS)
-    if #items > LIST_ROWS then
-        local trackH = shown * 24
+    list.split:SetShown(split)
+    list:SetHeight(-y + LIST_PAD)
+    local scrolls = #items > LIST_ROWS
+    list.track:SetShown(scrolls)
+    list.thumb:SetShown(scrolls)
+    if scrolls then
+        local trackH = -y - LIST_PAD
         local thumbH = math.max(16, trackH * LIST_ROWS / #items)
         list.thumb:SetHeight(thumbH)
         list.thumb:ClearAllPoints()
-        list.thumb:SetPoint("TOPRIGHT", list, "TOPRIGHT", -4, -4 - (trackH - thumbH) * list.offset / maxOffset)
+        list.thumb:SetPoint("TOPRIGHT", list, "TOPRIGHT", -5, -LIST_PAD - (trackH - thumbH) * list.offset / maxOffset)
     end
+end
+
+-- a flat row: a soft wash on hover; chosen, a gold bar at its left edge and gold text
+local function ListRow(parent, onClick)
+    local row = CreateFrame("Button", nil, parent)
+    row:SetHeight(ROW_H)
+    row.wash = row:CreateTexture(nil, "BACKGROUND", nil, 1)
+    row.wash:SetAllPoints()
+    row.wash:SetTexture(St.SOLID)
+    row.bar = row:CreateTexture(nil, "ARTWORK")
+    row.bar:SetTexture(St.SOLID)
+    row.bar:SetVertexColor(C.ACCENT[1], C.ACCENT[2], C.ACCENT[3], 1)
+    row.bar:SetWidth(2)
+    row.bar:SetPoint("TOPLEFT", 0, -3)
+    row.bar:SetPoint("BOTTOMLEFT", 0, 3)
+    row.dot = row:CreateTexture(nil, "OVERLAY")
+    row.dot:SetTexture(CIRCLE)
+    row.dot:SetSize(8, 8)
+    row.dot:SetPoint("LEFT", 10, 0)
+    row.text = St.Text(row, 10, C.INK2)
+    row.text:SetPoint("LEFT", 25, 0)
+    row.text:SetPoint("RIGHT", -44, 0)
+    row.text:SetWordWrap(false)
+    row.count = St.Text(row, 10, C.SUBTEXT)
+    row.count:SetPoint("RIGHT", -8, 0)
+    row.count:SetJustifyH("RIGHT")
+    function row:Paint()
+        local c = self.chosen and C.TITLE or (self.hover and C.TEXT or C.INK2)
+        self.text:SetTextColor(c[1], c[2], c[3])
+        self.bar:SetShown(self.chosen)
+        if self.chosen then
+            self.wash:SetVertexColor(1, 0.82, 0, self.hover and 0.16 or 0.10)
+        else
+            self.wash:SetVertexColor(1, 0.92, 0.70, self.hover and 0.07 or 0)
+        end
+    end
+    function row:SetChosen(on)
+        self.chosen = on
+        self:Paint()
+    end
+    row:SetScript("OnEnter", function(self)
+        self.hover = true
+        self:Paint()
+    end)
+    row:SetScript("OnLeave", function(self)
+        self.hover = false
+        self:Paint()
+    end)
+    row:SetScript("OnClick", onClick)
+    return row
 end
 
 local function BuildList()
@@ -190,36 +265,29 @@ local function BuildList()
     list:Hide()
     list.rows = {}
     for i = 1, LIST_ROWS do
-        local row = St.ChoiceButton(list, function(self)
+        list.rows[i] = ListRow(list, function(self)
             M.S().leather = self.key
             list:Hide()
             Refresh()
         end)
-        row:SetHeight(22)
-        row:SetPoint("TOPLEFT", 4, -4 - (i - 1) * 24)
-        row:SetPoint("TOPRIGHT", -12, -4 - (i - 1) * 24)
-        row.dot = row:CreateTexture(nil, "OVERLAY")
-        row.dot:SetTexture(CIRCLE)
-        row.dot:SetSize(8, 8)
-        row.dot:SetPoint("LEFT", 9, 0)
-        row.text:ClearAllPoints()
-        row.text:SetPoint("LEFT", 24, 0)
-        row.count = St.Text(row, 10, C.SUBTEXT)
-        row.count:SetPoint("RIGHT", -8, 0)
-        row.count:SetJustifyH("RIGHT")
-        list.rows[i] = row
     end
+    list.split = Rule(list)
+    list.split:SetHeight(1)
     list.track = list:CreateTexture(nil, "ARTWORK")
     list.track:SetColorTexture(1, 0.94, 0.82, 0.05)
     list.track:SetWidth(3)
-    list.track:SetPoint("TOPRIGHT", -4, -4)
-    list.track:SetPoint("BOTTOMRIGHT", -4, 4)
+    list.track:SetPoint("TOPRIGHT", -5, -LIST_PAD)
+    list.track:SetPoint("BOTTOMRIGHT", -5, LIST_PAD)
     list.thumb = list:CreateTexture(nil, "OVERLAY")
     list.thumb:SetColorTexture(0.42, 0.37, 0.26, 1)
     list.thumb:SetWidth(3)
     list:SetScript("OnMouseWheel", function(_, delta)
         list.offset = (list.offset or 0) - delta
         FillList()
+    end)
+    -- the owner's chevron points down again once the list closes
+    list:SetScript("OnHide", function()
+        if list.owner and list.owner.arrow then list.owner.arrow:SetRotation(0) end
     end)
 end
 
@@ -228,13 +296,21 @@ local function ToggleList(owner)
         list:Hide()
         return
     end
+    if list:IsShown() then list:Hide() end
     list.owner = owner
     list.offset = 0
-    list:SetWidth(math.max(owner:GetWidth(), 180))
+    -- the list lives on UIParent but must match the button on the map, whose window has its own
+    -- scale: same scale, same width, just under it
+    local base = UIParent:GetEffectiveScale() or 1
+    local own = owner:GetEffectiveScale() or base
+    if base > 0 and own > 0 then list:SetScale(own / base) end
+    list:SetWidth(math.max(owner:GetWidth() or 0, 160))
     list:ClearAllPoints()
-    list:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, -4)
+    list:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, -3)
     FillList()
     list:Show()
+    list:Raise() -- above the stats or share window, if one is open
+    if owner.arrow then owner.arrow:SetRotation(math.pi) end
 end
 
 -- the button that opens the list: the chosen leather's dot and name, and a chevron
@@ -427,6 +503,11 @@ local function SessionCard(parent, width)
     sc.dot:SetPoint("LEFT", 11, 0)
     sc.title = St.Title(sc, 12)
     sc.title:SetPoint("LEFT", sc.dot, "RIGHT", 7, 0)
+    -- beside the clock: "Paused" or the skins so far, stopping short of the pause and end icons
+    sc.detail = St.Text(sc, 10, C.INK2)
+    sc.detail:SetPoint("LEFT", sc.title, "RIGHT", 8, 0)
+    sc.detail:SetWordWrap(false)
+    sc.detail:SetJustifyH("LEFT")
     sc.start = Primary(sc, "Start", "play-white", function()
         FN.SessionStart()
         sc:Update()
@@ -476,17 +557,23 @@ local function SessionCard(parent, width)
         self.start:SetShown(not running)
         self.pause:SetShown(running)
         self.stop:SetShown(running)
+        self.detail:SetShown(running)
         if not running then
             self.dot:SetVertexColor(0.36, 0.35, 0.33)
             self.title:SetText("Session")
+            self.title:SetTextColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
         else
             if paused then
                 self.dot:SetVertexColor(C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
+                self.title:SetTextColor(C.INK2[1], C.INK2[2], C.INK2[3])
             else
                 self.dot:SetVertexColor(GREEN[1], GREEN[2], GREEN[3])
+                self.title:SetTextColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
             end
-            self.title:SetText((paused and "Paused  ·  " or "") .. Clock(FN.SessionSeconds()) .. "  ·  "
-                .. Plural(FN.session.count, "skin"))
+            self.title:SetText(Clock(FN.SessionSeconds()))
+            -- paused, the word takes the count's place (the card's tooltip still has the count)
+            self.detail:SetText(paused and "Paused" or Plural(FN.session.count, "skin"))
+            self.detail:SetWidth(math.max(20, width - 11 - 15 - self.title:GetStringWidth() - 8 - 56))
             self.pause.icon:SetTexture(St.Icon(paused and "play-white" or "pause-white"))
         end
     end
@@ -510,7 +597,7 @@ local function SettingsBody(parent, width)
     local b = { parent = parent }
     b.colorsLabel = Label(parent, "COLORS")
     b.swatches = {}
-    local slot = width / #M.SCHEME_ORDER
+    local slot = math.min(width / #M.SCHEME_ORDER, 72)
     for i, name in ipairs(M.SCHEME_ORDER) do
         local sw = CreateFrame("Button", nil, parent)
         sw:SetSize(slot, 46)
@@ -656,6 +743,23 @@ local function GearButton(parent, onClick)
     return g
 end
 
+-- an icon in the dock's footer, with its name in a tooltip (the gear's sisters)
+local function FooterIcon(parent, icon, name, tip, onClick)
+    local b = St.IconButton(parent, icon, 16, onClick)
+    b:SetScript("OnEnter", function(self)
+        self.icon:SetVertexColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(name, C.TITLE[1], C.TITLE[2], C.TITLE[3])
+        GameTooltip:AddLine(tip, 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function(self)
+        self.icon:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
+        GameTooltip:Hide()
+    end)
+    return b
+end
+
 -- ------------------------------------------------------------
 -- The dock (small map)
 -- ------------------------------------------------------------
@@ -671,25 +775,30 @@ local function SetSheet(open)
     if open then
         sheet:Show()
         sheet.body:Layout(PAD, -44)
+    else
+        dock.body:Show()
     end
-    -- the sheet slides up from the bottom over the dock while the dock's content fades and drifts down
+    -- one panel, two pages: the settings rise from the dock's bottom edge inside the same panel
+    -- (the dock clips them) while the dock's own content fades and lifts away
+    local rise = math.max(80, (dock:GetHeight() or 0) * 0.35)
     St.Animate("fn-sheet", open and 1 or 0, 0.3, open and "out" or "in", function(v)
         sheet:SetAlpha(v)
         sheet:ClearAllPoints()
-        sheet:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -30 * (1 - v))
-        sheet:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, -30 * (1 - v))
+        sheet:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -rise * (1 - v))
+        sheet:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, -rise * (1 - v))
         dock.body:SetAlpha(1 - v)
         dock.body:ClearAllPoints()
-        dock.body:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -10 * v)
-        dock.body:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, -10 * v)
+        dock.body:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, 16 * v)
+        dock.body:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, 16 * v)
     end, function()
-        if not open then sheet:Hide() end
+        if open then dock.body:Hide() else sheet:Hide() end
     end)
 end
 
 local function BuildDock()
     dock = St.Frame("Frame", WorldMapFrame)
-    St.Etch(dock, STYLE.panel, 12)
+    St.Etch(dock, STYLE.dock, 12)
+    St.Grime(dock, 0.25, 12, 0, 150, 220) -- as on Forever Goal Tracker's window: strongest at the top
     dock:SetWidth(DOCK_W)
     dock:EnableMouse(true)
     dock:Hide()
@@ -706,11 +815,22 @@ local function BuildDock()
         b.rim = b:CreateTexture(nil, "BORDER")
         b.rim:SetAllPoints()
         b.rim:SetTexture(St.SOLID)
-        b.icon = b:CreateTexture(nil, "ARTWORK")
-        b.icon:SetPoint("TOPLEFT", 1, -1)
-        b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-        b.icon:SetTexture(p.icon)
-        b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        b.fill = b:CreateTexture(nil, "ARTWORK", nil, 1)
+        b.fill:SetPoint("TOPLEFT", 1, -1)
+        b.fill:SetPoint("BOTTOMRIGHT", -1, 1)
+        b.fill:SetTexture(St.SOLID)
+        St.VGradient(b.fill, STYLE.row.top, STYLE.row.bottom)
+        if p.icon then
+            b.icon = b:CreateTexture(nil, "ARTWORK", nil, 2)
+            b.icon:SetSize(18, 18)
+            b.icon:SetPoint("CENTER")
+            b.icon:SetTexture(St.Icon(p.icon))
+        else
+            b.initial = St.Text(b, 12, C.INK2)
+            b.initial:SetPoint("CENTER", 0, 0)
+            b.initial:SetJustifyH("CENTER")
+            b.initial:SetText(p.label:sub(1, 1))
+        end
         b.p = p
         b:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
@@ -768,20 +888,23 @@ local function BuildDock()
     dock.key:SetPoint("TOPLEFT", PAD, y)
     dock.session = SessionCard(body, INNER)
 
-    -- the bottom row: Stats, Share, settings
-    local half = (INNER - 24 - 8) / 2
-    dock.stats = Choice(body, "Stats", function() FN.ToggleStats() end, "Your skinning stats")
-    dock.stats:SetSize(half, 24)
-    dock.stats:SetPoint("BOTTOMLEFT", PAD, PAD)
-    dock.share = Choice(body, "Share", function() FN.ShowShare() end, "Share your notes, or import someone else's")
-    dock.share:SetSize(half, 24)
-    dock.share:SetPoint("LEFT", dock.stats, "RIGHT", 4, 0)
+    -- the footer: Stats, Share and settings as three icons in a row, under a thin rule
+    dock.stats = FooterIcon(body, "stats-white", "Stats", "Your skinning stats", function() FN.ToggleStats() end)
+    dock.share = FooterIcon(body, "share-white", "Share", "Share your notes, or import someone else's",
+        function() FN.ShowShare() end)
     dock.gear = GearButton(body, function() SetSheet(not dock.sheetOpen) end)
-    dock.gear:SetPoint("BOTTOMRIGHT", -PAD - 4, PAD + 4)
+    local slot = INNER / 3
+    for i, f in ipairs({ dock.stats, dock.share, dock.gear }) do
+        f:SetPoint("BOTTOM", body, "BOTTOMLEFT", PAD + slot * (i - 0.5), PAD + 2)
+    end
+    dock.rule = Rule(body)
+    dock.rule:SetHeight(1)
+    dock.rule:SetPoint("BOTTOMLEFT", PAD, FOOTER_H)
+    dock.rule:SetPoint("BOTTOMRIGHT", -PAD, FOOTER_H)
 
-    -- the settings sheet
-    sheet = St.Frame("Frame", dock)
-    St.Etch(sheet, STYLE.window, 12)
+    -- the settings page: no panel of its own, it rises inside the dock (which clips it)
+    dock:SetClipsChildren(true)
+    sheet = CreateFrame("Frame", nil, dock)
     sheet:SetFrameLevel(dock:GetFrameLevel() + 20)
     sheet:SetAllPoints(dock)
     sheet:EnableMouse(true)
@@ -791,22 +914,50 @@ local function BuildDock()
     title:SetText("Map settings")
     local close = St.IconButton(sheet, "close-white", 12, function() SetSheet(false) end)
     close:SetPoint("TOPRIGHT", -PAD, -PAD - 2)
+    close:SetScript("OnEnter", function(self)
+        self.icon:SetVertexColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Back", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    close:SetScript("OnLeave", function(self)
+        self.icon:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
+        GameTooltip:Hide()
+    end)
     sheet.body = SettingsBody(sheet, INNER)
 
     -- the tab that folds the dock away and back: "Fieldnotes" down its length, and a chevron
     -- pointing the way it will go (out when folded, back toward the map when open)
     tab = St.Frame("Button", WorldMapFrame)
-    St.Etch(tab, STYLE.panel, 12)
+    St.Etch(tab, STYLE.dock, 12)
+    St.Grime(tab, 0.25, 12, 0.53, 150, 220)
     tab:SetSize(TAB_W, TAB_H)
-    tab.letters = St.Title(tab, 12)
-    tab.letters:SetPoint("TOP", 0, -12)
+    -- "Fieldnotes" turned a quarter clockwise to read top to bottom, as in the mockup; a client
+    -- whose text cannot turn stacks the letters instead
+    tab.letters = St.Title(tab, 13)
     tab.letters:SetJustifyH("CENTER")
-    tab.letters:SetText("F\ni\ne\nl\nd\nn\no\nt\ne\ns")
+    if tab.letters.SetRotation and pcall(tab.letters.SetRotation, tab.letters, -math.pi / 2) then
+        tab.letters:SetText("Fieldnotes")
+        -- the tab is only as long as the word, its chevron and a little room around them
+        local w = tab.letters:GetStringWidth()
+        if type(w) ~= "number" or w <= 0 then w = 64 end
+        local tabH = math.floor(TAB_TOP + w + TAB_GAP + 10 + TAB_BOTTOM + 0.5)
+        tab:SetHeight(tabH)
+        -- the game turns a font string about the top centre of its box, so the turned word sits
+        -- half a line left of that point: place the point half a line right of where it should go
+        local h = tab.letters:GetStringHeight()
+        if type(h) ~= "number" or h <= 0 then h = 13 end
+        tab.letterX, tab.letterY = h / 2, tabH / 2 - TAB_TOP - w / 2
+        tab.letters:SetPoint("TOP", tab, "CENTER", tab.letterX, tab.letterY)
+    else
+        tab.letters:SetText("F\ni\ne\nl\nd\nn\no\nt\ne\ns")
+        tab.letters:SetPoint("TOP", 0, -12)
+    end
     tab.chevron = tab:CreateTexture(nil, "OVERLAY")
     tab.chevron:SetTexture(St.Icon("chevron-white"))
     tab.chevron:SetVertexColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
     tab.chevron:SetSize(10, 10)
-    tab.chevron:SetPoint("BOTTOM", 0, 10)
+    tab.chevron:SetPoint("BOTTOM", 0, TAB_BOTTOM)
     tab:SetScript("OnClick", function()
         FN.db.settings.dockOpen = not DockOpen()
         if list then list:Hide() end
@@ -814,7 +965,7 @@ local function BuildDock()
     end)
     tab:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(DockOpen() and "Fold Fieldnotes away" or "Open Fieldnotes", 1, 1, 1)
+        GameTooltip:SetText(DockOpen() and "Close" or "Open", 1, 1, 1)
         GameTooltip:Show()
     end)
     tab:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -839,20 +990,28 @@ local function DockSide()
     local quest = type(q) == "table" and q.IsShown and q:IsShown()
     local roomRight = screen - right >= DOCK_W + TAB_W + 4
     local roomLeft = left >= DOCK_W + TAB_W + 4
-    -- gap: from the map art's edge to the window's outer edge, less a couple of pixels so the
-    -- dock tucks against the frame
+    -- gap: from the map art's edge to the window's outer edge, less the border frame's empty
+    -- margin, so the dock touches the window's gold edge
     if (quest or not roomRight) and roomLeft then
-        return "LEFT", left - (container:GetLeft() or left) + 2
+        return "LEFT", left - (container:GetLeft() or left) + EDGE_TUCK
     end
-    if roomRight or not roomLeft then return "RIGHT", (container:GetRight() or right) - right + 2 end
-    return "LEFT", left - (container:GetLeft() or left) + 2
+    if roomRight or not roomLeft then return "RIGHT", (container:GetRight() or right) - right + EDGE_TUCK end
+    return "LEFT", left - (container:GetLeft() or left) + EDGE_TUCK
 end
 
 local function LayoutDock()
     local container = WorldMapFrame.ScrollContainer or WorldMapFrame
     local side, gap = DockSide()
     local open = DockOpen()
-    dock:SetHeight(container:GetHeight())
+    -- from the top of the map art down to the window's bottom edge (its footer included)
+    local border = WorldMapFrame.BorderFrame
+    if not (type(border) == "table" and border.GetBottom and border:GetBottom()) then border = WorldMapFrame end
+    local top, bottom = container:GetTop(), border:GetBottom()
+    if top and bottom and top > bottom then
+        dock:SetHeight(top - bottom - (EDGE_TUCK - 2))
+    else
+        dock:SetHeight(container:GetHeight())
+    end
     local edge = side == "RIGHT" and "TOPLEFT" or "TOPRIGHT"
     local mapEdge = side == "RIGHT" and "TOPRIGHT" or "TOPLEFT"
     local dir = side == "RIGHT" and 1 or -1
@@ -864,16 +1023,30 @@ local function LayoutDock()
         dock:SetAlpha(v)
         dock:ClearAllPoints()
         dock:SetPoint(edge, container, mapEdge, dir * (-gap + 24 * (v - 1)), 0)
+        -- open, the tab grows by what hides under the dock, and its word and chevron stay centred
+        -- on the part that shows
+        local tuck = TAB_TUCK * v
+        tab:SetWidth(TAB_W + tuck)
+        -- (less one unit: the dock's border art stops a little short of its frame, seen in game)
+        local shift = (side == "RIGHT" and 1 or -1) * (tuck / 2 - v)
+        if tab.letterX then
+            tab.letters:ClearAllPoints()
+            tab.letters:SetPoint("TOP", tab, "CENTER", tab.letterX + shift, tab.letterY)
+        end
+        tab.chevron:ClearAllPoints()
+        tab.chevron:SetPoint("BOTTOM", tab, "BOTTOM", shift, TAB_BOTTOM)
         tab:ClearAllPoints()
         if side == "RIGHT" then
-            tab:SetPoint("TOPLEFT", container, "TOPRIGHT", -gap + (DOCK_W - 1) * v, -64)
+            tab:SetPoint("TOPLEFT", container, "TOPRIGHT", -gap + (DOCK_W - TAB_TUCK) * v, -64)
         else
-            tab:SetPoint("TOPRIGHT", container, "TOPLEFT", gap - (DOCK_W - 1) * v, -64)
+            tab:SetPoint("TOPRIGHT", container, "TOPLEFT", gap - (DOCK_W - TAB_TUCK) * v, -64)
         end
     end, function()
         if not DockOpen() then dock:Hide() end
     end)
     if open then dock:Show() end
+    -- the tab sits just under the dock, so its inner edge hides beneath the dock's border
+    tab:SetFrameLevel(math.max(1, (dock:GetFrameLevel() or 2) - 1))
     tab:Show()
     -- the chevron points out when folded, back toward the map when open
     local outward = side == "RIGHT" and math.pi / 2 or -math.pi / 2
@@ -884,10 +1057,12 @@ local function RenderDock(m)
     local s = M.S()
     for _, b in ipairs(dock.profs) do
         local active = b.p.key == "skinning"
-        b.rim:SetVertexColor((active and C.ACCENT or { 0.29, 0.25, 0.20 })[1], (active and C.ACCENT or { 0.29, 0.25, 0.20 })[2],
-            (active and C.ACCENT or { 0.29, 0.25, 0.20 })[3], 1)
-        b.icon:SetDesaturated(not b.p.ready)
-        b.icon:SetAlpha(b.p.ready and 1 or 0.45)
+        local rim = active and C.ACCENT or { 0.29, 0.25, 0.20 }
+        b.rim:SetVertexColor(rim[1], rim[2], rim[3], 1)
+        local ink = active and C.TITLE or C.INK2
+        local mark = b.p.icon and b.icon or b.initial
+        if b.p.icon then mark:SetVertexColor(ink[1], ink[2], ink[3]) else mark:SetTextColor(ink[1], ink[2], ink[3]) end
+        mark:SetAlpha(b.p.ready and 1 or 0.45)
     end
     dock.switch.toggle:SetOn(s.on)
     dock.prof:SetText("Skinning")
@@ -895,11 +1070,11 @@ local function RenderDock(m)
     for _, b in ipairs(dock.modes) do b:SetChosen(b.key == s.mode) end
     for _, b in ipairs(dock.shows) do b:SetChosen(b.key == s.show) end
     dock.leather:Update()
-    local room = dock:GetHeight() - 204 - 8 - 34 - 8 - (PAD + 24 + 8)
+    local room = dock:GetHeight() - 204 - 16 - 34 - (FOOTER_H + 12)
     dock.key:Update(m, room > 40 and room or nil)
     dock.session:Update()
     dock.session:ClearAllPoints()
-    dock.session:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", PAD, PAD + 24 + 8)
+    dock.session:SetPoint("BOTTOMLEFT", dock.body, "BOTTOMLEFT", PAD, FOOTER_H + 12)
     -- switched off, everything below the switch steps back
     local a = s.on and 1 or 0.45
     for _, f in ipairs({ dock.modes[1], dock.modes[2], dock.modes[3], dock.shows[1], dock.shows[2], dock.shows[3],

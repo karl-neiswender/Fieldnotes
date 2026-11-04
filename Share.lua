@@ -478,6 +478,7 @@ local function Build()
     frame:SetSize(W, H)
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     St.Etch(frame, St.STYLE.window, 16)
+    St.Grime(frame, 0.25, 16, 0.37, 150, 220) -- as the stats window, its tile started elsewhere
     St.Movable(frame, "sharePos")
     St.PlaceSaved(frame, "sharePos", "CENTER", "CENTER", 0, 60)
     frame:Hide()

@@ -28,6 +28,9 @@ local STYLE = {
     btnHover = { top = { 0.330, 0.300, 0.240 }, bottom = { 0.120, 0.110, 0.090 }, edge = { 0.85, 0.68, 0.20, 1 } },
     rowSel   = { top = { 0.380, 0.290, 0.060 }, bottom = { 0.110, 0.080, 0.015 }, edge = { 1.00, 0.82, 0.00, 1 } },
     goldHover = { top = { 0.470, 0.365, 0.085 }, bottom = { 0.155, 0.115, 0.025 }, edge = { 1.00, 0.89, 0.30, 1 } },
+    -- the map dock and its tab: Forever Goal Tracker's warm brown window fill (with St.Grime over
+    -- it), edged like a panel so the map window's own gold frame stays the strongest line
+    dock     = { top = { 0.105, 0.095, 0.080 }, bottom = { 0.016, 0.016, 0.016 }, edge = { 0.33, 0.29, 0.20, 1 } },
 }
 St.STYLE = STYLE
 
@@ -246,11 +249,57 @@ function St.IconButton(parent, icon, size, onClick)
     return b
 end
 
+-- Forever Goal Tracker's grime (FGT.AddGrime): Media/grime (512px, seamless) repeated at its real
+-- size inside the etched border, above the fill and below everything else. Full strength for
+-- `solid` px from the top, fading over `fade` px to a faint floor that keeps the dark gradient
+-- from banding. offset (0-1) shifts where the tile starts so neighbours don't repeat in step.
+do
+    local GRIME = St.Media("grime")
+    local TILE, FLOOR = 512, 0.07
+    function St.Grime(frame, alpha, edgeSize, offset, solid, fade)
+        local inset = math.floor((edgeSize or 12) / 4)
+        solid, fade, offset = solid or 0, fade or 140, offset or 0
+        local body = frame:CreateTexture(nil, "BACKGROUND", nil, -5)
+        local strip = frame:CreateTexture(nil, "BACKGROUND", nil, -5)
+        local rest = frame:CreateTexture(nil, "BACKGROUND", nil, -5)
+        for _, t in ipairs({ body, strip, rest }) do t:SetTexture(GRIME, "REPEAT", "REPEAT") end
+        body:SetPoint("TOPLEFT", inset, -inset)
+        body:SetPoint("TOPRIGHT", -inset, -inset)
+        strip:SetPoint("TOPLEFT", body, "BOTTOMLEFT")
+        strip:SetPoint("TOPRIGHT", body, "BOTTOMRIGHT")
+        rest:SetPoint("TOPLEFT", strip, "BOTTOMLEFT")
+        rest:SetPoint("BOTTOMRIGHT", -inset, inset)
+        body:SetVertexColor(1, 1, 1, alpha)
+        St.VGradient(strip, { 1, 1, 1 }, { 1, 1, 1 }, alpha, FLOOR)
+        rest:SetVertexColor(1, 1, 1, FLOOR)
+        local function Fit()
+            local w, h = (frame:GetWidth() or 0) - 2 * inset, (frame:GetHeight() or 0) - 2 * inset
+            if w <= 0 or h <= 0 then return end
+            local s = math.min(solid, h)
+            local f = math.max(1, math.min(fade, h - s))
+            body:SetHeight(math.max(0.01, s))
+            body:SetShown(s > 0)
+            strip:SetHeight(f)
+            local x0, x1, y0 = offset, offset + w / TILE, offset * 0.6
+            body:SetTexCoord(x0, x1, y0, y0 + s / TILE)
+            strip:SetTexCoord(x0, x1, y0 + s / TILE, y0 + (s + f) / TILE)
+            rest:SetShown(h - s - f > 0)
+            rest:SetTexCoord(x0, x1, y0 + (s + f) / TILE, y0 + h / TILE)
+        end
+        frame:HookScript("OnSizeChanged", Fit)
+        Fit()
+    end
+end
+
 -- a window that can be dragged anywhere and remembers where it was left (settings[key])
 function St.Movable(frame, key)
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true)
+    -- windows on the same layer come to the front when opened or clicked, whole, so two of them
+    -- (stats and share) never weave their pieces through each other
+    frame:SetToplevel(true)
+    frame:HookScript("OnShow", function(self) self:Raise() end)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", function(self)
