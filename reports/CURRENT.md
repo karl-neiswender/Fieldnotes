@@ -239,3 +239,6 @@
 - CurseForge project created (2026-11-04): Fieldnotes, ID 1783590 (in the TOC), MIT, 3rd-party distribution
   allowed, categories Professions + Map & Minimap, Skinning, Mining, Herbalism. Awaiting moderation. Pushed.
   Still to do: CF_API_KEY repo secret, the v0.7.0 tag (Karl's go), gallery shots.
+- v0.7.0 released (2026-11-04): CF_API_KEY added by Karl; tag v0.7.0 pushed; the Release workflow passed
+  (16 s) and uploaded v0.7.0 to project 1783590 as a Release for game versions 1.15.9 and 1.60.1, now
+  Under Review with the project. Still to do: gallery shots (/fn shots), Forever checks after launch.
