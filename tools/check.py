@@ -192,6 +192,11 @@ local function Open(mode, show)
 end
 WorldMapFrame.scripts.OnShow()
 local heat = Open("heat", "account")
+-- the dock lists the hot spots the map pins; Every skin lays dots over the heat
+local spotsListed = ns.Map.model.spots and #ns.Map.model.spots or 0
+FieldnotesDB.settings.map.dots = true
+local heatDots = Open("heat", "account")
+FieldnotesDB.settings.map.dots = false
 local pointsMe, pointsAll, pointsCommunity = Open("points", "me"), Open("points", "account"), Open("points", "community")
 WorldMapFrame.mapID = 947 -- a map with no notes
 local empty = Open("heat", "account")
@@ -204,7 +209,7 @@ local spot = Open("spotlight", "account")
 FieldnotesDB.settings.map.leather = "hides" -- hides are an entry in the leather list now
 local hides = Open("heat", "account")
 FieldnotesDB.settings.map.leather = 0
-for _, c in ipairs({ "ember", "thermal" }) do
+for _, c in ipairs({ "ember", "snowfall", "thermal" }) do
   FieldnotesDB.settings.map.colors = c
   Open("heat", "account")
 end
@@ -232,7 +237,7 @@ local sessionOn = ns.SessionRunning()
 ns.SessionEnd()
 print("map        layouts: maximized " .. tostring(toolbarLayout) .. ", small " .. tostring(dockLayout))
 local layouts = (toolbarLayout == "toolbar" and dockLayout == "dock" and sessionOn and not ns.SessionRunning()) and 1 or 0
-local mapResult = layouts .. "," .. continentBadges .. "," .. spot .. "," .. hides .. "," .. settingsOpen .. "," .. recent .. "," .. heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off
+local mapResult = layouts .. "," .. continentBadges .. "," .. spot .. "," .. hides .. "," .. settingsOpen .. "," .. recent .. "," .. heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off .. "," .. spotsListed .. "," .. heatDots
 
 -- 7. the stats window on the demo
 SlashCmdList.FIELDNOTES("")
@@ -314,7 +319,7 @@ if ok:
     count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result, stats, me_skins, tracker, demo_share, real_share = rt.execute(PLAY)
     print("share      real: %s" % real_share)
     print("stats      tiles %s, Me %s" % (stats, me_skins))
-    layouts, continent, spot, hides, settings_open, recent, heat, p_me, p_all, p_comm, empty, off = [int(v) for v in map_result.split(",")]
+    layouts, continent, spot, hides, settings_open, recent, heat, p_me, p_all, p_comm, empty, off, spots_listed, heat_dots = [int(v) for v in map_result.split(",")]
     print("map        continent badges %d" % continent)
     print("map        spotlight %d, hides %d, last 7 days %d, settings panel %s" % (spot, hides, recent, "open" if settings_open else "closed"))
     print("map        heat %d, points me %d / account %d / community %d, empty map %d, off %d" % (heat, p_me, p_all, p_comm, empty, off))
@@ -331,6 +336,8 @@ if ok:
         ("real records untouched by demo mode", bool(real_kept)),
         ("/fn demo off removes the sample data", bool(cleared)),
         ("map: heat squares drawn", heat > 20),
+        ("map: hot spots are listed for the dock (1 to 3)", 1 <= spots_listed <= 3),
+        ("map: Every skin lays dots over the heat", heat_dots > heat),
         ("map: points grow from Me to Account to Community", 0 < p_me < p_all < p_comm),
         ("map: a map without notes draws nothing but the dimming", empty <= 1),
         ("map: switched off draws nothing", off == 0),

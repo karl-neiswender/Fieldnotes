@@ -28,6 +28,7 @@ local INNER = DOCK_W - PAD * 2
 local TAB_W, TAB_H = 26, 150 -- TAB_H: the stacked-letter fallback; a turned word sets its own
 local TAB_TOP, TAB_GAP, TAB_BOTTOM = 8, 8, 8 -- room above the word, word to chevron, below it
 local TAB_TUCK = 8 -- how far the open tab slips under the dock's edge, so the two read as one
+local DOCK_TOP_H = 192 -- the dock's controls above the key (profession row to the leather list)
 local FOOTER_H = PAD + 2 + 16 + 12 -- the icon row and the space above it, up to its rule
 local EDGE_TUCK = 10 -- the map window's art stops this far inside its border frame's edge
 local LIST_ROWS = 6
@@ -51,7 +52,7 @@ local SHOWS = {
     { key = "account", label = "Account", tip = "Every character on this account" },
     { key = "community", label = "Community", tip = "Everyone who has shared, merged" },
 }
-local SCHEME_NAMES = { thermal = "Thermal", ember = "Ember" }
+local SCHEME_NAMES = { thermal = "Thermal", ember = "Ember", snowfall = "Snowfall" }
 local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
 
 local model = {}
@@ -349,10 +350,103 @@ end
 -- ------------------------------------------------------------
 -- The key: on this map, how many skins, what you skin most, and the scale
 -- ------------------------------------------------------------
-local function KeyCard(parent, width)
+-- withSpots: the card also lists the hot spots the map pins, one line each (the dock's key); a
+-- row and its pin light together (hover either), and a click on a row pings its pin
+local SPOT_ROW = 17
+local function SpotRow(k, i, width)
+    local row = CreateFrame("Button", nil, k)
+    row:SetSize(width - 10, SPOT_ROW)
+    row.rank = i
+    row.wash = row:CreateTexture(nil, "BACKGROUND")
+    row.wash:SetAllPoints()
+    row.wash:SetTexture(St.SOLID)
+    row.bar = row:CreateTexture(nil, "ARTWORK")
+    row.bar:SetTexture(St.SOLID)
+    row.bar:SetVertexColor(C.ACCENT[1], C.ACCENT[2], C.ACCENT[3], 1)
+    row.bar:SetWidth(2)
+    row.bar:SetPoint("TOPLEFT", 0, -2)
+    row.bar:SetPoint("BOTTOMLEFT", 0, 2)
+    row.badge = row:CreateTexture(nil, "ARTWORK")
+    row.badge:SetTexture(CIRCLE)
+    row.badge:SetSize(13, 13)
+    row.badge:SetPoint("LEFT", 6, 0)
+    if i == 1 then
+        row.badge:SetVertexColor(C.ACCENT[1], C.ACCENT[2], C.ACCENT[3], 1)
+    else
+        row.badge:SetVertexColor(0.83, 0.80, 0.71, 1)
+    end
+    -- a ring that breathes out from the badge while the row is lit, on the pin's clock
+    row.halo = row:CreateTexture(nil, "ARTWORK", nil, -1)
+    row.halo:SetTexture(St.Media("ring"))
+    row.halo:SetPoint("CENTER", row.badge, "CENTER", 0, 0)
+    row.halo:SetVertexColor(C.ACCENT[1], C.ACCENT[2], C.ACCENT[3], 1)
+    row.halo:Hide()
+    row.num = St.Text(row, 9, { 0.10, 0.07, 0.03 })
+    row.num:SetPoint("CENTER", row.badge, "CENTER", 0, 0)
+    row.num:SetJustifyH("CENTER")
+    row.num:SetText(i)
+    row.count = St.Text(row, 11, C.TEXT)
+    row.count:SetPoint("LEFT", 25, 0)
+    row.coords = St.Text(row, 10, C.INK2)
+    row.coords:SetPoint("RIGHT", -5, 0)
+    row.coords:SetJustifyH("RIGHT")
+    row.who = St.Text(row, 10, C.SUBTEXT)
+    row.who:SetPoint("LEFT", row.count, "RIGHT", 6, 0)
+    row.who:SetPoint("RIGHT", row.coords, "LEFT", -6, 0)
+    row.who:SetWordWrap(false)
+    row.who:SetJustifyH("LEFT")
+    local function Breathe(self)
+        local period = M.PULSE or 1.6
+        local t = (GetTime() % period) / period
+        local d = 13 + 10 * (1 - (1 - t) ^ 3)
+        self.halo:SetSize(d, d)
+        self.halo:SetAlpha(0.6 * (1 - t) ^ 1.6)
+    end
+    function row:Paint()
+        local on = self.hover or self.lit
+        self.bar:SetShown(on)
+        self.wash:SetVertexColor(1, 0.82, 0, on and 0.10 or 0)
+        self.halo:SetShown(on and true or false)
+        if on then
+            Breathe(self)
+            self:SetScript("OnUpdate", Breathe)
+        else
+            self:SetScript("OnUpdate", nil)
+        end
+    end
+    row:SetScript("OnEnter", function(self)
+        self.hover = true
+        self:Paint()
+        M.LightPin(self.rank, true)
+        if self.whoFull and self.who:IsTruncated() then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(self.whoFull, 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end
+    end)
+    row:SetScript("OnLeave", function(self)
+        self.hover = false
+        self:Paint()
+        M.LightPin(self.rank, false)
+        GameTooltip:Hide()
+    end)
+    row:SetScript("OnClick", function(self) M.PingPin(self.rank) end)
+    row:Paint()
+    return row
+end
+
+local function KeyCard(parent, width, withSpots)
     local k = St.Frame("Frame", parent)
     St.Etch(k, STYLE.row, 12)
     k:SetWidth(width)
+    k.withSpots = withSpots == true
+    if withSpots then
+        k.spotRule = k:CreateTexture(nil, "ARTWORK")
+        k.spotRule:SetColorTexture(0.33, 0.29, 0.20, 0.8)
+        k.spotRule:SetHeight(1)
+        k.spotRows = {}
+        for i = 1, 3 do k.spotRows[i] = SpotRow(k, i, width) end
+    end
     k.big = St.Text(k, 18, C.TEXT)
     k.big:SetPoint("TOPLEFT", 11, -10)
     k.message = St.Text(k, 11, C.INK2)
@@ -372,13 +466,42 @@ local function KeyCard(parent, width)
     k.fewer:SetText("Fewer")
     k.more = St.Text(k, 10, C.SUBTEXT)
     k.more:SetText("More")
+    -- the ramp: 16 stretches, each a smooth blend between its ends, laid edge to edge. Overlapping
+    -- them doubled the faint end's transparency at every seam, which read as stripes in game.
     k.ramp = {}
-    for i = 1, 30 do
+    for i = 1, 16 do
         local t = k:CreateTexture(nil, "ARTWORK")
         t:SetTexture(St.SOLID)
         t:SetHeight(8)
         k.ramp[i] = t
     end
+    function k:PaintRamp(x, y, barW, fade)
+        local n = #self.ramp
+        local step = barW / n
+        for i, t in ipairs(self.ramp) do
+            local v0, v1 = (i - 1) / n, i / n
+            local r0, g0, b0 = M.Ramp(v0)
+            local r1, g1, b1 = M.Ramp(v1)
+            t:SetWidth(step)
+            t:ClearAllPoints()
+            t:SetPoint("TOPLEFT", self, "TOPLEFT", x + (i - 1) * step, y)
+            St.HGradient(t, { r0, g0, b0 }, { r1, g1, b1 }, fade and M.Quiet(v0) or 1, fade and M.Quiet(v1) or 1)
+        end
+    end
+    -- on a zone's heat: the ramp runs the card's width with skin counts under it, its left end
+    -- fading as the map's quiet areas do, over a faint track so the bar still reads as one
+    k.track = k:CreateTexture(nil, "ARTWORK", nil, -1)
+    k.track:SetColorTexture(1, 0.94, 0.82, 0.06)
+    k.track:SetHeight(8)
+    k.ticks = {}
+    for i = 1, 5 do
+        local t = St.Text(k, 10, C.SUBTEXT)
+        t:SetWordWrap(false)
+        k.ticks[i] = t
+    end
+    k.caption = St.Text(k, 10, C.SUBTEXT)
+    k.caption:SetText("skins in one spot")
+    k.caption:SetJustifyH("CENTER")
     k.scale = St.Text(k, 10, C.SUBTEXT)
     k.scale:SetWidth(width - 22)
     k.legend = {}
@@ -393,10 +516,17 @@ local function KeyCard(parent, width)
     k.demo = St.Text(k, 10, C.SUBTEXT)
     k.demo:SetText("Sample data  ·  /fn demo off to hide it")
 
-    -- maxH: the room it has; past it, the key leaves out its scale line and demo note
-    function k:Update(m, maxH, compact)
+    -- maxH: the room it has; past it, the key leaves out its caption, scale line and demo note,
+    -- then hot spots from the bottom (spotCap), keeping at least the first
+    function k:Update(m, maxH, compact, spotCap)
         local y
         local hasData = not m.message
+        local spots = self.withSpots and hasData and m.kind ~= "continent" and m.spots or nil
+        local nSpots = spots and math.min(#spots, spotCap or 3) or 0
+        if self.withSpots then
+            self.spotRule:SetShown(nSpots > 0)
+            for i, row in ipairs(self.spotRows) do row:SetShown(i <= nSpots) end
+        end
         self.big:SetShown(hasData)
         self.message:SetShown(not hasData)
         for _, r in ipairs(self.rows) do
@@ -408,9 +538,13 @@ local function KeyCard(parent, width)
             l.t:Hide()
         end
         local showRamp = hasData and m.mode == "heat" or (hasData and m.kind == "continent")
+        local numbered = showRamp and m.peak ~= nil
         for _, t in ipairs(self.ramp) do t:SetShown(showRamp) end
-        self.fewer:SetShown(showRamp)
-        self.more:SetShown(showRamp)
+        self.track:SetShown(numbered)
+        for _, t in ipairs(self.ticks) do t:Hide() end
+        self.caption:SetShown(numbered and not compact)
+        self.fewer:SetShown(showRamp and not numbered)
+        self.more:SetShown(showRamp and not numbered)
         self.scale:SetShown(not compact and (hasData and m.scale ~= nil and m.mode ~= "points" or (hasData and m.kind == "continent")))
         if not hasData then
             self.message:SetText(m.message)
@@ -421,6 +555,8 @@ local function KeyCard(parent, width)
             local rows
             if m.kind == "continent" then
                 rows = { { "Zones", m.zones and tostring(m.zones) }, { "Most skins", m.bestZone } }
+            elseif nSpots > 0 then
+                rows = {} -- the hot spots below name the creatures instead
             else
                 rows = { { "Most skinned", m.topWho }, { "Main leather", m.topLoot } }
             end
@@ -439,17 +575,39 @@ local function KeyCard(parent, width)
                 end
             end
             y = y - 4
-            if showRamp then
+            if numbered then
+                local barW = width - 22
+                self.track:ClearAllPoints()
+                self.track:SetPoint("TOPLEFT", self, "TOPLEFT", 11, y - 1)
+                self.track:SetWidth(barW)
+                self:PaintRamp(11, y - 1, barW, true)
+                y = y - 12
+                -- 1 at the quiet end, then even steps up to the busiest spot on this map
+                local peak = math.max(1, m.peak)
+                local marks = { { 0, 1 } }
+                if peak >= 8 then
+                    for q = 1, 3 do marks[#marks + 1] = { q / 4, math.floor(peak * q / 4 + 0.5) } end
+                end
+                if peak > 1 then marks[#marks + 1] = { 1, peak } end
+                for i, mk in ipairs(marks) do
+                    local t = self.ticks[i]
+                    t:SetText(mk[2])
+                    t:ClearAllPoints()
+                    local point = mk[1] == 0 and "TOPLEFT" or (mk[1] == 1 and "TOPRIGHT" or "TOP")
+                    t:SetPoint(point, self, "TOPLEFT", 11 + barW * mk[1], y)
+                    t:Show()
+                end
+                y = y - 12
+                if self.caption:IsShown() then
+                    self.caption:ClearAllPoints()
+                    self.caption:SetPoint("TOP", self, "TOPLEFT", width / 2, y)
+                    y = y - 14
+                end
+            elseif showRamp then
                 self.fewer:ClearAllPoints()
                 self.fewer:SetPoint("TOPLEFT", self, "TOPLEFT", 11, y)
                 local barW = width - 22 - self.fewer:GetStringWidth() - self.more:GetStringWidth() - 12
-                local step = barW / #self.ramp
-                for i, t in ipairs(self.ramp) do
-                    t:SetWidth(step + 0.5)
-                    t:ClearAllPoints()
-                    t:SetPoint("TOPLEFT", self, "TOPLEFT", 11 + self.fewer:GetStringWidth() + 6 + (i - 1) * step, y - 1)
-                    t:SetColorTexture(M.Ramp((i - 1) / (#self.ramp - 1)))
-                end
+                self:PaintRamp(11 + self.fewer:GetStringWidth() + 6, y - 1, barW, false)
                 self.more:ClearAllPoints()
                 self.more:SetPoint("TOPRIGHT", self, "TOPRIGHT", -11, y)
                 y = y - 16
@@ -476,6 +634,23 @@ local function KeyCard(parent, width)
                 y = y - self.scale:GetStringHeight() - 4
             end
         end
+        if nSpots > 0 then
+            y = y - 1
+            self.spotRule:ClearAllPoints()
+            self.spotRule:SetPoint("TOPLEFT", self, "TOPLEFT", 11, y)
+            self.spotRule:SetPoint("TOPRIGHT", self, "TOPRIGHT", -11, y)
+            y = y - 3
+            for i = 1, nSpots do
+                local sp, row = spots[i], self.spotRows[i]
+                row.count:SetText(sp.count)
+                row.coords:SetText(sp.coords)
+                row.whoFull = sp.who ~= "" and sp.who or sp.loot
+                row.who:SetText(row.whoFull)
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", self, "TOPLEFT", 5, y)
+                y = y - SPOT_ROW
+            end
+        end
         self.demo:SetShown(m.inDemo and not compact)
         if m.inDemo and not compact then
             self.demo:ClearAllPoints()
@@ -483,7 +658,11 @@ local function KeyCard(parent, width)
             y = y - 16
         end
         self:SetHeight(-y + 8)
-        if maxH and not compact and -y + 8 > maxH then return self:Update(m, maxH, true) end
+        self.lastRoom, self.lastSpots = maxH, nSpots -- for /fn debug
+        if maxH and -y + 8 > maxH then
+            if not compact then return self:Update(m, maxH, true, spotCap) end
+            if nSpots > 1 then return self:Update(m, maxH, true, nSpots - 1) end
+        end
     end
     return k
 end
@@ -765,6 +944,18 @@ end
 -- ------------------------------------------------------------
 local dock, tab, sheet
 
+-- the hot spot row for a pin the mouse is over (Map.lua calls this), and whether a row is lit
+function MapUI.LightSpot(rank, on)
+    local row = dock and dock.key.spotRows and dock.key.spotRows[rank]
+    if not row then return end
+    row.lit = on
+    row:Paint()
+end
+function MapUI.SpotLit(rank)
+    local row = dock and dock.key.spotRows and dock.key.spotRows[rank]
+    return row and (row.hover or row.lit) and row:IsShown() and true or false
+end
+
 local function DockOpen() return FN.db.settings.dockOpen ~= false end
 
 local function SetSheet(open)
@@ -844,15 +1035,45 @@ local function BuildDock()
     dock.switch = Switch(body)
     dock.switch:SetPoint("TOPRIGHT", -PAD, -PAD - 5)
     dock.prof = St.Title(body, 15)
-    dock.prof:SetPoint("TOPLEFT", PAD, -50)
+    dock.prof:SetPoint("TOPLEFT", PAD, -48)
     dock.place = St.Text(body, 10, C.SUBTEXT)
-    dock.place:SetPoint("TOPRIGHT", -PAD, -53)
+    dock.place:SetPoint("TOPRIGHT", -PAD, -51)
     dock.place:SetJustifyH("RIGHT")
     dock.place:SetWidth(110)
     dock.place:SetWordWrap(false)
 
-    local y = -74
+    local y = -70
     Label(body, "VIEW"):SetPoint("TOPLEFT", PAD, y)
+    -- "Every skin": one dot per skin over Heat or Spotlight (Points shows them already). A small
+    -- switch, at three quarters of the main one's size, on the View label's line
+    local DS = 0.75
+    dock.dots = CreateFrame("Button", nil, body)
+    dock.dots:SetScale(DS)
+    dock.dots:SetSize(36, 18)
+    dock.dots.toggle = St.Toggle(dock.dots)
+    dock.dots.toggle:SetAllPoints()
+    dock.dots:SetPoint("RIGHT", body, "TOPRIGHT", -PAD / DS, (y - 5) / DS)
+    dock.dots:SetScript("OnClick", function()
+        if M.S().mode == "points" then return end
+        M.S().dots = not M.S().dots
+        Refresh()
+    end)
+    dock.dots:SetScript("OnEnter", function(self)
+        local s = M.S()
+        if s.mode ~= "points" then self.toggle:SetOn(s.dots, true) end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Every skin", C.TITLE[1], C.TITLE[2], C.TITLE[3])
+        GameTooltip:AddLine(s.mode == "points" and "Points already shows every skin."
+            or "Lay one dot per skin over the heat.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    dock.dots:SetScript("OnLeave", function(self)
+        self.toggle:SetOn(M.S().dots and M.S().mode ~= "points")
+        GameTooltip:Hide()
+    end)
+    dock.dotsLabel = St.Text(body, 10, C.INK2)
+    dock.dotsLabel:SetText("Every skin")
+    dock.dotsLabel:SetPoint("RIGHT", dock.dots, "LEFT", -6, 0)
     local w3 = (INNER - 6) / 3
     dock.modes = {}
     for i, m in ipairs(MODES) do
@@ -865,7 +1086,7 @@ local function BuildDock()
         b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - 14)
         dock.modes[i] = b
     end
-    y = y - 42
+    y = y - 40
     Label(body, "SHOW"):SetPoint("TOPLEFT", PAD, y)
     dock.shows = {}
     for i, sh in ipairs(SHOWS) do
@@ -878,13 +1099,13 @@ local function BuildDock()
         b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - 14)
         dock.shows[i] = b
     end
-    y = y - 42
+    y = y - 40
     Label(body, "LEATHER"):SetPoint("TOPLEFT", PAD, y)
     dock.leather = LeatherButton(body)
     dock.leather:SetSize(INNER, 24)
     dock.leather:SetPoint("TOPLEFT", PAD, y - 14)
-    y = y - 46
-    dock.key = KeyCard(body, INNER)
+    y = y - 42
+    dock.key = KeyCard(body, INNER, true)
     dock.key:SetPoint("TOPLEFT", PAD, y)
     dock.session = SessionCard(body, INNER)
 
@@ -1070,17 +1291,28 @@ local function RenderDock(m)
     for _, b in ipairs(dock.modes) do b:SetChosen(b.key == s.mode) end
     for _, b in ipairs(dock.shows) do b:SetChosen(b.key == s.show) end
     dock.leather:Update()
-    local room = dock:GetHeight() - 204 - 16 - 34 - (FOOTER_H + 12)
+    local points = s.mode == "points"
+    dock.dots.toggle:SetOn(s.dots and not points)
+    -- the session row first, so the key can measure the room above it
+    dock.session:ClearAllPoints()
+    dock.session:SetPoint("BOTTOMLEFT", dock.body, "BOTTOMLEFT", PAD, FOOTER_H + 8)
+    -- the key holds the hot spots; when the dock is short it drops its caption, then spots
+    local room = dock:GetHeight() - DOCK_TOP_H - 6 - 34 - (FOOTER_H + 8)
+    local keyTop, sessionTop = dock.key:GetTop(), dock.session:GetTop()
+    if type(keyTop) == "number" and type(sessionTop) == "number" and keyTop > sessionTop then
+        room = keyTop - sessionTop - 5
+    end
     dock.key:Update(m, room > 40 and room or nil)
     dock.session:Update()
-    dock.session:ClearAllPoints()
-    dock.session:SetPoint("BOTTOMLEFT", dock.body, "BOTTOMLEFT", PAD, FOOTER_H + 12)
     -- switched off, everything below the switch steps back
     local a = s.on and 1 or 0.45
     for _, f in ipairs({ dock.modes[1], dock.modes[2], dock.modes[3], dock.shows[1], dock.shows[2], dock.shows[3],
         dock.leather, dock.key }) do
         f:SetAlpha(a)
     end
+    -- the Every skin switch also steps back in Points, which shows every skin already
+    dock.dots:SetAlpha(a * (points and 0.4 or 1))
+    dock.dotsLabel:SetAlpha(a * (points and 0.4 or 1))
     dock.gear:Tint()
     if dock.sheetOpen then sheet.body:Layout(PAD, -44) end
 end
@@ -1336,6 +1568,14 @@ end
 function MapUI.Debug(Size)
     FN.Print("  layout " .. tostring(ui.layout) .. "; dock " .. Size(dock) .. "; tab " .. Size(tab))
     FN.Print("  toolbar " .. Size(bar) .. "; key " .. Size(hudKey))
+    local k = dock and dock.key
+    if k then
+        local room, shown, h = rawget(k, "lastRoom"), rawget(k, "lastSpots"), k:GetHeight()
+        local all = type(model.spots) == "table" and #model.spots or 0
+        FN.Print(string.format("  dock key: room %s, height %.1f, hot spots %d of %d",
+            type(room) == "number" and string.format("%.1f", room) or "none", type(h) == "number" and h or 0,
+            type(shown) == "number" and shown or 0, all))
+    end
 end
 
 function MapUI.Init()

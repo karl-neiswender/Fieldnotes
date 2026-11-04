@@ -80,3 +80,36 @@
   new texture. Not yet seen in game.
 - Stats and share windows get the same grime over their brown window fill (2026-11-03). Checks
   pass, copied to Era. Not yet seen in game.
+- Map v3 mockup (design/map-v3-2026-11-03/Dock.html): hot spots list, quiet areas fading out,
+  numbers on the key, dots over heat. Waiting for Karl's approval before any Lua.
+- Map v3 built (approved 2026-11-03): quiet areas fade out (EDGE_FROM/EDGE_TO 0.06 to 0.32, M.Quiet);
+  the key numbers its ramp from 1 to the busiest spot ("skins in one spot"), its left end fading
+  the same way; pins show their rank and a gold ring (Media/ring.tga from FGT); the dock lists the
+  hot spots under the key (row and pin light together, a click pings the pin; the list gives way
+  when the dock is short); an "Every skin" switch beside View lays dots over Heat or Spotlight
+  (setting map.dots). Checks pass (28), copied to Era. Needs a full client restart (new texture).
+  Not yet seen in game.
+- Map v3 fixes after Karl's first look (2026-11-03): the dock's hot spots moved into the key card
+  (one line each: rank, skins, creature, coordinates; replacing Most skinned / Main leather), since a
+  separate list never fit at Karl's UI scale; the key drops its caption, then spots, when short. The
+  fade eases off with little data (SetFade in Map.lua: 0.015-0.12 for a busiest spot of 2 skins, up to
+  0.06-0.32 from 20), so every pinned spot glows. Finer key ramp (64 steps), larger pin numbers,
+  tighter dock top. New Snowfall color scheme after a snowfall forecast map (grey, blue, violet,
+  magenta, pink, teal, lavender). Checks pass (28), copied to Era. Not yet seen in game.
+- After Karl's Snowfall test (2026-11-03, Elwynn, Community): Snowfall now ends on a saturated
+  lavender-violet (its pale top read as a gap); hot spot rows are 1 unit shorter and show the bare
+  count, so three fit and creature names get room; pins and their rank numbers are sized for the
+  screen (PinScale in Map.lua), since the map art's own smaller scale shrank them. Checks pass (28),
+  copied to Era. Not yet seen in game.
+- After Karl's Every skin test (2026-11-03): the key measures its room from the session row's real
+  position (the added-up constants came out short, so the third hot spot never showed); dots over
+  the heat lose their dark rims and shrink a size (Points keeps its rimmed dots); the key's ramp is
+  16 edge-to-edge gradient stretches (overlapping segments striped its faint end). Checks pass (28),
+  copied to Era. Not yet seen in game.
+- Third hot spot (2026-11-03): it missed by rounding (needed about 127 of about 127). The card is
+  2 units shorter and keeps 5 instead of 8 above the session row. /fn debug now prints the dock
+  key's room, height and how many hot spots it shows. Checks pass (28), copied to Era. Not yet seen.
+- Hot spot motion (2026-11-03, Karl): lit (row or pin hovered) shows a steady gold ring at once
+  and a second ring breathing outward every 1.6 s; the dock's numbered badge breathes on the same
+  clock. A click on a row pings the pin with two eased-out ripples, 0.22 s apart (PinMotion in
+  Map.lua). Nothing runs while nothing moves. Checks pass (28), copied to Era. Not yet seen in game.

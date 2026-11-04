@@ -19,7 +19,18 @@ local GRID_SCALE = COLS / 56
 local MAX_DOTS = 2000 -- Points view thins out beyond this
 local PINS = 3 -- hot spots marked on the map
 local HEAT_ALPHA_MIN, HEAT_ALPHA_SPAN = 0.02, 0.6 -- one glow's strength, faintest to densest
-local EDGE_FROM, EDGE_TO = 0.015, 0.2 -- the faintest heat fades in across this range: a soft edge
+-- quiet areas fade to clear: below EDGE_FROM nothing shows, and the heat fades in up to EDGE_TO,
+-- so a light scatter no longer tints the whole zone (map v3 mockup). With little data (a busiest
+-- spot of a few skins) one skin is already a lot, so the fade eases off toward the old soft edge
+-- (0.015 to 0.12) and every pinned spot still glows. Set per draw from the busiest spot.
+local FADE_LOW = { 0.015, 0.12 } -- busiest spot of 2 skins or fewer
+local FADE_HIGH = { 0.06, 0.32 } -- busiest spot of 20 skins or more
+local EDGE_FROM, EDGE_TO = FADE_HIGH[1], FADE_HIGH[2]
+local function SetFade(peak)
+    local k = math.max(0, math.min(1, ((peak or 20) - 2) / 18))
+    EDGE_FROM = FADE_LOW[1] + (FADE_HIGH[1] - FADE_LOW[1]) * k
+    EDGE_TO = FADE_LOW[2] + (FADE_HIGH[2] - FADE_LOW[2]) * k
+end
 local SPOT_DARK = 0.5 -- Spotlight: one shade's darkness; overlapping shades build to about 0.75
 local RUINED = 2934
 local HIDES = { [783] = true, [4232] = true, [4235] = true, [8169] = true, [8171] = true }
@@ -34,14 +45,20 @@ local SOFT = C.INK2
 local DIM = C.SUBTEXT
 
 -- Heat color schemes, fewest to most. Thermal (the default) is the familiar cool-to-warm heat
--- scale; Ember grows steadily darker, so it reads the same in grayscale and for color-blind players.
+-- scale; Ember grows steadily darker, so it reads the same in grayscale and for color-blind players;
+-- Snowfall follows a weather service's snowfall map (Karl, 2026-11-03): grey and pale blue, deep
+-- blue, violet, magenta, hot pink, then teal and lavender at the very top (a saturated lavender:
+-- a pale top read as a gap in the heat on parchment, seen in game).
 local SCHEMES = {
     thermal = { { 0, 0.16, 0.30, 0.85 }, { 0.3, 0.15, 0.70, 0.85 }, { 0.55, 0.45, 0.85, 0.30 },
         { 0.78, 1.00, 0.85, 0.15 }, { 1, 0.90, 0.18, 0.10 } },
     ember = { { 0, 0.953, 0.886, 0.651 }, { 0.3, 0.933, 0.702, 0.361 }, { 0.55, 0.871, 0.478, 0.227 },
         { 0.8, 0.702, 0.251, 0.169 }, { 1, 0.416, 0.110, 0.133 } },
+    snowfall = { { 0, 0.60, 0.62, 0.68 }, { 0.12, 0.52, 0.74, 0.96 }, { 0.24, 0.22, 0.42, 0.94 },
+        { 0.38, 0.40, 0.18, 0.78 }, { 0.52, 0.84, 0.18, 0.74 }, { 0.66, 1.00, 0.36, 0.62 },
+        { 0.78, 0.24, 0.80, 0.76 }, { 0.90, 0.56, 0.46, 0.92 }, { 1, 0.62, 0.36, 1.00 } },
 }
-M.SCHEME_ORDER = { "thermal", "ember" }
+M.SCHEME_ORDER = { "thermal", "ember", "snowfall" }
 local RAMP = SCHEMES.thermal -- the scheme in use, set by Draw
 
 -- Points colors, given to the map's leading leathers in order; each also differs in lightness.
@@ -54,7 +71,8 @@ local OTHER_COLOR = { 0.80, 0.78, 0.74 }
 local HIDE_COLOR = { 0.76, 0.62, 0.40 }
 M.PALETTE, M.RUINED_COLOR, M.OTHER_COLOR = PALETTE, RUINED_COLOR, OTHER_COLOR -- the stats window's leather colors
 
-local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "thermal", when = 0, strength = 1, spread = 1 }
+local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "thermal", when = 0, strength = 1,
+    spread = 1, dots = false }
 M.DEFAULTS = DEFAULTS
 
 -- the map's settings. leather: 0 (all), an item ID, "hides" or "ruined"
@@ -90,6 +108,14 @@ local function Ramp(v)
     return l[2], l[3], l[4]
 end
 M.Ramp = Ramp
+
+-- how much of the heat shows at v (0..1): clear in quiet areas, full from EDGE_TO up. The key's
+-- ramp fades the same way the map does.
+local function Quiet(v)
+    local e = math.max(0, math.min(1, (v - EDGE_FROM) / (EDGE_TO - EDGE_FROM)))
+    return e * e * (3 - 2 * e)
+end
+M.Quiet = Quiet
 
 -- a scheme's colour at v (0..1), for swatches
 function M.SchemeColor(name, v)
@@ -299,7 +325,7 @@ local function PinTooltip(self)
     local p = self.info
     if not p then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText("Hot spot", ACCENT[1], ACCENT[2], ACCENT[3])
+    GameTooltip:SetText("Hot spot " .. (p.rank or ""), ACCENT[1], ACCENT[2], ACCENT[3])
     GameTooltip:AddLine(p.count .. (p.count == 1 and " skin here" or " skins here"), 1, 1, 1)
     if p.who ~= "" then GameTooltip:AddLine(p.who, SOFT[1], SOFT[2], SOFT[3], true) end
     if p.loot ~= "" then GameTooltip:AddLine(p.loot, SOFT[1], SOFT[2], SOFT[3], true) end
@@ -320,10 +346,122 @@ local function Pin(i)
     p.dot:SetPoint("CENTER")
     p.dot:SetTexture(CIRCLE)
     p.dot:SetVertexColor(INK[1], INK[2], INK[3], 1)
-    p:SetScript("OnEnter", PinTooltip)
-    p:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- its rank above it, and a gold ring that lights with its row in the dock's hot spots list
+    p.num = St.Title(p, 13)
+    p.num:SetPoint("BOTTOM", p, "TOP", 0, 1)
+    p.num:SetTextColor(1, 1, 1)
+    p.num:SetShadowColor(0, 0, 0, 1)
+    p.ring = p:CreateTexture(nil, "BACKGROUND")
+    p.ring:SetPoint("CENTER")
+    p.ring:SetTexture(St.Media("ring"))
+    p.ring:SetVertexColor(C.ACCENT[1], C.ACCENT[2], C.ACCENT[3], 1)
+    p.ring:Hide()
+    -- motion rings (see PinMotion): one breathes while the pin is lit, two ripple out on a ping
+    p.pulse = p:CreateTexture(nil, "BACKGROUND", nil, 1)
+    p.ripples = {}
+    for j, t in ipairs({ p.pulse, p:CreateTexture(nil, "BACKGROUND", nil, 2), p:CreateTexture(nil, "BACKGROUND", nil, 2) }) do
+        t:SetPoint("CENTER")
+        t:SetTexture(St.Media("ring"))
+        t:SetVertexColor(C.ACCENT[1], C.ACCENT[2], C.ACCENT[3], 1)
+        t:Hide()
+        if j > 1 then p.ripples[j - 1] = t end
+    end
+    p:SetScript("OnEnter", function(self)
+        PinTooltip(self)
+        M.LightPin(self.rank, true, true)
+    end)
+    p:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+        M.LightPin(self.rank, false, true)
+    end)
     pins[i] = p
     return p
+end
+
+-- the pin for a hot spot (by rank), lit with a gold ring; fromPin: the dock's row lights too
+local byRank = {}
+local function PinScale()
+    local mine = overlay and overlay:GetEffectiveScale()
+    local screen = UIParent:GetEffectiveScale()
+    if not (mine and mine > 0 and screen and screen > 0) then return 1 end
+    return screen / mine
+end
+-- Pin motion, kept small and calm (micro-interaction practice: instant feedback, then a quiet loop;
+-- motion that grows outward and slows as it goes, eased out; nothing runs when nothing moves).
+--   Lit (its row or the pin hovered): a steady gold ring at once, and a second ring breathing
+--   outward and fading every PULSE seconds. The dock's badge breathes on the same clock.
+--   Ping (a click on its row): two rings ripple out from the pin, a beat apart, and fade.
+local PULSE = 1.6 -- seconds per breath
+local PULSE_REACH = 14 -- how far a breath grows past the steady ring
+local PING_DUR, PING_GAP, PING_REACH = 0.9, 0.22, 46 -- a ripple's life, the beat between two, its reach
+M.PULSE = PULSE
+
+local function EaseOut(t) return 1 - (1 - t) ^ 3 end
+
+local function PinMotion(p)
+    local k = p.k or 1
+    local base = p:GetWidth() + 10 * k
+    local now = GetTime()
+    if p.lit then
+        local t = (now % PULSE) / PULSE
+        local d = base + PULSE_REACH * k * EaseOut(t)
+        p.pulse:SetSize(d, d)
+        p.pulse:SetAlpha(0.55 * (1 - t) ^ 1.6)
+        p.pulse:Show()
+    else
+        p.pulse:Hide()
+    end
+    local pinging = false
+    if p.pingAt then
+        for j, rip in ipairs(p.ripples) do
+            local t = (now - p.pingAt - (j - 1) * PING_GAP) / PING_DUR
+            if t < 1 then pinging = true end
+            if t > 0 and t < 1 then
+                local d = base + PING_REACH * k * EaseOut(t)
+                rip:SetSize(d, d)
+                rip:SetAlpha(0.9 * (1 - t) ^ 2)
+                rip:Show()
+            else
+                rip:Hide()
+            end
+        end
+        if not pinging then p.pingAt = nil end
+    end
+    if not p.lit and not pinging then p:SetScript("OnUpdate", nil) end
+end
+
+-- a pin at rest: no rings, nothing running (each redraw starts its pins this way)
+local function PinRest(p)
+    p.lit, p.pingAt = false, nil
+    p.ring:Hide()
+    p.pulse:Hide()
+    for _, rip in ipairs(p.ripples) do rip:Hide() end
+    p:SetScript("OnUpdate", nil)
+end
+
+function M.LightPin(rank, on, fromPin)
+    local p = rank and byRank[rank]
+    if p and p:IsShown() then
+        local base = p:GetWidth() + 10 * (p.k or 1)
+        p.lit = on and true or false
+        p.ring:SetSize(base, base)
+        p.ring:SetAlpha(1)
+        p.ring:SetShown(on)
+        if on then
+            p:SetScript("OnUpdate", PinMotion)
+        elseif not p.pingAt then
+            PinMotion(p) -- hides the breath and stops
+        end
+    end
+    if fromPin and FN.MapUI and FN.MapUI.LightSpot then FN.MapUI.LightSpot(rank, on) end
+end
+
+-- a click on a hot spot row: two rings ripple out from its pin, so the eye finds it
+function M.PingPin(rank)
+    local p = rank and byRank[rank]
+    if not (p and p:IsShown()) then return end
+    p.pingAt = GetTime()
+    p:SetScript("OnUpdate", PinMotion)
 end
 
 -- ------------------------------------------------------------
@@ -617,6 +755,7 @@ local function Draw()
     local cw, ch = w / cols, h / rows
     local spread, passes, hideThin = Auto(#recs)
     local g, max, rawMax = HeatGrid(recs, cols, rows, passes)
+    SetFade(rawMax)
     local size = spread * s.spread * math.max(cw, ch)
     local function Counts(i)
         return g[i] / max >= EDGE_FROM and (not hideThin or g[i] >= 0.35 / (GRID_SCALE * GRID_SCALE))
@@ -637,10 +776,8 @@ local function Draw()
             t:SetPoint("CENTER", overlay, "TOPLEFT", (c + 0.5) * cw, -(rr + 0.5) * ch)
             t:SetSize(size, size)
             local r, gg, b = Ramp(v)
-            -- the faintest areas fade in smoothly, so the heat's edge dissolves into the map
-            local e = math.min(1, (v - EDGE_FROM) / (EDGE_TO - EDGE_FROM))
-            local edge = e * e * (3 - 2 * e)
-            t:SetVertexColor(r, gg, b, math.min(0.95, (HEAT_ALPHA_MIN + HEAT_ALPHA_SPAN * v) * s.strength) * edge)
+            -- quiet areas fade out, so the heat's edge dissolves into the map
+            t:SetVertexColor(r, gg, b, math.min(0.95, (HEAT_ALPHA_MIN + HEAT_ALPHA_SPAN * v) * s.strength) * Quiet(v))
         end
     elseif s.mode == "spotlight" then
         -- the map dims everywhere except where you skin: a soft shade on every area, fading
@@ -664,19 +801,26 @@ local function Draw()
                 end
             end
         end
-    else
+    end
+    -- one dot per skin: Points view, or laid over Heat and Spotlight (smaller, a little faint)
+    -- with the "Every skin" switch
+    local over = s.mode ~= "points"
+    if not over or s.dots then
         local step = math.max(1, math.ceil(#recs / MAX_DOTS))
-        local dot = #recs > 800 and 5 or 7
+        local dot = over and (#recs > 800 and 2.5 or 3.5) or (#recs > 800 and 5 or 7)
+        local alpha = over and 0.75 or 1
         local n = 0
         for i = 1, #recs, step do
             local r = recs[i]
             n = n + 1
             local px, py = r.x / 1000 * w, -r.y / 1000 * h
-            local ring = Pooled(rings, n, "ARTWORK", 1, CIRCLE)
-            ring:ClearAllPoints()
-            ring:SetPoint("CENTER", overlay, "TOPLEFT", px, py)
-            ring:SetSize(dot + 3, dot + 3)
-            ring:SetVertexColor(0.08, 0.055, 0.03, 0.95)
+            if not over then
+                local ring = Pooled(rings, n, "ARTWORK", 1, CIRCLE)
+                ring:ClearAllPoints()
+                ring:SetPoint("CENTER", overlay, "TOPLEFT", px, py)
+                ring:SetSize(dot + 3, dot + 3)
+                ring:SetVertexColor(0.08, 0.055, 0.03, 0.95)
+            end
             local d = Pooled(dots, n, "ARTWORK", 2, CIRCLE)
             d:ClearAllPoints()
             d:SetPoint("CENTER", overlay, "TOPLEFT", px, py)
@@ -686,11 +830,13 @@ local function Draw()
             local c = (type(key) == "number" and key ~= 0 and colorOf[key])
                 or (key == "hides" and HIDE_COLOR) or (key == "ruined" and RUINED_COLOR)
                 or colorOf[MainItem(r, rank)] or OTHER_COLOR
-            d:SetVertexColor(c[1], c[2], c[3], 1)
+            d:SetVertexColor(c[1], c[2], c[3], alpha)
         end
     end
 
-    -- hot spot pins: what lives in each, shown on hover
+    -- hot spot pins: what lives in each, shown on hover, ranked; the dock lists them too
+    model.spots = {}
+    wipe(byRank)
     for i, peak in ipairs(Peaks(g, max, cols)) do
         local hx, hy = (peak.c + 0.5) / cols, (peak.r + 0.5) / rows
         local near, who, loot = 0, {}, {}
@@ -707,15 +853,28 @@ local function Draw()
             for _, npc in ipairs(Top(who, 2)) do names[#names + 1] = CreatureName(npc) end
             for _, id in ipairs(Top(loot, 2)) do items[#items + 1] = ItemName(id) end
             local p = Pin(i)
-            local pin = i == 1 and 16 or 12
+            -- the map art is drawn at its own (smaller) scale; size the pin and its number for the
+            -- screen so they read the same at any map size
+            local k = PinScale()
+            local pin = (i == 1 and 16 or 12) * k
             p:SetSize(pin, pin)
             p.dot:SetSize(pin / 2, pin / 2)
+            p.k = k
+            p.num:SetFont(STANDARD_TEXT_FONT, 13 * k, "")
+            p.num:ClearAllPoints()
+            p.num:SetPoint("BOTTOM", p, "TOP", 0, k)
             p:ClearAllPoints()
             p:SetPoint("CENTER", overlay, "TOPLEFT", hx * w, -hy * h)
+            local rankN = #model.spots + 1
+            p.rank = rankN
+            p.num:SetText(rankN)
+            PinRest(p)
             p.info = {
-                count = near, who = table.concat(names, ", "), loot = table.concat(items, "  ·  "),
+                rank = rankN, count = near, who = table.concat(names, ", "), loot = table.concat(items, "  ·  "),
                 coords = string.format("%d, %d", math.floor(hx * 100 + 0.5), math.floor(hy * 100 + 0.5)),
             }
+            model.spots[rankN] = p.info
+            byRank[rankN] = p
             p:Show()
         end
     end
@@ -731,7 +890,7 @@ local function Draw()
     model.topWho = topWho and CreatureName(topWho)
     model.topLoot = topLoot and ItemName(topLoot)
     if s.mode == "heat" then
-        model.scale = string.format("Up to %d %s in one area", rawMax, rawMax == 1 and "skin" or "skins")
+        model.peak = rawMax -- the key numbers its ramp from 1 to this
     elseif s.mode == "spotlight" then
         model.scale = "Brightest where you skin most"
     else

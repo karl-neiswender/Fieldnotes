@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldnotes dock v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gold: #ffd75e; --accent: #ffd100; --gold2: #c89b1a;
+  --text: #e8e8e8; --ink2: #bdbdbd; --sub: #8a8a8a;
+  --edge: #54492f; --rule: #544a33;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 40% 40%, #2a3138 0%, #11161b 70%); color: var(--text);
+  font-family: Marcellus, Georgia, serif; min-height: 100vh; }
+button { font-family: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.stage { width: 1360px; margin: 0 auto; padding: 28px 0 40px; }
+.notes-top { display: flex; align-items: center; justify-content: space-between; margin: 0 0 16px; }
+.notes-top h1 { font-weight: 400; font-size: 22px; color: var(--gold); margin: 0; }
+.notes-top p { margin: 4px 0 0; color: var(--sub); font-size: 13px; }
+.compare { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink2); }
+.row { display: flex; align-items: stretch; }
+
+/* the map window */
+.mapwin { width: 980px; height: 720px; position: relative; border-radius: 6px; background: #17140f;
+  box-shadow: 0 0 0 2px #5a4a2a, 0 0 0 4px #1a160f, 0 18px 50px rgba(0,0,0,.6); }
+.mapwin .title { height: 30px; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(#2a241a, #120f0a); border-bottom: 1px solid #5a4a2a; font-size: 17px; color: var(--gold); }
+.mapwin .art { position: absolute; left: 8px; top: 38px; right: 8px; bottom: 34px; overflow: hidden; border-radius: 3px; }
+.mapwin .foot { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 22px; background: linear-gradient(#2c2a27, #151412); border-radius: 2px; }
+canvas { position: absolute; inset: 0; }
+.pin { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 30%, #1a1208 31% 46%, transparent 47%); border: 0; padding: 0; }
+.pin span { position: absolute; left: 50%; top: -17px; transform: translateX(-50%); font-size: 12px; color: #fff;
+  text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.pin::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0;
+  transition: opacity .2s, transform .3s; transform: scale(.6); }
+.pin.lit::after { opacity: 1; transform: scale(1); }
+.tip { position: absolute; pointer-events: none; background: rgba(8,8,8,.94); border: 1px solid #6b5e42; border-radius: 4px;
+  padding: 8px 10px; font-size: 12px; color: var(--ink2); white-space: nowrap; display: none; z-index: 5; }
+.tip b { color: var(--gold); font-weight: 400; display: block; font-size: 13px; margin-bottom: 2px; }
+
+/* the dock */
+.dock { width: 300px; height: 704px; margin: 8px 0 0 -6px; position: relative; border: 1px solid var(--edge); border-radius: 0 7px 7px 0;
+  background: linear-gradient(#1b1814, #040404); overflow: hidden; padding: 16px; z-index: 1; }
+.dock::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .92  0 0 0 0 .78  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.35'/></svg>");
+  -webkit-mask-image: linear-gradient(#000 0, #000 30%, rgba(0,0,0,.25) 60%); mask-image: linear-gradient(#000 0, #000 30%, rgba(0,0,0,.25) 60%); }
+.dock > * { position: relative; }
+.profs { display: flex; gap: 6px; align-items: center; }
+.prof { width: 32px; height: 32px; border: 1px solid #4a4030; background: linear-gradient(#26231f, #0d0c0b); color: var(--ink2);
+  display: grid; place-items: center; font-size: 15px; opacity: .55; }
+.prof.on { border-color: var(--accent); color: var(--gold); opacity: 1; }
+.switch { margin-left: auto; width: 46px; height: 24px; border-radius: 12px; border: 1px solid #d9ad33;
+  background: linear-gradient(#8c6b19, #382905); position: relative; padding: 0; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 24px; width: 18px; height: 18px; border-radius: 50%;
+  background: linear-gradient(#fff5c7, #ebb338); transition: left .2s; }
+.switch.off { border-color: #524c42; background: linear-gradient(#2b2926, #0d0d0d); }
+.switch.off::after { left: 2px; background: linear-gradient(#a9a69e, #5c5a54); }
+.switch.small { width: 34px; height: 18px; }
+.switch.small::after { width: 13px; height: 13px; top: 1.5px; left: 17px; }
+.switch.small.off::after { left: 2px; }
+.head { display: flex; align-items: baseline; justify-content: space-between; margin: 10px 0 2px; }
+.head h2 { margin: 0; font-weight: 400; font-size: 22px; color: var(--gold); text-shadow: 1px 1px 0 #33240a; }
+.head span { color: var(--sub); font-size: 13px; }
+.label { font-size: 12px; letter-spacing: .5px; color: var(--sub); margin: 8px 0 4px; display: flex; align-items: center; justify-content: space-between; }
+.label .inline { display: flex; align-items: center; gap: 7px; letter-spacing: 0; text-transform: none; color: var(--ink2); }
+.choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.choice { height: 27px; border: 1px solid #6b5e42; border-radius: 3px; background: linear-gradient(#3d3933, #14130f); color: var(--ink2); font-size: 14px; }
+.choice.on { border-color: var(--accent); background: linear-gradient(#614a0f, #1c1404); color: var(--gold); }
+.choice:hover { border-color: #d9ad33; }
+.dropdown { width: 100%; height: 29px; display: flex; align-items: center; gap: 9px; padding: 0 12px; text-align: left;
+  border: 1px solid #6b5e42; border-radius: 3px; background: linear-gradient(#3d3933, #14130f); color: var(--ink2); font-size: 14px; }
+.dropdown i { width: 9px; height: 9px; border-radius: 50%; background: #4d4d4d; }
+.dropdown em { margin-left: auto; font-style: normal; color: var(--ink2); }
+.card { border: 1px solid #47423a; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 10px 14px 8px; margin-top: 12px; }
+.big { font-size: 25px; margin-bottom: 4px; }
+.kv { display: flex; justify-content: space-between; font-size: 14px; line-height: 22px; }
+.kv span { color: var(--sub); }
+.ramp { height: 10px; border-radius: 2px; margin: 9px 0 4px; }
+.ticks { position: relative; height: 16px; font-size: 11px; color: var(--sub); }
+.ticks span { position: absolute; transform: translateX(-50%); }
+.ticks span:first-child { transform: none; }
+.ticks span:last-child { transform: translateX(-100%); }
+.caption { font-size: 11px; color: var(--sub); text-align: center; margin-top: 1px; }
+.section { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 4px; }
+.section h3 { margin: 0; font-weight: 400; font-size: 15px; color: var(--gold); }
+.section span { font-size: 11px; color: var(--sub); }
+.spot { display: grid; grid-template-columns: 22px 1fr auto; column-gap: 9px; align-items: center; width: 100%;
+  padding: 5px 8px; border: 0; border-left: 2px solid transparent; background: transparent; color: var(--text); text-align: left; border-radius: 0 3px 3px 0; }
+.spot + .spot { margin-top: 1px; }
+.spot:hover, .spot.lit { background: rgba(255,209,0,.09); border-left-color: var(--accent); }
+.spot .n { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #1a1208;
+  background: #d4cbb5; grid-row: span 2; }
+.spot:first-of-type .n { background: var(--accent); }
+.spot b { font-weight: 400; font-size: 14px; }
+.spot small { grid-column: 2; font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spot .xy { grid-row: 1; grid-column: 3; font-size: 12px; color: var(--ink2); }
+.session { position: absolute; left: 16px; right: 16px; bottom: 58px; height: 40px; display: flex; align-items: center; gap: 9px;
+  border: 1px solid #47423a; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 0 8px 0 14px; }
+.session i { width: 9px; height: 9px; border-radius: 50%; background: #5c5a54; }
+.session b { font-weight: 400; color: var(--gold); font-size: 16px; }
+.session button { margin-left: auto; height: 28px; padding: 0 14px; border: 1px solid var(--accent); border-radius: 3px;
+  background: linear-gradient(#614a0f, #1c1404); color: var(--gold); font-size: 14px; }
+.footer { position: absolute; left: 16px; right: 16px; bottom: 0; height: 46px; border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: repeat(3, 1fr); place-items: center; color: var(--ink2); font-size: 18px; }
+.tab { width: 34px; height: 130px; margin-top: 90px; margin-left: -1px; border: 1px solid var(--edge); border-left: 0;
+  border-radius: 0 7px 7px 0; background: linear-gradient(#1b1814, #070707); color: var(--gold); writing-mode: vertical-rl;
+  display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 15px; }
+
+/* the notes beside it */
+.notes { margin-left: 26px; width: 300px; font-size: 13px; line-height: 1.5; color: var(--ink2); }
+.notes ol { padding-left: 18px; margin: 0; }
+.notes li { margin-bottom: 14px; }
+.notes li b { color: var(--gold); font-weight: 400; font-size: 14px; display: block; }
+.notes .muted { color: var(--sub); font-size: 12px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="notes-top">
+    <div>
+      <h1>Fieldnotes dock v3: hot spots, a quieter heat, a key with numbers, dots over heat</h1>
+      <p>Mockup for approval (2026-11-03). Hover a hot spot row or a pin; the two light together. Sample data, Dun Morogh.</p>
+    </div>
+    <div class="compare" role="group" aria-label="Compare quiet areas">
+      Quiet areas
+      <button class="choice on" id="cmpFade" style="width:90px">Faded</button>
+      <button class="choice" id="cmpNow" style="width:90px">As now</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="mapwin">
+      <div class="title">Eastern Kingdoms</div>
+      <div class="art" id="art">
+        <canvas id="parch" width="964" height="648"></canvas>
+        <canvas id="heat" width="964" height="648"></canvas>
+        <canvas id="dots" width="964" height="648"></canvas>
+        <div class="tip" id="tip"></div>
+      </div>
+      <div class="foot"></div>
+    </div>
+
+    <aside class="dock" aria-label="Fieldnotes">
+      <div class="profs">
+        <div class="prof on" title="Skinning">S</div><div class="prof" title="Mining">M</div>
+        <div class="prof" title="Herbalism">H</div><div class="prof" title="Fishing">F</div>
+        <button class="switch" aria-label="Fieldnotes on"></button>
+      </div>
+      <div class="head"><h2>Skinning</h2><span>Dun Morogh</span></div>
+
+      <div class="label">VIEW
+        <span class="inline">Every skin <button class="switch small off" id="dotsSwitch" aria-label="Every skin as a dot"></button></span>
+      </div>
+      <div class="choices">
+        <button class="choice on">Heat</button><button class="choice">Points</button><button class="choice">Spotlight</button>
+      </div>
+      <div class="label">SHOW</div>
+      <div class="choices">
+        <button class="choice">Me</button><button class="choice on">Account</button><button class="choice">Community</button>
+      </div>
+      <div class="label">LEATHER</div>
+      <button class="dropdown"><i></i>All leather<em>⌄</em></button>
+
+      <div class="card">
+        <div class="big">1,279 skins</div>
+        <div class="kv"><span>Most skinned</span>Winter Wolf</div>
+        <div class="kv"><span>Main leather</span>Light Leather</div>
+        <div class="ramp" id="ramp"></div>
+        <div class="ticks" id="ticks"></div>
+        <div class="caption">skins in one spot</div>
+      </div>
+
+      <div class="section"><h3>Hot spots</h3><span>where you skin most</span></div>
+      <div id="spots"></div>
+
+      <div class="session"><i></i><b>Session</b><button>▸ Start</button></div>
+      <div class="footer" aria-label="Stats, Share, Map settings"><span title="Stats">▮▮▮</span><span title="Share">⇪</span><span title="Map settings">⚙</span></div>
+    </aside>
+    <div class="tab">Fieldnotes ‹</div>
+
+    <div class="notes">
+      <ol>
+        <li><b>Hot spots list</b>The three spots the map already pins, now named in the dock: rank, skins, the creatures there and map coordinates. Hover a row and its pin rings in gold; hover a pin and its row lights. Click a row to ping the spot. The pins carry their rank number.</li>
+        <li><b>Quiet areas fade out</b>The coolest part of the Thermal ramp fades to clear, so the blue haze over the whole zone goes and the hot spots stand out. Thermal's colors are unchanged. Use the switch above to compare.</li>
+        <li><b>A key with numbers</b>Fewer and More become real counts under the ramp, scaled to this map. The ramp's left end fades the same way the map does.</li>
+        <li><b>Every skin, over the heat</b>A small switch beside View lays one dot per skin over Heat or Spotlight (Points already shows them). Dots take their leather colors, smaller and fainter than in Points.</li>
+      </ol>
+      <p class="muted">Kept as is: colors, layout, the panel look. The full-screen toolbar gets the same fade and key numbers; its hot spots stay as pins with tooltips (no room for a list).</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const W = 964, H = 648;
+  const THERMAL = [[0, .16, .30, .85], [.3, .15, .70, .85], [.55, .45, .85, .30], [.78, 1, .85, .15], [1, .90, .18, .10]];
+  function ramp(v) {
+    for (let i = 1; i < THERMAL.length; i++) {
+      const b = THERMAL[i];
+      if (v <= b[0]) {
+        const a = THERMAL[i - 1], t = (v - a[0]) / (b[0] - a[0]);
+        return [a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t];
+      }
+    }
+    const l = THERMAL[THERMAL.length - 1];
+    return [l[1], l[2], l[3]];
+  }
+  // a seeded random, so the sample looks the same every time
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const gauss = () => { let u = 0; for (let i = 0; i < 6; i++) u += rnd(); return u / 3 - 1; };
+
+  // the parchment
+  const p = document.getElementById("parch").getContext("2d");
+  const g = p.createRadialGradient(W * .45, H * .45, 40, W * .5, H * .5, W * .75);
+  g.addColorStop(0, "#d6b878"); g.addColorStop(1, "#9c7740");
+  p.fillStyle = g; p.fillRect(0, 0, W, H);
+  p.strokeStyle = "rgba(96,70,36,.55)"; p.lineWidth = 1.3;
+  for (let i = 0; i < 520; i++) {
+    const x = rnd() * W, y = rnd() * H;
+    if (Math.hypot((x - 470) / 1.4, y - 330) < 150) continue; // the valley stays open
+    p.beginPath(); p.moveTo(x - 8, y + 5); p.lineTo(x - 2, y - 5); p.lineTo(x + 2, y); p.lineTo(x + 6, y - 6); p.lineTo(x + 11, y + 5); p.stroke();
+  }
+  p.fillStyle = "rgba(231,211,161,.55)";
+  p.beginPath(); p.ellipse(470, 340, 250, 140, -.1, 0, 7); p.fill();
+  p.fillStyle = "#8fa4a8"; p.strokeStyle = "#6e5530";
+  p.beginPath(); p.ellipse(330, 300, 34, 22, 0, 0, 7); p.fill(); p.stroke();
+  p.beginPath(); p.ellipse(720, 280, 16, 34, .3, 0, 7); p.fill(); p.stroke();
+  p.font = "22px Marcellus, serif"; p.fillStyle = "#ffd75e"; p.textAlign = "center";
+  p.fillText("I R O N F O R G E", 560, 200);
+  p.font = "26px Marcellus, serif"; p.fillStyle = "rgba(70,52,28,.75)";
+  p.fillText("W E T L A N D S", 790, 60); p.fillText("S E A R I N G   G O R G E", 650, 590);
+  p.font = "11px Marcellus, serif"; p.fillText("KHARANOS", 480, 375); p.fillText("BREWNALL VILLAGE", 250, 290);
+
+  // the skins: three hot spots, some lighter areas, a scatter
+  const LEATHER = ["#e39a3b", "#f3dfa8", "#3f8f8a", "#8f8a80"];
+  const pts = [];
+  const cluster = (cx, cy, sx, sy, n) => { for (let i = 0; i < n; i++) pts.push([cx + gauss() * sx, cy + gauss() * sy, LEATHER[Math.floor(rnd() * rnd() * 4)]]); };
+  cluster(300, 205, 55, 45, 300);
+  cluster(670, 440, 60, 45, 260);
+  cluster(515, 390, 40, 35, 150);
+  cluster(330, 560, 70, 50, 70);
+  cluster(760, 270, 60, 50, 40);
+  for (let i = 0; i < 90; i++) pts.push([120 + rnd() * 760, 90 + rnd() * 500, "#8f8a80"]);
+
+  // density on a grid, then a soft blur
+  const CELL = 6, cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL);
+  let grid = new Float32Array(cols * rows);
+  pts.forEach(([x, y]) => { const c = Math.floor(x / CELL), r = Math.floor(y / CELL); if (c >= 0 && c < cols && r >= 0 && r < rows) grid[r * cols + c]++; });
+  const K = 26, sig = 10, kern = [];
+  for (let i = -K; i <= K; i++) kern.push(Math.exp(-(i * i) / (2 * sig * sig)));
+  function blur(src) {
+    const a = new Float32Array(cols * rows), b = new Float32Array(cols * rows);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { let s = 0; for (let k = -K; k <= K; k++) { const cc = c + k; if (cc >= 0 && cc < cols) s += src[r * cols + cc] * kern[k + K]; } a[r * cols + c] = s; }
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { let s = 0; for (let k = -K; k <= K; k++) { const rr = r + k; if (rr >= 0 && rr < rows) s += a[rr * cols + c] * kern[k + K]; } b[r * cols + c] = s; }
+    return b;
+  }
+  grid = blur(grid);
+  let max = 0; grid.forEach(v => { if (v > max) max = v; });
+
+  const heat = document.getElementById("heat"), hx = heat.getContext("2d");
+  const small = document.createElement("canvas"); small.width = cols; small.height = rows;
+  const sx = small.getContext("2d");
+  function drawHeat(fade) {
+    const img = sx.createImageData(cols, rows);
+    for (let i = 0; i < cols * rows; i++) {
+      const v = Math.min(1, grid[i] / max);
+      let a;
+      if (fade) {
+        // quiet areas fade to clear: nothing under 8%, full colour from about 35%
+        const t = Math.max(0, Math.min(1, (v - .08) / .27));
+        a = (t * t * (3 - 2 * t)) * (.25 + .5 * v);
+      } else {
+        // as now: every touched area tinted from the bottom of the ramp
+        a = v > .015 ? .22 + .5 * v : v / .015 * .22;
+      }
+      const [r, gg, b] = ramp(v);
+      img.data[i * 4] = r * 255; img.data[i * 4 + 1] = gg * 255; img.data[i * 4 + 2] = b * 255; img.data[i * 4 + 3] = Math.min(.85, a) * 255;
+    }
+    sx.putImageData(img, 0, 0);
+    hx.clearRect(0, 0, W, H);
+    hx.imageSmoothingEnabled = true; hx.imageSmoothingQuality = "high";
+    hx.drawImage(small, 0, 0, cols, rows, 0, 0, W, H);
+    drawKey(fade);
+  }
+
+  // the key's ramp and its numbers (the densest cell, in skins)
+  function drawKey(fade) {
+    const stops = [];
+    for (let i = 0; i <= 10; i++) {
+      const v = i / 10, [r, gg, b] = ramp(v);
+      const a = fade ? Math.min(1, Math.max(0, (v - .05) / .3)) : 1;
+      stops.push(`rgba(${r * 255 | 0},${gg * 255 | 0},${b * 255 | 0},${a.toFixed(2)}) ${v * 100}%`);
+    }
+    document.getElementById("ramp").style.background = `linear-gradient(90deg, ${stops.join(",")})`;
+  }
+  const peakSkins = 48;
+  document.getElementById("ticks").innerHTML = [1, 12, 24, 36, "48+"].map((n, i) => `<span style="left:${i * 25}%">${n}</span>`).join("");
+
+  // every skin as a dot
+  const dots = document.getElementById("dots").getContext("2d");
+  let dotsOn = false;
+  function drawDots() {
+    dots.clearRect(0, 0, W, H);
+    if (!dotsOn) return;
+    pts.forEach(([x, y, c]) => { dots.globalAlpha = .7; dots.fillStyle = c; dots.beginPath(); dots.arc(x, y, 2.2, 0, 7); dots.fill(); });
+    dots.globalAlpha = 1;
+  }
+
+  // hot spots: pins on the map, rows in the dock, lit together
+  const SPOTS = [
+    { x: 300, y: 205, n: 212, who: "Winter Wolf, Snow Leopard", xy: "31, 32" },
+    { x: 670, y: 440, n: 188, who: "Ice Claw Bear, Winter Wolf", xy: "69, 68" },
+    { x: 515, y: 390, n: 104, who: "Snow Tracker Wolf", xy: "53, 60" },
+  ];
+  const art = document.getElementById("art"), tip = document.getElementById("tip"), list = document.getElementById("spots");
+  const pinEls = [], rowEls = [];
+  function light(i, on) { pinEls[i].classList.toggle("lit", on); rowEls[i].classList.toggle("lit", on); }
+  SPOTS.forEach((s, i) => {
+    const pin = document.createElement("button");
+    pin.className = "pin"; pin.style.left = s.x + "px"; pin.style.top = s.y + "px";
+    pin.innerHTML = `<span>${i + 1}</span>`;
+    pin.setAttribute("aria-label", `Hot spot ${i + 1}`);
+    pin.onmouseenter = () => { light(i, true); tip.style.display = "block"; tip.style.left = (s.x + 16) + "px"; tip.style.top = (s.y - 10) + "px";
+      tip.innerHTML = `<b>Hot spot ${i + 1}</b>${s.n} skins  ·  ${s.xy}<br>${s.who}`; };
+    pin.onmouseleave = () => { light(i, false); tip.style.display = "none"; };
+    art.appendChild(pin); pinEls.push(pin);
+    const row = document.createElement("button");
+    row.className = "spot";
+    row.innerHTML = `<i class="n">${i + 1}</i><b>${s.n} skins</b><span class="xy">${s.xy}</span><small>${s.who}</small>`;
+    row.onmouseenter = () => light(i, true);
+    row.onmouseleave = () => light(i, false);
+    row.onfocus = () => light(i, true);
+    row.onblur = () => light(i, false);
+    list.appendChild(row); rowEls.push(row);
+  });
+
+  const fadeBtn = document.getElementById("cmpFade"), nowBtn = document.getElementById("cmpNow");
+  fadeBtn.onclick = () => { fadeBtn.classList.add("on"); nowBtn.classList.remove("on"); drawHeat(true); };
+  nowBtn.onclick = () => { nowBtn.classList.add("on"); fadeBtn.classList.remove("on"); drawHeat(false); };
+  const sw = document.getElementById("dotsSwitch");
+  sw.onclick = () => { dotsOn = !dotsOn; sw.classList.toggle("off", !dotsOn); drawDots(); };
+
+  document.fonts && document.fonts.ready.then(() => drawHeat(true));
+  drawHeat(true);
+})();
+</script>
+</body>
+</html>
