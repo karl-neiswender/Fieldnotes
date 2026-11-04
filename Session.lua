@@ -1,11 +1,13 @@
 local ADDON, FN = ...
 
--- The session tracker: a small panel you can drag anywhere. It appears with your first skin,
--- counts the session as you go (skins, skins per minute, ruined, your skill and what this session
--- added, the loot) and hides itself after two minutes without a skin. Five quiet minutes end the
--- session; the next skin starts a new one. Pause stops the clock (a break does not lower your
--- rate). The chevron folds it to one line. When your skill reaches its rank's cap, it says so,
--- and says it once in chat and on screen: time to see a trainer.
+-- The session tracker: a small panel you can drag anywhere. One session, one clock, for every
+-- profession (professions v4 mockup, 2026-11-04): a row appears the first time you gather
+-- something of a profession this session, with its count, per hour on the shared clock, and
+-- your skill and what this session added (Cloth: how often humanoids dropped it). Then the
+-- session's top loot. It appears with your first gather and hides after two minutes without one;
+-- five quiet minutes end the session. Pause stops the clock. The chevron folds it to one line:
+-- the clock, then each profession's initial and count. When a skill reaches its rank's cap, it
+-- says so, once in chat and on screen: time to see a trainer.
 
 local St = FN.Style
 local C = St.C
@@ -15,7 +17,10 @@ local IDLE = 300 -- seconds without a skin that end a session
 local FADE = 120 -- seconds without a skin before the tracker hides
 local LOOT_ROWS = 4
 
-local session = { count = 0, ruined = 0, loot = {}, creatures = {}, minutes = {}, paused = 0 }
+-- count, ruined, loot, creatures: skinning's (the stats window reads them); total and allLoot:
+-- every profession's; profs[key] = { count, loots, skillStart }, in order of first gather
+local session = { count = 0, ruined = 0, loot = {}, creatures = {}, minutes = {}, paused = 0,
+    total = 0, allLoot = {}, profs = {}, order = {} }
 FN.session = session
 
 -- seconds of skinning so far, leaving out pauses
@@ -30,9 +35,30 @@ local function Reset(now)
     session.count, session.ruined, session.paused = 0, 0, 0
     session.start, session.last, session.pausedAt = now, nil, nil
     session.skillStart = FN.SkinningSkill and FN.SkinningSkill() or nil
+    session.total = 0
     wipe(session.loot)
     wipe(session.creatures)
     wipe(session.minutes)
+    wipe(session.allLoot)
+    wipe(session.profs)
+    wipe(session.order)
+end
+
+function FN.SessionHas(prof) return session.start ~= nil and session.profs[prof] ~= nil end
+
+local function ProfInfo(key)
+    return FN.Map and FN.Map.PROF and FN.Map.PROF[key] or { key = key, label = key, unit = "gather", units = "gathers",
+        color = { 0.8, 0.8, 0.8 } }
+end
+
+-- "34 skins" while you only skin, else "43 gathers": the dock's session row and the toolbar
+function FN.SessionLabel()
+    local n = session.total or 0
+    if #session.order == 1 then
+        local p = ProfInfo(session.order[1])
+        return n .. " " .. (n == 1 and p.unit or p.units)
+    end
+    return n .. (n == 1 and " gather" or " gathers")
 end
 
 -- skins per minute, counting at least one minute so the first skin reads as 1.0, not a spike
@@ -84,14 +110,17 @@ end
 -- ------------------------------------------------------------
 -- Skill: your rank, its cap, and the trainer alert
 -- ------------------------------------------------------------
--- the rank a trainer teaches next, by the cap you are at (Classic's skinning ranks)
+-- the rank a trainer teaches next, by the cap you are at (Classic's ranks, the same for every
+-- gathering profession)
 local NEXT_RANK = { [75] = "Journeyman", [150] = "Expert", [225] = "Artisan" }
 local TOP_CAP = 300
 local ORANGE = { 1.00, 0.55, 0.15 }
+local SKILLED = { "skinning", "mining", "herbalism", "fishing" }
 
-local function Skill()
-    if not FN.SkinningSkill then return nil end
-    local rank, cap = FN.SkinningSkill()
+local function Skill(prof)
+    prof = prof or "skinning"
+    if not FN.ProfessionSkill then return nil end
+    local rank, cap = FN.ProfessionSkill(prof)
     if type(rank) ~= "number" or rank <= 0 or type(cap) ~= "number" or cap <= 0 then return nil end
     return rank, cap
 end
@@ -99,28 +128,39 @@ end
 -- capped: at the top of your rank, short of the last one
 local function Capped(rank, cap) return rank and cap and rank >= cap and cap < TOP_CAP end
 
--- the panel's note at the cap: short, one line (the bar and "75 / 75" already show the cap)
-local function CapNote(cap) return "Capped  ·  train " .. (NEXT_RANK[cap] or "the next rank") end
-
-local function TrainerLine(cap)
-    local nextRank = NEXT_RANK[cap]
-    return nextRank and ("Visit a skinning trainer to learn " .. nextRank .. ".")
-        or "Visit a skinning trainer to learn the next rank."
+-- the panel's note at the cap: short, one line
+local function CapNote(cap)
+    local warn = string.format("|T%s:12:12:0:0:64:64:0:64:0:64:255:140:38|t ", St.Icon("warning-white"))
+    return warn .. "Capped  ·  train " .. (NEXT_RANK[cap] or "the next rank")
 end
 
--- once per cap: a line in chat, the words across the middle of the screen and a sound
+local function TrainerLine(prof, cap)
+    local nextRank = NEXT_RANK[cap]
+    local who = string.lower(ProfInfo(prof).label)
+    return nextRank and ("Visit a " .. who .. " trainer to learn " .. nextRank .. ".")
+        or ("Visit a " .. who .. " trainer to learn the next rank.")
+end
+
+-- once per profession and cap: a line in chat, the words across the screen and a sound
+-- (skinning's caps keep their old keys, 75 and so on, so an alert already given stays given)
 local function AlertIfCapped()
-    local rank, cap = Skill()
-    if not Capped(rank, cap) then return end
     FN.db.settings.capAlerted = FN.db.settings.capAlerted or {}
-    if FN.db.settings.capAlerted[cap] then return end
-    FN.db.settings.capAlerted[cap] = true
-    local line = string.format("Skinning %d / %d: you're at your rank's cap. %s", rank, cap, TrainerLine(cap))
-    FN.Print(line)
-    if UIErrorsFrame and UIErrorsFrame.AddMessage then
-        UIErrorsFrame:AddMessage(line, ORANGE[1], ORANGE[2], ORANGE[3])
+    for _, prof in ipairs(SKILLED) do
+        local rank, cap = Skill(prof)
+        if Capped(rank, cap) then
+            local key = prof == "skinning" and cap or (prof .. cap)
+            if not FN.db.settings.capAlerted[key] then
+                FN.db.settings.capAlerted[key] = true
+                local line = string.format("%s %d / %d: you're at your rank's cap. %s", ProfInfo(prof).label, rank, cap,
+                    TrainerLine(prof, cap))
+                FN.Print(line)
+                if UIErrorsFrame and UIErrorsFrame.AddMessage then
+                    UIErrorsFrame:AddMessage(line, ORANGE[1], ORANGE[2], ORANGE[3])
+                end
+                if PlaySound and SOUNDKIT and SOUNDKIT.RAID_WARNING then pcall(PlaySound, SOUNDKIT.RAID_WARNING) end
+            end
+        end
     end
-    if PlaySound and SOUNDKIT and SOUNDKIT.RAID_WARNING then pcall(PlaySound, SOUNDKIT.RAID_WARNING) end
 end
 
 -- ------------------------------------------------------------
@@ -181,7 +221,7 @@ local function Build()
     ui.glow = St.Glow(frame, ui.dot, { 0.31, 0.75, 0.23 }) -- breathes while the session runs
     ui.title = St.Title(frame, 12)
     ui.title:SetPoint("LEFT", ui.dot, "RIGHT", 7, 0)
-    ui.title:SetText("Skinning")
+    ui.title:SetText("Session")
     ui.fold = St.IconButton(frame, "chevron-white", 10, function()
         FN.db.settings.trackerCompact = not Compact()
         FN.UpdateTracker()
@@ -228,34 +268,10 @@ local function Build()
     ui.line:SetWidth(W - PADX * 2)
     ui.line:SetWordWrap(false)
 
-    -- open: three numbers
-    ui.stats, ui.statLabels = {}, {}
-    for i, label in ipairs({ "skins", "per minute", "ruined" }) do
-        local v = St.Text(frame, 18, C.TEXT)
-        v:SetPoint("TOPLEFT", PADX + (i - 1) * 70, -34)
-        local l = St.Text(frame, 10, C.SUBTEXT)
-        l:SetPoint("TOPLEFT", v, "BOTTOMLEFT", 0, -2)
-        l:SetText(label)
-        ui.stats[i], ui.statLabels[i] = v, l
-    end
-
-    -- your skill: rank / cap, what this session added, and a slim bar toward the cap
-    ui.skillLabel = St.Text(frame, 10, C.SUBTEXT)
-    ui.skillLabel:SetText("Skill")
-    ui.skillValue = St.Text(frame, 11, C.TEXT)
-    ui.skillValue:SetJustifyH("RIGHT")
-    ui.skillGain = St.Text(frame, 10, C.TITLE)
-    ui.skillGain:SetJustifyH("RIGHT")
-    ui.skillTrack = frame:CreateTexture(nil, "ARTWORK")
-    ui.skillTrack:SetColorTexture(1, 0.94, 0.82, 0.08)
-    ui.skillTrack:SetHeight(4)
-    ui.skillFill = frame:CreateTexture(nil, "ARTWORK", nil, 1)
-    ui.skillFill:SetTexture(St.SOLID)
-    ui.skillFill:SetHeight(4)
-    -- at the cap: an orange note, the clearest thing in the panel
-    ui.alert = St.Text(frame, 11, ORANGE)
-    ui.alert:SetWidth(W - PADX * 2)
-    ui.alert:SetJustifyV("TOP")
+    -- open: a row per profession gathered this session (made as needed, see Row below)
+    ui.rows = {}
+    ui.empty = St.Text(frame, 10, C.SUBTEXT)
+    ui.empty:SetText("Gather anything to start counting.")
 
     ui.rule = frame:CreateTexture(nil, "ARTWORK")
     ui.rule:SetColorTexture(0.33, 0.29, 0.20, 0.8)
@@ -300,17 +316,58 @@ local function Clock(secs)
     return string.format("%d:%02d", math.floor(secs / 60), math.floor(secs % 60))
 end
 
+-- one profession's row: a mark on a soft square of its color, its name, the count and per hour,
+-- and under it the skill line (or the cap note, in orange)
+local ROW_H = 34
+local function Row(i)
+    local r = ui.rows[i]
+    if r then return r end
+    r = {}
+    r.chip = frame:CreateTexture(nil, "ARTWORK")
+    r.chip:SetSize(20, 20)
+    r.mark = frame:CreateTexture(nil, "ARTWORK", nil, 1)
+    r.mark:SetSize(14, 14)
+    r.mark:SetPoint("CENTER", r.chip, "CENTER", 0, 0)
+    r.name = St.Text(frame, 12, C.TEXT)
+    r.name:SetPoint("TOPLEFT", r.chip, "TOPRIGHT", 8, 1)
+    r.rate = St.Text(frame, 10, C.SUBTEXT)
+    r.rate:SetJustifyH("RIGHT")
+    r.rate:SetWidth(52)
+    r.count = St.Text(frame, 12, C.TEXT)
+    r.count:SetJustifyH("RIGHT")
+    r.count:SetPoint("RIGHT", r.rate, "LEFT", -6, 0)
+    r.sub = St.Text(frame, 10, C.SUBTEXT)
+    r.sub:SetPoint("TOPLEFT", r.name, "BOTTOMLEFT", 0, -3)
+    r.sub:SetWidth(W - PADX * 2 - 28)
+    r.sub:SetWordWrap(false)
+    r.rule = frame:CreateTexture(nil, "ARTWORK")
+    r.rule:SetColorTexture(0.33, 0.29, 0.20, 0.45)
+    r.rule:SetHeight(1)
+    ui.rows[i] = r
+    return r
+end
+
+local function ShowRow(r, on)
+    for _, k in ipairs({ "chip", "mark", "name", "rate", "count", "sub", "rule" }) do r[k]:SetShown(on) end
+end
+
+local function Hex(c) return string.format("%02x%02x%02x", c[1] * 255, c[2] * 255, c[3] * 255) end
+
+-- an icon inside a line of text, tinted (|T path : size : size : x : y : 64 : 64 : crop : r : g : b |t)
+local function InlineIcon(name, c, size)
+    size = size or 13
+    return string.format("|T%s:%d:%d:0:0:64:64:0:64:0:64:%d:%d:%d|t", St.Icon(name), size, size,
+        c[1] * 255, c[2] * 255, c[3] * 255)
+end
+
 function FN.UpdateTracker()
     if not frame or not frame:IsShown() then return end
     local secs = Active()
     local paused = session.pausedAt ~= nil
     local compact = Compact()
-    local rank, cap = Skill()
-    local capped = Capped(rank, cap)
-    local gain = rank and session.skillStart and math.max(0, rank - session.skillStart) or 0
 
     ui.clock:SetText(Clock(secs))
-    ui.title:SetText(paused and "Paused" or "Skinning")
+    ui.title:SetText(paused and "Paused" or "Session")
     if paused then
         ui.dot:SetVertexColor(C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
     else
@@ -321,79 +378,109 @@ function FN.UpdateTracker()
     ui.glow:SetOn(glowing)
     ui.fold.icon:SetRotation(compact and 0 or math.pi) -- down to open, up to fold
 
-    local ruined = session.count > 0 and (math.floor(session.ruined / session.count * 100 + 0.5) .. "%") or "-"
+    -- the first profession at its cap, for the folded note
+    local capNote
+    for _, key in ipairs(session.order) do
+        local rank, cap = Skill(key)
+        if not capNote and key ~= "cloth" and Capped(rank, cap) then capNote = ProfInfo(key).label .. " " .. CapNote(cap) end
+    end
+
     local open = not compact
-    ui.line:SetShown(compact and capped)
     ui.minPause:SetShown(compact)
     ui.minStop:SetShown(compact)
-    ui.stats[1]:SetText(session.count)
-    ui.stats[2]:SetText(string.format("%.1f", FN.SessionRate()))
-    ui.stats[3]:SetText(ruined)
-    for _, f in ipairs({ ui.skillLabel, ui.skillValue, ui.skillGain, ui.skillTrack, ui.skillFill, ui.rule,
-        ui.pause, ui.finish }) do
-        f:SetShown(open)
-    end
-    ui.alert:SetShown(open and capped)
+    for _, f in ipairs({ ui.rule, ui.pause, ui.finish }) do f:SetShown(open) end
+    ui.empty:SetShown(#session.order == 0)
 
     if compact then
-        if capped then ui.line:SetText(CapNote(cap)) end
-        ui.minPause.icon:SetTexture(St.Icon(paused and "play-white" or "pause-white"))
+        -- one line: each profession's initial in its color, and its count
+        local parts = {}
+        for _, key in ipairs(session.order) do
+            local p, e = ProfInfo(key), session.profs[key]
+            parts[#parts + 1] = InlineIcon(key .. "-white", p.color) .. " " .. e.count
+        end
+        for _, r in ipairs(ui.rows) do ShowRow(r, false) end
         for _, row in ipairs(ui.loot) do
             row.icon:Hide()
             row.name:Hide()
             row.count:Hide()
         end
-        SetHeightFromTop(capped and 94 or 78)
+        ui.minPause.icon:SetTexture(St.Icon(paused and "play-white" or "pause-white"))
+        ui.empty:ClearAllPoints()
+        ui.empty:SetPoint("TOPLEFT", PADX, -36)
+        ui.summary = ui.summary or St.Text(frame, 12, C.TEXT)
+        ui.summary:ClearAllPoints()
+        ui.summary:SetPoint("TOPLEFT", PADX, -36)
+        ui.summary:SetText(table.concat(parts, "     "))
+        ui.summary:SetShown(#parts > 0)
+        ui.line:ClearAllPoints()
+        ui.line:SetPoint("TOPLEFT", PADX, -54)
+        ui.line:SetShown(capNote ~= nil)
+        if capNote then ui.line:SetText(capNote) end
+        SetHeightFromTop(capNote and 74 or 58)
         return
     end
+    if ui.summary then ui.summary:Hide() end
+    ui.line:Hide()
 
-    local y = -78
-    ui.skillLabel:SetShown(rank ~= nil)
-    ui.skillValue:SetShown(rank ~= nil)
-    ui.skillGain:SetShown(rank ~= nil and gain > 0)
-    ui.skillTrack:SetShown(rank ~= nil)
-    ui.skillFill:SetShown(rank ~= nil)
-    if rank then
-        ui.skillLabel:ClearAllPoints()
-        ui.skillLabel:SetPoint("TOPLEFT", PADX, y)
-        ui.skillValue:ClearAllPoints()
-        ui.skillValue:SetPoint("TOPRIGHT", -PADX, y + 1)
-        ui.skillValue:SetText(rank .. " / " .. cap)
-        ui.skillGain:ClearAllPoints()
-        ui.skillGain:SetPoint("RIGHT", ui.skillValue, "LEFT", -8, 0)
-        ui.skillGain:SetText("+" .. gain .. " this session")
-        y = y - 16
-        local barW = W - PADX * 2
-        ui.skillTrack:ClearAllPoints()
-        ui.skillTrack:SetPoint("TOPLEFT", PADX, y)
-        ui.skillTrack:SetWidth(barW)
-        ui.skillFill:ClearAllPoints()
-        ui.skillFill:SetPoint("TOPLEFT", PADX, y)
-        ui.skillFill:SetWidth(math.max(1, barW * math.min(1, rank / cap)))
-        if capped then
-            ui.skillFill:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 1)
-        else
-            St.HGradient(ui.skillFill, { 0.62, 0.42, 0.05 }, { 1.00, 0.86, 0.30 })
-        end
-        y = y - 12
-        if capped then
-            ui.alert:SetText(CapNote(cap))
-            ui.alert:ClearAllPoints()
-            ui.alert:SetPoint("TOPLEFT", PADX, y)
-            y = y - ui.alert:GetStringHeight() - 8
-        end
+    local y = -36
+    if #session.order == 0 then
+        ui.empty:ClearAllPoints()
+        ui.empty:SetPoint("TOPLEFT", PADX, y)
+        y = y - 20
     end
+    local hours = math.max(1 / 60, secs / 3600)
+    for i, key in ipairs(session.order) do
+        local p, e, r = ProfInfo(key), session.profs[key], Row(i)
+        ShowRow(r, true)
+        r.rule:SetShown(i > 1)
+        r.rule:ClearAllPoints()
+        r.rule:SetPoint("TOPLEFT", PADX, y + 4)
+        r.rule:SetPoint("TOPRIGHT", -PADX, y + 4)
+        r.chip:ClearAllPoints()
+        r.chip:SetPoint("TOPLEFT", PADX, y - 2)
+        r.chip:SetColorTexture(p.color[1], p.color[2], p.color[3], 0.16)
+        r.mark:SetTexture(St.Icon(key .. "-white"))
+        r.mark:SetVertexColor(p.color[1], p.color[2], p.color[3])
+        r.name:SetText(p.label)
+        r.count:SetText(e.count)
+        r.rate:ClearAllPoints()
+        r.rate:SetPoint("TOPRIGHT", -PADX, y)
+        r.rate:SetText(math.floor(e.count / hours + 0.5) .. "/hr")
+        r.count:ClearAllPoints()
+        r.count:SetPoint("TOPRIGHT", -PADX - 58, y)
+        local sub, orange
+        if key == "cloth" then
+            sub = e.loots > 0 and string.format("%d%% of humanoid loots", math.floor(e.count / e.loots * 100 + 0.5)) or ""
+        else
+            local rank, cap = Skill(key)
+            if Capped(rank, cap) then
+                sub, orange = CapNote(cap), true
+            elseif rank then
+                local gain = e.skillStart and math.max(0, rank - e.skillStart) or 0
+                sub = "Skill " .. rank .. " / " .. cap .. (gain > 0 and ("  ·  +" .. gain .. " this session") or "")
+            else
+                sub = ""
+            end
+        end
+        r.sub:SetText(sub)
+        local c = orange and ORANGE or C.SUBTEXT
+        r.sub:SetTextColor(c[1], c[2], c[3])
+        y = y - ROW_H
+    end
+    for i = #session.order + 1, #ui.rows do ShowRow(ui.rows[i], false) end
+    y = y + 4
 
     ui.rule:ClearAllPoints()
     ui.rule:SetPoint("TOPLEFT", PADX, y)
     ui.rule:SetPoint("TOPRIGHT", -PADX, y)
     y = y - 8
 
+    local loot = session.allLoot
     local ids = {}
-    for id in pairs(session.loot) do ids[#ids + 1] = id end
+    for id in pairs(loot) do ids[#ids + 1] = id end
     table.sort(ids, function(a, b)
         if (a == RUINED) ~= (b == RUINED) then return b == RUINED end -- scraps last
-        if session.loot[a] ~= session.loot[b] then return session.loot[a] > session.loot[b] end
+        if loot[a] ~= loot[b] then return loot[a] > loot[b] end
         return a < b
     end)
     for i, row in ipairs(ui.loot) do
@@ -402,7 +489,7 @@ function FN.UpdateTracker()
             local name = GetItemInfo(id)
             row.icon:SetTexture(GetItemIcon and GetItemIcon(id) or nil)
             row.name:SetText(name or "...")
-            row.count:SetText("x " .. session.loot[id])
+            row.count:SetText("x " .. loot[id])
             row.icon:ClearAllPoints()
             row.icon:SetPoint("TOPLEFT", PADX, y - (i - 1) * 20)
         end
@@ -425,6 +512,8 @@ function FN.UpdateTracker()
     SetHeightFromTop(-y + 22 + 14)
 end
 
+function FN.TrackerFrame() return frame end
+
 function FN.ShowTracker()
     if FN.db.settings.tracker == false then return end
     if not frame then Build() end
@@ -436,22 +525,51 @@ function FN.HideTracker()
     if frame then frame:Hide() end
 end
 
-function FN.SessionAdd(npc, items)
+-- one gather of any profession (Recorder.lua). Cloth: every humanoid loot comes here, with its
+-- cloth or with nothing; only the ones with cloth count.
+function FN.SessionGather(prof, source, items)
     local now = GetTime()
-    if session.pausedAt then -- a skin while paused carries on the session
+    if session.pausedAt then -- a gather while paused carries on the session
         session.paused = session.paused + (now - session.pausedAt)
         session.pausedAt = nil
     end
-    if not session.start or not session.last or now - session.last > IDLE then Reset(now) end
-    session.count = session.count + 1
+    local has = next(items) ~= nil
+    if prof == "cloth" and not has and not session.start then return end -- an empty loot starts nothing
+    if FN.db.settings.autoSession == false then
+        -- sessions start only by hand (Settings): no session, nothing to count; a running one
+        -- never ends by itself
+        if not session.start then return end
+    elseif not session.start or not session.last or now - session.last > IDLE then
+        Reset(now)
+    end
+    local e = session.profs[prof]
+    if not e then
+        e = { count = 0, loots = 0, skillStart = prof ~= "cloth" and FN.ProfessionSkill and FN.ProfessionSkill(prof) or nil }
+        session.profs[prof] = e
+        session.order[#session.order + 1] = prof
+    end
+    e.loots = e.loots + 1
+    if prof == "cloth" and not has then
+        FN.UpdateTracker()
+        return
+    end
+    e.count = e.count + 1
+    session.total = session.total + 1
     session.last = now
-    if items[RUINED] then session.ruined = session.ruined + 1 end
-    for id, n in pairs(items) do session.loot[id] = (session.loot[id] or 0) + n end
-    if npc and npc > 0 then session.creatures[npc] = (session.creatures[npc] or 0) + 1 end
-    local m = math.floor(Active() / 60) + 1
-    session.minutes[m] = (session.minutes[m] or 0) + 1
+    for id, n in pairs(items) do session.allLoot[id] = (session.allLoot[id] or 0) + n end
+    if prof == "skinning" then
+        session.count = session.count + 1
+        if items[RUINED] then session.ruined = session.ruined + 1 end
+        for id, n in pairs(items) do session.loot[id] = (session.loot[id] or 0) + n end
+        if source and source > 0 then session.creatures[source] = (session.creatures[source] or 0) + 1 end
+        local m = math.floor(Active() / 60) + 1
+        session.minutes[m] = (session.minutes[m] or 0) + 1
+    end
     FN.ShowTracker()
+    if FN.Map and FN.Map.Refresh then FN.Map.Refresh() end -- the tab's recording dot
 end
+
+function FN.SessionAdd(npc, items) FN.SessionGather("skinning", npc, items) end
 
 local ev = CreateFrame("Frame")
 pcall(ev.RegisterEvent, ev, "GET_ITEM_INFO_RECEIVED") -- loot names arriving after a skin

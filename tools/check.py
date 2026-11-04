@@ -94,9 +94,12 @@ function UnitExists(u) return units[u] ~= nil end
 function UnitIsPlayer(u) return false end
 function UnitIsDead(u) return units[u] and units[u].dead end
 function UnitGUID(u) return units[u] and units[u].guid end
-function UnitCreatureType(u) return "Beast" end
+function UnitCreatureType(u) return units[u] and units[u].type or "Beast" end
 function UnitLevel(u) return units[u] and units[u].level or 0 end
-function GetSpellInfo(id) if id == 8613 or id == 8618 then return "Skinning" end return "Other" end
+SPELLS = { [8613] = "Skinning", [8618] = "Skinning", [2575] = "Mining", [2366] = "Herb Gathering",
+  [7620] = "Fishing", [921] = "Pick Pocket" }
+function GetSpellInfo(id) return SPELLS[id] or "Other" end
+function IsFishingLoot() return fishingLoot end
 function GetNumSkillLines() return 1 end
 function GetSkillLineInfo() return "Skinning", false, false, skillRank or 225, 0, 0, skillMax or 300 end
 C_Map = {
@@ -161,6 +164,52 @@ Fire("LOOT_READY"); Fire("LOOT_CLOSED")
 Fire("UNIT_SPELLCAST_SENT", "player", "Stranglethorn Tiger", "cast-3", 8618)
 now = now + 30
 Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+
+-- 6. the other professions
+local function Count(prof) local n = 0 for _, l in pairs(FieldnotesDB.events[prof] or {}) do n = n + #l end return n end
+local function Last(prof) local l = FieldnotesDB.events[prof][1434] return l[#l] end
+local vein = "GameObject-0-1-0-1-1731-00000DEF"
+now = now + 10
+Fire("UNIT_SPELLCAST_SENT", "player", "Copper Vein", "cast-4", 2575)
+now = now + 3
+loot = { { id = 2770, n = 3, guid = vein } }
+Fire("LOOT_READY"); Fire("LOOT_OPENED"); Fire("LOOT_CLOSED")
+local mined = Count("mining") == 1 and Last("mining"):find(":1731:1:0:2770=3$") ~= nil
+  and FieldnotesDB.nodes[1731].name == "Copper Vein"
+now = now + 10
+Fire("UNIT_SPELLCAST_SENT", "player", "", "cast-5", 7620)
+now = now + 18
+fishingLoot = true
+loot = { { id = 6291, n = 1, guid = "GameObject-0-1-0-1-35591-0000BBB" } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+fishingLoot = false
+local fished = Count("fishing") == 1 and Last("fishing"):find(":0:1:0:6291=1$") ~= nil
+-- a humanoid with Linen, the same corpse again, a humanoid with nothing, a pickpocket
+local thug = "Creature-0-1-0-1-116-00000AAA"
+units.target = { name = "Defias Thug", guid = thug, dead = true, level = 10, type = "Humanoid" }
+Fire("PLAYER_TARGET_CHANGED")
+now = now + 10
+loot = { { id = 2589, n = 2, guid = thug }, { id = 117, n = 1, guid = thug } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+local thug2 = "Creature-0-1-0-1-116-00000AAB"
+units.target = { name = "Defias Thug", guid = thug2, dead = true, level = 10, type = "Humanoid" }
+Fire("PLAYER_TARGET_CHANGED")
+loot = { { id = 117, n = 1, guid = thug2 } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+local thug3 = "Creature-0-1-0-1-116-00000AAC"
+Fire("UNIT_SPELLCAST_SENT", "player", "Defias Thug", "cast-6", 921)
+loot = { { id = 2589, n = 1, guid = thug3 } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+-- (the tiger's Silk in 2. counts too: a creature of any type that drops cloth)
+local cl = {}
+for _, r in ipairs(FieldnotesDB.events.cloth[1434]) do if r:find(":116:") then cl[#cl + 1] = r end end
+local clothOk = #FieldnotesDB.events.cloth[1434] == 3 and #cl == 2 and cl[1]:find(":116:1:0:2589=2$") ~= nil and cl[2]:find(":116:1:0:$") ~= nil
+gatherResult = (mined and "m" or "-") .. (fished and "f" or "-") .. (clothOk and "c" or "-")
+  .. (Count("skinning") == 1 and "s" or "-")
+units.target = nil
+-- the tracker: one session, a row per profession in the order first gathered
+sessionOrder = table.concat(ns.session.order, ",")
 
 SlashCmdList.FIELDNOTES("summary")
 SlashCmdList.FIELDNOTES("")
@@ -245,6 +294,44 @@ function WorldMapFrame:GetRight() return 1300 end
 function UIParent:GetRight() return 1920 end
 Open("points", "account")
 local dockLayout = ns.Map.ui.layout
+-- the dashboard: every gather as a dot; hovering a row lights that profession (glows added),
+-- another row lights its own instead; a profession tab goes to its page, the Fieldnotes tab back
+FieldnotesDB.settings.map.prof = "all"
+local dash = Open("points", "account")
+ns.Map.SetLit("skinning")
+local dashLit = ShownOnMap()
+ns.Map.SetLit("mining")
+local dashOther = ShownOnMap()
+ns.Map.SetLit(nil)
+local dashModel = ns.Map.model.kind
+local tabs = ns.MapUI.tabs
+local skinTab
+for _, t in ipairs(tabs) do if t.p.key == "skinning" then skinTab = t end end
+skinTab.scripts.OnClick(skinTab)
+skinTab.scripts.OnClick(skinTab) -- a tab never folds the dock
+local toSkinning = FieldnotesDB.settings.map.prof == "skinning" and FieldnotesDB.settings.dockOpen ~= false
+ns.MapUI.home.scripts.OnClick(ns.MapUI.home)
+local toDash = FieldnotesDB.settings.map.prof == "all"
+skinTab.scripts.OnClick(skinTab)
+ns.MapUI.tab.scripts.OnClick(ns.MapUI.tab) -- the Fieldnotes tab only folds and opens
+local folded = FieldnotesDB.settings.dockOpen == false and FieldnotesDB.settings.map.prof == "skinning"
+ns.MapUI.tab.scripts.OnClick(ns.MapUI.tab) -- and opening lands on Home
+folded = folded and FieldnotesDB.settings.dockOpen ~= false and FieldnotesDB.settings.map.prof == "all"
+FieldnotesDB.settings.map.prof = "skinning"
+Open("heat", "account")
+dashResult = (dash > 20 and "d" or "-") .. (dashLit > dash and "l" or "-") .. ((dashOther > dash and dashOther ~= dashLit) and "o" or "-")
+  .. (dashModel == "dash" and "m" or "-") .. ((toSkinning and toDash and folded) and "t" or "-")
+-- sessions by hand only (Settings): a gather starts nothing, a started session still counts
+FieldnotesDB.settings.autoSession = false
+ns.SessionEnd()
+ns.SessionGather("mining", 1731, { [2770] = 1 })
+local stayedOff = not ns.SessionRunning()
+ns.SessionStart()
+ns.SessionGather("mining", 1731, { [2770] = 1 })
+local counted = ns.session.total == 1
+ns.SessionEnd()
+FieldnotesDB.settings.autoSession = nil
+dashResult = dashResult .. ((stayedOff and counted) and "a" or "-")
 ns.SessionStart()
 local sessionOn = ns.SessionRunning()
 ns.SessionEnd()
@@ -342,6 +429,18 @@ if ok:
         ("record holds place, time, creature, character, skill and loot",
          first == "471:220:1700000000:682:1:225:2319=2,2934=1"),
         ("creature remembered from mouseover", cname == "Stranglethorn Tiger" and clevel == 33),
+        ("mining: a vein's ore recorded with its node", rt.globals().gatherResult[0] == "m"),
+        ("fishing: a catch recorded where you stood", rt.globals().gatherResult[1] == "f"),
+        ("cloth: humanoid loots counted once each, with or without cloth; Pick Pocket left out",
+         rt.globals().gatherResult[2] == "c"),
+        ("other professions leave skinning alone", rt.globals().gatherResult[3] == "s"),
+        ("tracker: one session, a row per profession in the order gathered",
+         rt.globals().sessionOrder == "skinning,cloth,mining,fishing"),
+        ("dashboard: every gather a dot, no heat", rt.globals().dashResult[0] == "d" and rt.globals().dashResult[3] == "m"),
+        ("dashboard: hovering a row lights its dots", rt.globals().dashResult[1] == "l"),
+        ("dashboard: another row lights its own dots instead", rt.globals().dashResult[2] == "o"),
+        ("tabs: a tab opens its page, Home the dashboard; Fieldnotes only folds and opens (on Home)", rt.globals().dashResult[4] == "t"),
+        ("session: with auto start off, only Start begins one", rt.globals().dashResult[5] == "a"),
         ("/fn summary runs", "1 skins on this account" in chat),
         ("/fn fake refused outside demo mode", bool(refused)),
         ("/fn demo loads sample skins", demo_count > 1000),

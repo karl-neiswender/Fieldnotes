@@ -7,9 +7,13 @@ local ADDON, FN = ...
 --   map but the heat itself. A "Fieldnotes" tab folds it away and back.
 --   Full-screen map: one toolbar centred at the top and a small key in a bottom corner.
 --
--- Both hold the same things: the profession (Skinning for now), the on/off switch, View, Show,
--- the leather list, the key, the session (start, pause, end), Stats, Share and a gear for the
--- two settings left (Colors, When). Map.lua draws the map and hands Render() a model of what is
+-- Both hold the same things: the profession, the on/off switch, View, Show, the material list
+-- (leather, ore...), the key, the session (start, pause, end), Stats, Share and a gear for the
+-- two settings left (Colors, When).
+--
+-- Professions v4 (design/professions-v4-2026-11-04): under the dock's Fieldnotes tab, one small
+-- tab per profession in its color. The Fieldnotes tab opens the dashboard: a row per profession,
+-- and on the map every gather as a dot in its profession's color (hover a row to light its dots). Map.lua draws the map and hands Render() a model of what is
 -- on screen. Slides and fades follow the motion notes in that folder's README.
 
 local MapUI = {}
@@ -22,31 +26,59 @@ local M -- FN.Map, set in Init (Map.lua loads first)
 local ui -- shared with Map.lua (FN.Map.ui)
 
 local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
+local BLOB = "Interface\\AddOns\\Fieldnotes\\Media\\blob" -- the soft round glow
 local DOCK_W = 228
 local PAD = 12
 local INNER = DOCK_W - PAD * 2
 local TAB_W, TAB_H = 26, 150 -- TAB_H: the stacked-letter fallback; a turned word sets its own
 local TAB_TOP, TAB_GAP, TAB_BOTTOM = 8, 8, 8 -- room above the word, word to chevron, below it
 local TAB_TUCK = 8 -- how far the open tab slips under the dock's edge, so the two read as one
-local DOCK_TOP_H = 192 -- the dock's controls above the key (profession row to the leather list)
-local FOOTER_H = PAD + 2 + 16 + 12 -- the icon row and the space above it, up to its rule
+local DOCK_TOP_H = 218 -- the dock's controls above the key (title to the material list)
+local TOP_SHIFT = 20 -- the old profession row's room, given back now the tabs choose the profession
+-- the dock's spacing, on a 4-unit scale: a section label, 16 to its controls (22 tall), 14 to the
+-- next label. The first label sits 16 under the place line.
+local FIRST_Y = -60 -- the first section label, from the dock's top
+local LABEL_GAP = 16 -- a label's top to its controls' top
+local CTRL_H = 22
+local GROUP_GAP = 16 -- controls' bottom to the next label
+local STEP = LABEL_GAP + CTRL_H + GROUP_GAP
+local FOOTER_H = 4 -- the room under the session row (Stats, Share and settings moved to the tabs)
 local EDGE_TUCK = 10 -- the map window's art stops this far inside its border frame's edge
 local LIST_ROWS = 6
 local GREEN = { 0.31, 0.75, 0.23 }
 
--- icon: a file name in Media/icons (white on clear, like the others), tinted gold when chosen.
--- Until Karl's profession icons land, each slot shows its initial as a placeholder.
-local PROFESSIONS = {
-    { key = "skinning", label = "Skinning", ready = true },
-    { key = "mining", label = "Mining" },
-    { key = "herbalism", label = "Herbalism" },
-    { key = "fishing", label = "Fishing" },
+-- Silver relief icons share Forever Goal Tracker's treatment.
+local PROF_ICONS = {
+    skinning = "skinning-white",
+    mining = "mining-white",
+    herbalism = "herbalism-white",
+    fishing = "fishing-white",
+    cloth = "cloth-white",
 }
 local MODES = {
-    { key = "heat", label = "Heat", tip = "A glow where you skin most" },
-    { key = "points", label = "Points", tip = "One dot per skin, colored by its leather" },
-    { key = "spotlight", label = "Spotlight", tip = "The map dims, except where you skin" },
+    { key = "heat", label = "Heat", tip = "A glow where you gather most" },
+    { key = "points", label = "Points", tip = "One dot per gather, colored by what it gave" },
+    { key = "spotlight", label = "Spotlight", tip = "The map dims, except where you gather" },
 }
+-- a section label's color for a profession: its hue, brought to the grey label's lightness and
+-- softened a little toward that grey (pure color at that lightness read too loud)
+local function LabelTint(c)
+    local function Lum(x) return 0.299 * x[1] + 0.587 * x[2] + 0.114 * x[3] end
+    local grey = C.SUBTEXT
+    local k = Lum(grey) * 1.12 / math.max(0.05, Lum(c))
+    local out = {}
+    for i = 1, 3 do
+        local v = math.min(1, c[i] * k)
+        out[i] = v + (grey[i] - v) * 0.3
+    end
+    return out
+end
+
+-- n skins, n catches: the profession's own word
+local function Units(p, n)
+    p = p or { unit = "gather", units = "gathers" }
+    return n .. " " .. (n == 1 and p.unit or p.units)
+end
 local SHOWS = {
     { key = "me", label = "Me", tip = "This character only" },
     { key = "account", label = "Account", tip = "Every character on this account" },
@@ -56,6 +88,13 @@ local SCHEME_NAMES = { thermal = "Thermal", solar = "Solar", snowfall = "Snowfal
 local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
 
 local model = {}
+local profTabs, shownTabs = {}, {}
+local PROF_TAB_H, PROF_TAB_GAP = 30, 4
+local ProfMark, GoTo, Dashboard, FormatCount, SetSheet, ApplyTab, Glide -- defined with the dock
+local homeTab
+local utilTabs = {} -- Stats and Settings, under the profession tabs after a little gap
+local UTIL_GAP = 12
+local TAB_DROP = 14 -- the Fieldnotes tab's top, below the dock's
 
 local function Refresh() M.Refresh() end
 
@@ -500,7 +539,7 @@ local function KeyCard(parent, width, withSpots)
         k.ticks[i] = t
     end
     k.caption = St.Text(k, 10, C.SUBTEXT)
-    k.caption:SetText("skins in one spot")
+    k.caption:SetText("in one spot")
     k.caption:SetJustifyH("CENTER")
     k.scale = St.Text(k, 10, C.SUBTEXT)
     k.scale:SetWidth(width - 22)
@@ -550,15 +589,20 @@ local function KeyCard(parent, width, withSpots)
             self.message:SetText(m.message)
             y = -12 - self.message:GetStringHeight() - 10
         else
-            self.big:SetText(Plural(m.skins or 0, "skin"))
+            self.big:SetText(Units(m.p, m.skins or 0))
+            self.caption:SetText((m.p and m.p.units or "gathers") .. " in one spot")
             y = -34
             local rows
+            local p = m.p or {}
             if m.kind == "continent" then
-                rows = { { "Zones", m.zones and tostring(m.zones) }, { "Most skins", m.bestZone } }
+                rows = { { "Zones", m.zones and tostring(m.zones) }, { "Most " .. (p.units or ""), m.bestZone } }
             elseif nSpots > 0 then
                 rows = {} -- the hot spots below name the creatures instead
+            elseif m.prof == "fishing" then
+                rows = { { "Main catch", m.topLoot } }
             else
-                rows = { { "Most skinned", m.topWho }, { "Main leather", m.topLoot } }
+                rows = { { m.prof == "skinning" and "Most skinned" or "Most from", m.topWho },
+                    { "Main " .. (p.material or "leather"), m.topLoot } }
             end
             for i, r in ipairs(rows) do
                 if r[2] then
@@ -692,7 +736,7 @@ local function SessionCard(parent, width)
         FN.SessionStart()
         sc:Update()
     end)
-    sc.start.tip = "A session also starts by itself with your first skin."
+    sc.start.tip = "A session also starts by itself with your first gather."
     sc.start:SetSize(70, 22)
     sc.start:SetPoint("RIGHT", -6, 0)
     sc.stop = St.IconButton(sc, "stop-white", 10, function() -- stop, not close: it ends the session
@@ -725,9 +769,11 @@ local function SessionCard(parent, width)
         local s = FN.session
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("This session", C.TITLE[1], C.TITLE[2], C.TITLE[3])
-        GameTooltip:AddLine(string.format("%s in %s", Plural(s.count, "skin"), Clock(FN.SessionSeconds())), 1, 1, 1)
-        GameTooltip:AddLine(string.format("%.1f per minute  ·  %d%% ruined", FN.SessionRate(),
-            s.count > 0 and math.floor(s.ruined / s.count * 100 + 0.5) or 0), C.INK2[1], C.INK2[2], C.INK2[3])
+        GameTooltip:AddLine(string.format("%s in %s", FN.SessionLabel(), Clock(FN.SessionSeconds())), 1, 1, 1)
+        for _, key in ipairs(s.order or {}) do
+            local p, e = M.PROF[key], s.profs[key]
+            if p and e then GameTooltip:AddLine(p.label .. "  " .. e.count, p.color[1], p.color[2], p.color[3]) end
+        end
         GameTooltip:Show()
     end)
     sc:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -753,7 +799,7 @@ local function SessionCard(parent, width)
             end
             self.title:SetText(Clock(FN.SessionSeconds()))
             -- paused, the word takes the count's place (the card's tooltip still has the count)
-            self.detail:SetText(paused and "Paused" or Plural(FN.session.count, "skin"))
+            self.detail:SetText(paused and "Paused" or FN.SessionLabel())
             self.detail:SetWidth(math.max(20, width - 11 - 15 - self.title:GetStringWidth() - 8 - 56))
             self.pause.icon:SetTexture(St.Icon(paused and "play-white" or "pause-white"))
         end
@@ -774,7 +820,8 @@ end
 -- The settings: Colors and When. In the dock a sheet slides up over it from the bottom; on
 -- the full-screen map it drops from the gear.
 -- ------------------------------------------------------------
-local function SettingsBody(parent, width)
+-- noWhen: leave out When (the dock: the dashboard has it; the full-screen map keeps it)
+local function SettingsBody(parent, width, noWhen)
     local b = { parent = parent }
     b.colorsLabel = Label(parent, "COLORS")
     b.swatches = {}
@@ -812,9 +859,9 @@ local function SettingsBody(parent, width)
         end)
         b.swatches[i] = sw
     end
-    b.whenLabel = Label(parent, "WHEN")
     b.whens = {}
-    for i, w in ipairs(WHENS) do
+    if not noWhen then b.whenLabel = Label(parent, "WHEN") end
+    for i, w in ipairs(noWhen and {} or WHENS) do
         local btn = Choice(parent, w[2], function()
             M.S().when = w[1]
             Refresh()
@@ -840,8 +887,35 @@ local function SettingsBody(parent, width)
     end)
     b.note = St.Text(parent, 10, C.SUBTEXT)
     b.note:SetWidth(width)
-    b.note:SetText("Strength is how bold the heat is; spread, how wide each glow reaches. Thin areas adjust themselves to how much you have skinned.")
-    b.reset = Choice(parent, "Reset to defaults", function()
+    b.note:SetText("Strength is how bold the heat is; spread, how wide each glow reaches.")
+    -- the session: start by itself with your first gather (on by default), or only by hand
+    b.sessionLabel = Label(parent, "SESSION")
+    b.autoText = St.Text(parent, 10, C.INK2)
+    b.autoText:SetText("Start with my first gather")
+    b.auto = CreateFrame("Button", nil, parent)
+    b.auto:SetSize(36, 18)
+    b.auto.toggle = St.Toggle(b.auto)
+    b.auto.toggle:SetAllPoints()
+    b.auto:SetScript("OnClick", function(self)
+        FN.db.settings.autoSession = FN.db.settings.autoSession == false
+        self.toggle:SetOn(FN.db.settings.autoSession ~= false)
+    end)
+    b.auto:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Start sessions by themselves", 1, 1, 1)
+        GameTooltip:AddLine("Off: a session starts only when you press Start. Your gathers are always recorded.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    b.auto:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- sharing lives here now: one button for the share window (Share and Import)
+    b.shareLabel = Label(parent, "SHARE")
+    b.share = Choice(parent, "Share or import notes", function() FN.ShowShare() end,
+        "Copy your notes as one line of text, or paste someone else's")
+    b.share.icon = b.share:CreateTexture(nil, "OVERLAY")
+    b.share.icon:SetTexture(St.Icon("share-white"))
+    b.share.icon:SetSize(12, 12)
+    b.share.icon:SetPoint("RIGHT", b.share.text, "LEFT", -6, 0)
+    b.reset = Choice(parent, "Reset map settings", function()
         local s = M.S()
         s.colors, s.when, s.strength, s.spread, s.leather = M.DEFAULTS.colors, M.DEFAULTS.when,
             M.DEFAULTS.strength, M.DEFAULTS.spread, 0
@@ -864,18 +938,20 @@ local function SettingsBody(parent, width)
             end
             sw.name:SetTextColor((on and C.TITLE or C.INK2)[1], (on and C.TITLE or C.INK2)[2], (on and C.TITLE or C.INK2)[3])
         end
-        y = y - 58
-        self.whenLabel:ClearAllPoints()
-        self.whenLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-        y = y - 16
-        local w3 = (width - 6) / 3
-        for i, btn in ipairs(self.whens) do
-            btn:SetSize(w3, 22)
-            btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", parent, "TOPLEFT", x + (i - 1) * (w3 + 3), y)
-            btn:SetChosen(model.when == btn.value)
+        y = y - 62
+        if self.whenLabel then
+            self.whenLabel:ClearAllPoints()
+            self.whenLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+            y = y - 16
+            local w3 = (width - 6) / 3
+            for i, btn in ipairs(self.whens) do
+                btn:SetSize(w3, 22)
+                btn:ClearAllPoints()
+                btn:SetPoint("TOPLEFT", parent, "TOPLEFT", x + (i - 1) * (w3 + 3), y)
+                btn:SetChosen(model.when == btn.value)
+            end
+            y = y - 38
         end
-        y = y - 34
         self.strengthLabel:ClearAllPoints()
         self.strengthLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         self.strengthValue:ClearAllPoints()
@@ -886,7 +962,7 @@ local function SettingsBody(parent, width)
         self.slider:ClearAllPoints()
         self.slider:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         self.slider:Set(st)
-        y = y - 30
+        y = y - 34
         self.spreadLabel:ClearAllPoints()
         self.spreadLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         self.spreadValue:ClearAllPoints()
@@ -897,14 +973,30 @@ local function SettingsBody(parent, width)
         self.spreadSlider:ClearAllPoints()
         self.spreadSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         self.spreadSlider:Set(sp)
-        y = y - 30
+        y = y - 34
         self.note:ClearAllPoints()
         self.note:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-        y = y - self.note:GetStringHeight() - 14
-        self.reset:SetSize(width, 24)
+        y = y - self.note:GetStringHeight() - 16
+        self.reset:SetSize(width, 22)
         self.reset:ClearAllPoints()
         self.reset:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-        return y - 24
+        y = y - 22 - 24
+        self.sessionLabel:ClearAllPoints()
+        self.sessionLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        y = y - 18
+        self.autoText:ClearAllPoints()
+        self.autoText:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 3)
+        self.auto:ClearAllPoints()
+        self.auto:SetPoint("TOPRIGHT", parent, "TOPLEFT", x + width, y)
+        self.auto.toggle:SetOn(FN.db.settings.autoSession ~= false)
+        y = y - 18 - 24
+        self.shareLabel:ClearAllPoints()
+        self.shareLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        y = y - 16
+        self.share:SetSize(width, 22)
+        self.share:ClearAllPoints()
+        self.share:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        return y - 22
     end
     return b
 end
@@ -968,38 +1060,411 @@ end
 
 local function DockOpen() return FN.db.settings.dockOpen ~= false end
 
-local function SetSheet(open)
+-- a profession's mark: its icon tinted in its color, or its initial until the icon exists.
+-- p can change later (the dock's title mark follows the page): mark:Set(p)
+ProfMark = function(parent, size, p)
+    local f = CreateFrame("Frame", nil, parent)
+    f:SetSize(size, size)
+    f.icon = f:CreateTexture(nil, "ARTWORK")
+    f.icon:SetAllPoints()
+    f.initial = St.Text(f, math.floor(size * 0.8), C.INK2)
+    f.initial:SetPoint("CENTER", 0, 0)
+    f.initial:SetJustifyH("CENTER")
+    function f:Set(q)
+        self.p = q
+        if not q then
+            self.icon:Hide()
+            self.initial:Hide()
+            return
+        end
+        local file = PROF_ICONS[q.key]
+        self.icon:SetShown(file ~= nil)
+        self.initial:SetShown(file == nil)
+        if file then
+            self.icon:SetTexture(St.Icon(file))
+            self.icon:SetVertexColor(q.color[1], q.color[2], q.color[3])
+        else
+            self.initial:SetText(q.label:sub(1, 1))
+            self.initial:SetTextColor(q.color[1], q.color[2], q.color[3])
+        end
+    end
+    f:Set(p)
+    return f
+end
+
+-- A rail tab's look at its current `out` (see RailTab in BuildDock)
+local REST = { 0.84, 0.82, 0.78 } -- every icon at rest: the painted silver, barely toned
+local TAB_SLIDE = 8 -- how much further the active tab reaches out (hover: 0.4 of it)
+-- The active tab is the page itself reaching out. Rather than guess the dock's color (a guess
+-- showed as a lighter block, seen in game), each tab carries a copy of the dock's own background,
+-- the same gradient and grime laid out on the same rectangle as the dock (so every pixel matches),
+-- seen only through a window over the tab and the strip of the dock's border beside it. Shown
+-- while active, that window erases the border between them: tab and page are one surface.
+-- Over it, a faint light of the tab's color comes in from the tab's outer edge.
+local SEAM_IN = 5 -- how far into the dock the window reaches (past the dock's border)
+local RECESS = 0.72 -- inactive tabs: a shade darker, as if they sat behind the page
+local LIGHT_PEAK = 0.34 -- at the outer edge; 0.14 and 0.2 did not show in game
+
+local function PageCopy(t)
+    local clip = CreateFrame("Frame", nil, dock)
+    clip:SetClipsChildren(true)
+    clip:Hide()
+    local copy = CreateFrame("Frame", nil, clip)
+    -- the dock's rectangle, reaching on past its right edge so the copy runs under the tab too
+    copy:SetPoint("TOPLEFT", dock, "TOPLEFT", -80, 0)
+    copy:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 80, 0)
+    local inset = 3 -- St.Etch's inset at the dock's edge size (12)
+    copy.bg = copy:CreateTexture(nil, "BACKGROUND", nil, -7)
+    copy.bg:SetTexture(St.SOLID)
+    copy.bg:SetPoint("TOPLEFT", dock, "TOPLEFT", inset - 80, -inset)
+    copy.bg:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 80, inset)
+    St.VGradient(copy.bg, STYLE.dock.top, STYLE.dock.bottom)
+    -- the grime as St.Grime lays it on the dock: same strength, same fade, same tile origin
+    local grime = CreateFrame("Frame", nil, clip)
+    -- (wider than the dock to the right, so the grime runs on under the tab; the tile is laid from
+    -- the left at its real size, so the part over the dock is the dock's own)
+    grime:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, 0)
+    grime:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 80, 0)
+    St.Grime(grime, 0.25, 12, 0, 150, 220)
+    -- the light lives on the icon's frame, the one layer known to draw above the copy (on the
+    -- window, then on a frame of its own inside it, it never showed in game, though /fn debug had it
+    -- shown at its strength), under the icon itself; it reaches past that small frame to fill the tab
+    clip.light = t.mark:CreateTexture(nil, "BACKGROUND")
+    clip.light:SetTexture(St.Media("fade"))
+    clip.light:Hide()
+    clip.copy, clip.grime, clip.lightF = copy, grime, t.mark
+    t.page = clip
+end
+
+ApplyTab = function(t)
+    local v = t.out or 0
+    local a = math.max(0, (v - 0.4) / 0.6) -- how active it looks: nothing while only hovered
+    t:SetWidth(TAB_W + (t.tuck or 0) + TAB_SLIDE * v)
+    -- at rest the tab is recessed, a shade darker than the page
+    local d = STYLE.dock
+    St.VGradient(t.etchBg, { d.top[1] * RECESS, d.top[2] * RECESS, d.top[3] * RECESS },
+        { d.bottom[1] * RECESS, d.bottom[2] * RECESS, d.bottom[3] * RECESS })
+    local rest, c = t.rest or REST, t.color
+    t.icon:SetVertexColor(rest[1] + (c[1] - rest[1]) * a, rest[2] + (c[2] - rest[2]) * a, rest[3] + (c[3] - rest[3]) * a)
+    t.icon:SetAlpha(0.72 + 0.28 * math.min(1, v / 0.4))
+
+    if not t.page and dock then PageCopy(t) end
+    local page = t.page
+    if not page then return end
+    page:SetShown(a > 0.01 and t:IsShown())
+    page.light:SetShown(a > 0.01)
+    if a <= 0.01 then return end
+    local right = t.side ~= "LEFT" -- the dock is to the tab's left
+    local tuck = t.tuck or 0
+    page:SetAlpha(a)
+    local base = dock:GetFrameLevel() + 4
+    page:SetFrameLevel(base)
+    page.copy:SetFrameLevel(base + 1)
+    page.grime:SetFrameLevel(base + 1)
+    -- the icon (and the session dot on it) stays above the copy
+    t.mark:SetFrameLevel(base + 3)
+    page:ClearAllPoints()
+    if right then
+        page:SetPoint("TOPLEFT", t, "TOPLEFT", tuck - SEAM_IN, -3)
+        page:SetPoint("BOTTOMRIGHT", t, "BOTTOMRIGHT", -3, 3)
+    else
+        page:SetPoint("TOPRIGHT", t, "TOPRIGHT", -tuck + SEAM_IN, -3)
+        page:SetPoint("BOTTOMLEFT", t, "BOTTOMLEFT", 3, 3)
+    end
+    -- the light: from the outer edge inward, gone before it reaches the page
+    local light = page.light
+    light:ClearAllPoints()
+    -- (corner anchors only: no edge anchor fighting another for the same side)
+    if right then
+        light:SetPoint("TOPRIGHT", page, "TOPRIGHT")
+        light:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT")
+        light:SetTexCoord(1, 0, 0, 1)
+    else
+        light:SetPoint("TOPLEFT", page, "TOPLEFT")
+        light:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT")
+        light:SetTexCoord(0, 1, 0, 1)
+    end
+    light:SetWidth(math.max(4, (t:GetWidth() or TAB_W) - tuck - 3))
+    light:SetVertexColor(c[1], c[2], c[3], LIGHT_PEAK * a)
+end
+
+-- glide a tab toward its state: active 1, hovered 0.4, else 0
+Glide = function(t, instant)
+    local target = t.active and 1 or (t.hover and 0.4 or 0)
+    St.Animate(t.id, target, instant and 0 or 0.22, "out", function(v)
+        t.out = v
+        ApplyTab(t)
+    end)
+end
+
+-- which professions get a tab: the ones this character knows, Cloth for everyone, and in
+-- Account or Community any profession with notes
+local function TabProfs()
+    local s, out = M.S(), {}
+    local sum = M.Summary(s.show, 0)
+    for _, p in ipairs(M.PROFS) do
+        local known = p.key == "cloth" or (FN.ProfessionSkill and (FN.ProfessionSkill(p.key) or 0) > 0)
+        local any = sum[p.key] and sum[p.key].n > 0
+        if known or (s.show ~= "me" and any) or (FN.View() ~= FN.db and any) then out[#out + 1] = p end
+    end
+    return out
+end
+
+-- go to a page ("all": the dashboard). The tab of the page already open folds the dock.
+GoTo = function(key)
+    local s = M.S()
+    if list then list:Hide() end
+    if dock.sheetOpen then
+        SetSheet(false)
+        if DockOpen() and s.prof == key then
+            MapUI.Render(model)
+            return
+        end
+    end
+    FN.db.settings.dockOpen = true
+    if s.prof ~= key then
+        s.prof = key
+        M.SetLit(nil)
+        Refresh()
+    end
+    MapUI.Render(model)
+end
+
+-- the settings, laid out in their scroll area (from its top), which then measures them
+local function SheetLayout()
+    local bottom = sheet.body:Layout(PAD, -4)
+    sheet.area:SetHeight(-bottom + 12)
+end
+
+SetSheet = function(open)
     dock.sheetOpen = open
     ui.gear = dock.gear
     dock.gear.open = open
     dock.gear:Tint()
     if open then
         sheet:Show()
-        sheet.body:Layout(PAD, -44)
+        SheetLayout()
     else
         dock.body:Show()
     end
-    -- one panel, two pages: the settings rise from the dock's bottom edge inside the same panel
-    -- (the dock clips them) while the dock's own content fades and lifts away
-    local rise = math.max(80, (dock:GetHeight() or 0) * 0.35)
+    -- one panel, two pages: the settings slide in from the dock's left edge inside the same panel
+    -- (the dock clips them), pushing the dock's own content right as it fades; back reverses it
     St.Animate("fn-sheet", open and 1 or 0, 0.3, open and "out" or "in", function(v)
-        sheet:SetAlpha(v)
+        local x = -DOCK_W * (1 - v)
+        sheet:SetAlpha(0.3 + 0.7 * v)
         sheet:ClearAllPoints()
-        sheet:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -rise * (1 - v))
-        sheet:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, -rise * (1 - v))
+        sheet:SetPoint("TOPLEFT", dock, "TOPLEFT", x, 0)
+        sheet:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", x, 0)
         dock.body:SetAlpha(1 - v)
         dock.body:ClearAllPoints()
-        dock.body:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, 16 * v)
-        dock.body:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, 16 * v)
+        dock.body:SetPoint("TOPLEFT", dock, "TOPLEFT", 48 * v, 0)
+        dock.body:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 48 * v, 0)
     end, function()
         if open then dock.body:Hide() else sheet:Hide() end
     end)
+end
+
+-- ------------------------------------------------------------
+-- The dashboard (the Fieldnotes tab): Show and When, then one row per profession with how
+-- many, where most, and the skill toward its cap. Hovering a row lights that profession's dots
+-- on the map; a click opens its tab.
+-- ------------------------------------------------------------
+local DASH_ROW = 34
+local ROW_GAP = 4 -- between rows
+local CARD_PAD = 6 -- the card's inner edge to its rows
+local function DashRow(parent, p, width)
+    local r = CreateFrame("Button", nil, parent)
+    r:SetSize(width, DASH_ROW)
+    r.p = p
+    -- hover: the profession's color washes in from the bar and fades across the row
+    r.wash = r:CreateTexture(nil, "BACKGROUND")
+    r.wash:SetAllPoints()
+    r.wash:SetTexture(St.Media("fade"))
+    r.wash:SetVertexColor(p.color[1], p.color[2], p.color[3], 0.22)
+    r.wash:Hide()
+    -- the profession's color down the row's edge (the tabs carry its icon), brighter on hover
+    r.bar = r:CreateTexture(nil, "ARTWORK")
+    r.bar:SetColorTexture(p.color[1], p.color[2], p.color[3], 1)
+    r.bar:SetPoint("TOPLEFT", 0, -4)
+    r.bar:SetPoint("BOTTOMLEFT", 0, 4)
+    r.bar:SetWidth(2)
+    r.bar:SetAlpha(0.7)
+    r.name = St.Text(r, 11, C.TEXT)
+    r.name:SetPoint("TOPLEFT", 12, -5)
+    r.name:SetText(p.label)
+    r.count = St.Text(r, 11, C.TEXT)
+    r.count:SetPoint("TOPRIGHT", -8, -5)
+    r.count:SetJustifyH("RIGHT")
+    r.sub = St.Text(r, 9, C.SUBTEXT)
+    r.sub:SetPoint("TOPLEFT", 12, -19)
+    r.sub:SetWidth(width - 12 - 58)
+    r.sub:SetWordWrap(false)
+    r.skill = St.Text(r, 9, C.SUBTEXT)
+    r.skill:SetPoint("TOPRIGHT", -8, -19)
+    r.skill:SetJustifyH("RIGHT")
+    -- the skill toward its cap, a hairline under the row
+    r.track = r:CreateTexture(nil, "ARTWORK")
+    r.track:SetColorTexture(0.18, 0.165, 0.14, 1)
+    r.track:SetHeight(1)
+    r.track:SetPoint("BOTTOMLEFT", 12, 2)
+    r.track:SetPoint("BOTTOMRIGHT", -8, 2)
+    r.fill = r:CreateTexture(nil, "ARTWORK", nil, 1)
+    r.fill:SetColorTexture(p.color[1], p.color[2], p.color[3], 0.9)
+    r.fill:SetHeight(1)
+    r.fill:SetPoint("BOTTOMLEFT", r.track, "BOTTOMLEFT")
+    local function Lit(on)
+        r.wash:SetShown(on)
+        r.bar:SetAlpha(on and 1 or 0.7)
+        M.SetLit(on and p.key or nil)
+    end
+    r:SetScript("OnEnter", function() Lit(true) end)
+    r:SetScript("OnLeave", function() Lit(false) end)
+    r:SetScript("OnClick", function(self) if self.tabbed then GoTo(p.key) end end)
+
+    function r:Update(sum)
+        local n = sum and sum.n or 0
+        local rank, cap = 0, nil
+        if p.key ~= "cloth" and FN.ProfessionSkill then rank, cap = FN.ProfessionSkill(p.key) end
+        rank = rank or 0
+        self.count:SetText(n > 0 and FormatCount(n) or "-")
+        local sub
+        if n == 0 then
+            sub = "nothing yet"
+        elseif p.key == "cloth" and sum.loots > 0 then
+            sub = string.format("%d%% drop rate", math.floor(n / sum.loots * 100 + 0.5))
+        else
+            sub = sum.bestZone and ("most in " .. sum.bestZone) or ""
+        end
+        self.sub:SetText(sub)
+        if p.key == "cloth" then
+            self.skill:SetText(sum and sum.loots > 0 and (FormatCount(sum.loots) .. " loots") or "")
+        elseif rank > 0 then
+            self.skill:SetText(cap and (rank .. " / " .. cap) or tostring(rank))
+        else
+            self.skill:SetText("not learned")
+        end
+        local frac = (rank > 0 and cap and cap > 0) and math.min(1, rank / cap) or 0
+        self.track:SetShown(frac > 0)
+        self.fill:SetShown(frac > 0)
+        if frac > 0 then self.fill:SetWidth(math.max(1, (width - 20) * frac)) end
+        self.name:SetAlpha(n > 0 and 1 or 0.5)
+        self.count:SetAlpha(n > 0 and 1 or 0.5)
+    end
+    return r
+end
+
+-- 1,279
+FormatCount = function(n)
+    local s = tostring(math.floor(n))
+    local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+    return (out:gsub("^,", ""))
+end
+
+-- the scrolling part of a dock page: under the title, over the session row
+local SCROLL_TOP = 46
+local SCROLL_BOTTOM = FOOTER_H + 8 + 34 + 6
+local function DockScroll(parent)
+    local o = St.Scroll(parent)
+    o.scroll:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -SCROLL_TOP)
+    o.scroll:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -6, SCROLL_BOTTOM)
+    o.content:SetWidth(DOCK_W - 6)
+    return o
+end
+
+Dashboard = function(parent)
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetAllPoints()
+    holder:Hide()
+    holder.area = DockScroll(holder)
+    local d = holder.area.content
+    local w3 = (INNER - 6) / 3
+    local y = FIRST_Y + SCROLL_TOP
+    Label(d, "SHOW"):SetPoint("TOPLEFT", PAD, y)
+    d.shows = {}
+    for i, sh in ipairs(SHOWS) do
+        local b = Choice(d, sh.label, function()
+            M.S().show = sh.key
+            Refresh()
+        end, sh.tip)
+        b.key = sh.key
+        b:SetSize(w3, CTRL_H)
+        b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - LABEL_GAP)
+        d.shows[i] = b
+    end
+    y = y - STEP
+    Label(d, "WHEN"):SetPoint("TOPLEFT", PAD, y)
+    d.whens = {}
+    for i, wh in ipairs(WHENS) do
+        local b = Choice(d, wh[2], function()
+            M.S().when = wh[1]
+            Refresh()
+        end)
+        b.key = wh[1]
+        b:SetSize(w3, CTRL_H)
+        b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - LABEL_GAP)
+        d.whens[i] = b
+    end
+    y = y - STEP
+    d.card = St.Frame("Frame", d)
+    St.Etch(d.card, STYLE.card or STYLE.row, 4)
+    d.card:SetPoint("TOPLEFT", PAD, y)
+    d.card:SetWidth(INNER)
+    d.rows = {}
+    for i, p in ipairs(M.PROFS) do
+        local r = DashRow(d.card, p, INNER - CARD_PAD * 2)
+        r:SetPoint("TOPLEFT", CARD_PAD, -CARD_PAD - (i - 1) * (DASH_ROW + ROW_GAP))
+        d.rows[i] = r
+    end
+    local cardH = CARD_PAD * 2 + #M.PROFS * (DASH_ROW + ROW_GAP) - ROW_GAP
+    d.card:SetHeight(cardH)
+
+    d.bottom = -y + cardH + 12
+    function holder:Update()
+        local s = M.S()
+        for _, b in ipairs(d.shows) do b:SetChosen(b.key == s.show) end
+        for _, b in ipairs(d.whens) do b:SetChosen(b.key == s.when) end
+        local sum = M.Summary(s.show, s.when)
+        local tabbed = {}
+        for _, p in ipairs(TabProfs()) do tabbed[p.key] = true end
+        for _, r in ipairs(d.rows) do
+            r.tabbed = tabbed[r.p.key]
+            r:Update(sum[r.p.key])
+        end
+        self.area:SetHeight(d.bottom)
+    end
+    holder.rows = d.rows
+    return holder
 end
 
 local function BuildDock()
     dock = St.Frame("Frame", WorldMapFrame)
     St.Etch(dock, STYLE.dock, 12)
     St.Grime(dock, 0.25, 12, 0, 150, 220) -- as on Forever Goal Tracker's window: strongest at the top
+    -- a profession page's glow: a large, soft radial light of its color, centred on the title's icon
+    -- and reaching about halfway down, over the fill and grime and under everything else. Cut to
+    -- the dock by its texture coordinates (it is the dock's own texture, so it cannot spill out).
+    dock.glow = dock:CreateTexture(nil, "BACKGROUND", nil, -4)
+    dock.glow:SetTexture(St.Media("radial"))
+    dock.glow:SetPoint("TOPLEFT", 3, -3)
+    dock.glow:SetPoint("BOTTOMRIGHT", -3, 3)
+    dock.glow:SetAlpha(0)
+    function dock:SetGlow(p)
+        local w, h = self:GetWidth() or 0, self:GetHeight() or 0
+        if p and w > 0 and h > 0 then
+            local R = h * 0.5 -- radius: about halfway down the dock
+            local cx, cy = PAD + 8 - 3, PAD + 10 - 3 -- the icon, from the glow's top-left
+            local iw, ih = w - 6, h - 6
+            self.glow:SetTexCoord(0.5 - cx / (2 * R), 0.5 + (iw - cx) / (2 * R),
+                0.5 - cy / (2 * R), 0.5 + (ih - cy) / (2 * R))
+            self.glow:SetVertexColor(p.color[1], p.color[2], p.color[3])
+        end
+        local target = p and 0.16 or 0
+        if self.glowKey ~= (p and p.key) then
+            self.glowKey = p and p.key
+            St.Animate("fn-page-glow", 0, 0, nil, function(v) self.glow:SetAlpha(v) end)
+        end
+        St.Animate("fn-page-glow", target, 0.4, "out", function(v) self.glow:SetAlpha(v) end)
+    end
     dock:SetWidth(DOCK_W)
     dock:EnableMouse(true)
     dock:Hide()
@@ -1007,53 +1472,27 @@ local function BuildDock()
     dock.body:SetAllPoints()
     local body = dock.body
 
-    -- profession row and switch
-    dock.profs = {}
-    for i, p in ipairs(PROFESSIONS) do
-        local b = CreateFrame("Button", nil, body)
-        b:SetSize(28, 28)
-        b:SetPoint("TOPLEFT", PAD + (i - 1) * 32, -PAD)
-        b.rim = b:CreateTexture(nil, "BORDER")
-        b.rim:SetAllPoints()
-        b.rim:SetTexture(St.SOLID)
-        b.fill = b:CreateTexture(nil, "ARTWORK", nil, 1)
-        b.fill:SetPoint("TOPLEFT", 1, -1)
-        b.fill:SetPoint("BOTTOMRIGHT", -1, 1)
-        b.fill:SetTexture(St.SOLID)
-        St.VGradient(b.fill, STYLE.row.top, STYLE.row.bottom)
-        if p.icon then
-            b.icon = b:CreateTexture(nil, "ARTWORK", nil, 2)
-            b.icon:SetSize(18, 18)
-            b.icon:SetPoint("CENTER")
-            b.icon:SetTexture(St.Icon(p.icon))
-        else
-            b.initial = St.Text(b, 12, C.INK2)
-            b.initial:SetPoint("CENTER", 0, 0)
-            b.initial:SetJustifyH("CENTER")
-            b.initial:SetText(p.label:sub(1, 1))
-        end
-        b.p = p
-        b:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-            GameTooltip:SetText(p.label, C.TITLE[1], C.TITLE[2], C.TITLE[3])
-            if not p.ready then GameTooltip:AddLine("Coming later", 1, 1, 1) end
-            GameTooltip:Show()
-        end)
-        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-        dock.profs[i] = b
-    end
+    -- the title (the profession, or Fieldnotes on the dashboard) and the switch; the place under it
     dock.switch = Switch(body)
-    dock.switch:SetPoint("TOPRIGHT", -PAD, -PAD - 5)
+    dock.switch:SetPoint("TOPRIGHT", -PAD, -PAD - 1)
+    dock.icon = ProfMark(body, 16)
+    dock.icon:SetPoint("TOPLEFT", PAD, -PAD - 1)
     dock.prof = St.Title(body, 15)
-    dock.prof:SetPoint("TOPLEFT", PAD, -48)
+    dock.prof:SetPoint("TOPLEFT", PAD, -PAD - 2)
     dock.place = St.Text(body, 10, C.SUBTEXT)
-    dock.place:SetPoint("TOPRIGHT", -PAD, -51)
-    dock.place:SetJustifyH("RIGHT")
-    dock.place:SetWidth(110)
+    dock.place:SetPoint("TOPLEFT", PAD, -PAD - 23)
+    dock.place:SetJustifyH("LEFT")
+    dock.place:SetWidth(INNER - 44)
     dock.place:SetWordWrap(false)
 
-    local y = -70
-    Label(body, "VIEW"):SetPoint("TOPLEFT", PAD, y)
+    -- a profession's page; the dashboard (Dashboard below) takes its place for "all"
+    dock.page = CreateFrame("Frame", nil, body)
+    dock.page:SetAllPoints()
+    local shared = body
+    body = dock.page
+    local y = FIRST_Y
+    dock.viewLabel = Label(body, "VIEW")
+    dock.viewLabel:SetPoint("TOPLEFT", PAD, y)
     -- "Every skin": one dot per skin over Heat or Spotlight (Points shows them already). A small
     -- switch, at three quarters of the main one's size, on the View label's line
     local DS = 0.75
@@ -1082,7 +1521,7 @@ local function BuildDock()
         GameTooltip:Hide()
     end)
     dock.dotsLabel = St.Text(body, 10, C.INK2)
-    dock.dotsLabel:SetText("Every skin")
+    dock.dotsLabel:SetText("Every skin") -- "Every vein" and so on, set in RenderDock
     dock.dotsLabel:SetPoint("RIGHT", dock.dots, "LEFT", -6, 0)
     local w3 = (INNER - 6) / 3
     dock.modes = {}
@@ -1092,12 +1531,13 @@ local function BuildDock()
             Refresh()
         end, m.tip)
         b.key = m.key
-        b:SetSize(w3, 22)
-        b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - 14)
+        b:SetSize(w3, CTRL_H)
+        b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - LABEL_GAP)
         dock.modes[i] = b
     end
-    y = y - 40
-    Label(body, "SHOW"):SetPoint("TOPLEFT", PAD, y)
+    y = y - STEP
+    dock.showLabel = Label(body, "SHOW")
+    dock.showLabel:SetPoint("TOPLEFT", PAD, y)
     dock.shows = {}
     for i, sh in ipairs(SHOWS) do
         local b = Choice(body, sh.label, function()
@@ -1105,33 +1545,22 @@ local function BuildDock()
             Refresh()
         end, sh.tip)
         b.key = sh.key
-        b:SetSize(w3, 22)
-        b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - 14)
+        b:SetSize(w3, CTRL_H)
+        b:SetPoint("TOPLEFT", PAD + (i - 1) * (w3 + 3), y - LABEL_GAP)
         dock.shows[i] = b
     end
-    y = y - 40
-    Label(body, "LEATHER"):SetPoint("TOPLEFT", PAD, y)
+    y = y - STEP
+    dock.matLabel = Label(body, "LEATHER")
+    dock.matLabel:SetPoint("TOPLEFT", PAD, y)
     dock.leather = LeatherButton(body)
     dock.leather:SetSize(INNER, 24)
-    dock.leather:SetPoint("TOPLEFT", PAD, y - 14)
-    y = y - 42
+    dock.leather:SetPoint("TOPLEFT", PAD, y - LABEL_GAP)
+    y = y - LABEL_GAP - 24 - GROUP_GAP
     dock.key = KeyCard(body, INNER, true)
     dock.key:SetPoint("TOPLEFT", PAD, y)
+    body = shared
+    dock.dash = Dashboard(body)
     dock.session = SessionCard(body, INNER)
-
-    -- the footer: Stats, Share and settings as three icons in a row, under a thin rule
-    dock.stats = FooterIcon(body, "stats-white", "Stats", "Your skinning stats", function() FN.ToggleStats() end)
-    dock.share = FooterIcon(body, "share-white", "Share", "Share your notes, or import someone else's",
-        function() FN.ShowShare() end)
-    dock.gear = GearButton(body, function() SetSheet(not dock.sheetOpen) end)
-    local slot = INNER / 3
-    for i, f in ipairs({ dock.stats, dock.share, dock.gear }) do
-        f:SetPoint("BOTTOM", body, "BOTTOMLEFT", PAD + slot * (i - 0.5), PAD + 2)
-    end
-    dock.rule = Rule(body)
-    dock.rule:SetHeight(1)
-    dock.rule:SetPoint("BOTTOMLEFT", PAD, FOOTER_H)
-    dock.rule:SetPoint("BOTTOMRIGHT", -PAD, FOOTER_H)
 
     -- the settings page: no panel of its own, it rises inside the dock (which clips it)
     dock:SetClipsChildren(true)
@@ -1141,10 +1570,12 @@ local function BuildDock()
     sheet:EnableMouse(true)
     sheet:Hide()
     local title = St.Title(sheet, 15)
-    title:SetPoint("TOPLEFT", PAD, -PAD - 2)
-    title:SetText("Map settings")
-    local close = St.IconButton(sheet, "close-white", 12, function() SetSheet(false) end)
-    close:SetPoint("TOPRIGHT", -PAD, -PAD - 2)
+    title:SetPoint("TOPLEFT", PAD + 16, -PAD - 2)
+    title:SetText("Settings")
+    -- back, not close: a chevron pointing the way the settings leave (left, back to the dock)
+    local close = St.IconButton(sheet, "chevron-white", 11, function() SetSheet(false) end)
+    close.icon:SetRotation(-math.pi / 2)
+    close:SetPoint("TOPLEFT", PAD - 2, -PAD - 3)
     close:SetScript("OnEnter", function(self)
         self.icon:SetVertexColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
@@ -1155,7 +1586,11 @@ local function BuildDock()
         self.icon:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
         GameTooltip:Hide()
     end)
-    sheet.body = SettingsBody(sheet, INNER)
+    sheet.area = St.Scroll(sheet)
+    sheet.area.scroll:SetPoint("TOPLEFT", sheet, "TOPLEFT", 0, -40)
+    sheet.area.scroll:SetPoint("BOTTOMRIGHT", sheet, "BOTTOMRIGHT", -6, PAD)
+    sheet.area.content:SetWidth(DOCK_W - 6)
+    sheet.body = SettingsBody(sheet.area.content, INNER, true)
 
     -- the tab that folds the dock away and back: "Fieldnotes" down its length, and a chevron
     -- pointing the way it will go (out when folded, back toward the map when open)
@@ -1189,9 +1624,21 @@ local function BuildDock()
     tab.chevron:SetVertexColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
     tab.chevron:SetSize(10, 10)
     tab.chevron:SetPoint("BOTTOM", 0, TAB_BOTTOM)
+    -- the Fieldnotes tab only opens and closes the dock; opening lands on Home (the dashboard)
     tab:SetScript("OnClick", function()
-        FN.db.settings.dockOpen = not DockOpen()
         if list then list:Hide() end
+        if DockOpen() then
+            if dock.sheetOpen then SetSheet(false) end
+            FN.db.settings.dockOpen = false
+        else
+            FN.db.settings.dockOpen = true
+            local s = M.S()
+            if s.prof ~= "all" then
+                s.prof = "all"
+                M.SetLit(nil)
+                Refresh()
+            end
+        end
         MapUI.Render(model)
     end)
     tab:SetScript("OnEnter", function(self)
@@ -1201,6 +1648,93 @@ local function BuildDock()
     end)
     tab:SetScript("OnLeave", function() GameTooltip:Hide() end)
     tab:Hide()
+
+    -- The rail's tabs (Home, a tab per profession, Stats, Settings) share one look: every icon
+    -- the same quiet silver at rest, on the plain tab; hovered, it brightens and the tab glides out
+    -- a little; active, it glides out further, its icon takes its color (a profession's, or gold),
+    -- and a soft light of that color rises from the edge it shares with the dock, washing out
+    -- across the tab. Nothing glows around the icon (it muddied the icon, Karl). One value per tab (out: 0 at
+    -- rest, 0.4 hovered, 1 active) drives all of it, eased, so every change glides.
+    local function RailTab(icon, color, name, tipText, onClick)
+        local t = St.Frame("Button", WorldMapFrame)
+        St.Etch(t, STYLE.dock, 8)
+        t:SetSize(TAB_W, PROF_TAB_H)
+        t.color = color
+        t.out, t.tuck = 0, 0
+        t.rest, t.active, t.hover = false, false, false -- (rest: an icon color other than silver)
+        t.id = "fn-rail-" .. icon
+        t.page = false -- the copy of the page shown while active (PageCopy, made on first use)
+        t.mark = CreateFrame("Frame", nil, t)
+        t.mark:SetSize(16, 16) -- one size for the whole rail: the icon set is balanced to it
+        t.icon = t.mark:CreateTexture(nil, "ARTWORK")
+        t.icon:SetAllPoints()
+        t.icon:SetTexture(St.Icon(icon))
+        t:SetScript("OnClick", onClick)
+        t:SetScript("OnEnter", function(self)
+            self.hover = true
+            Glide(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(name, color[1], color[2], color[3])
+            if tipText then GameTooltip:AddLine(tipText, 1, 1, 1, true) end
+            GameTooltip:Show()
+        end)
+        t:SetScript("OnLeave", function(self)
+            self.hover = false
+            Glide(self)
+            GameTooltip:Hide()
+        end)
+        t:Hide()
+        ApplyTab(t)
+        return t
+    end
+
+    -- Home: the dashboard, Codex's book
+    homeTab = RailTab("book-white", C.TITLE, "Home", "All your professions", function() GoTo("all") end)
+    homeTab.p = { key = "all" }
+    homeTab.rec = homeTab:CreateTexture(nil, "OVERLAY") -- (never shown: only professions record)
+    homeTab.rec:Hide()
+
+    -- one tab per profession
+    profTabs = {}
+    for i, p in ipairs(M.PROFS) do
+        local t = RailTab(PROF_ICONS[p.key], p.color, p.label, nil, function() GoTo(p.key) end)
+        t.p = p
+        -- a green dot while this session records it
+        t.rec = t.mark:CreateTexture(nil, "OVERLAY", nil, 2)
+        t.rec:SetTexture(CIRCLE)
+        t.rec:SetSize(5, 5)
+        t.rec:SetVertexColor(GREEN[1], GREEN[2], GREEN[3])
+        t.rec:SetPoint("TOPRIGHT", t.mark, "TOPRIGHT", 4, 4)
+        profTabs[i] = t
+    end
+
+    -- Stats and Settings, at the dock's bottom. Settings opens the settings page inside the dock
+    -- (at rest its icon turns a darker gold while anything differs from the defaults); Stats opens
+    -- the stats window.
+    dock.stats = RailTab("stats-white", C.TITLE, "Stats", "Your gathering stats", function()
+        FN.ToggleStats()
+        MapUI.Render(model)
+    end)
+    dock.stats.p = false
+    function dock.stats:Tint() ApplyTab(self) end
+    dock.gear = RailTab("gear-white", C.TITLE, "Settings", "Map colors, strength and spread, sessions, and sharing",
+        function()
+            if not DockOpen() then
+                FN.db.settings.dockOpen = true
+                MapUI.Render(model)
+            end
+            SetSheet(not dock.sheetOpen)
+            MapUI.Render(model)
+        end)
+    dock.gear.p = false
+    function dock.gear:Tint()
+        local s = M.S()
+        local changed = s.colors ~= M.DEFAULTS.colors or math.abs(s.strength - M.DEFAULTS.strength) > 0.01
+            or math.abs(s.spread - M.DEFAULTS.spread) > 0.01
+        self.rest = changed and C.GOLD2 or false
+        ApplyTab(self)
+    end
+    utilTabs[1], utilTabs[2] = dock.stats, dock.gear
 end
 
 -- which side of the small map the dock goes on, and the gap between the map's art and the
@@ -1234,26 +1768,45 @@ local function LayoutDock()
     local container = WorldMapFrame.ScrollContainer or WorldMapFrame
     local side, gap = DockSide()
     local open = DockOpen()
-    -- from the top of the map art down to the window's bottom edge (its footer included)
+    -- the window's full height, its title bar to its footer, tucked inside its gold edge at both
+    -- ends the same, so the dock reads as part of the map window (it started at the map art)
     local border = WorldMapFrame.BorderFrame
     if not (type(border) == "table" and border.GetBottom and border:GetBottom()) then border = WorldMapFrame end
-    local top, bottom = container:GetTop(), border:GetBottom()
-    if top and bottom and top > bottom then
-        dock:SetHeight(top - bottom - (EDGE_TUCK - 2))
+    local inset = EDGE_TUCK - 2
+    local top, bottom, artTop = border:GetTop(), border:GetBottom(), container:GetTop()
+    local dy = 0
+    if top and bottom and artTop and top > bottom then
+        dock:SetHeight(top - bottom - inset * 2)
+        dy = (top - inset) - artTop
     else
         dock:SetHeight(container:GetHeight())
     end
     local edge = side == "RIGHT" and "TOPLEFT" or "TOPRIGHT"
     local mapEdge = side == "RIGHT" and "TOPRIGHT" or "TOPLEFT"
     local dir = side == "RIGHT" and 1 or -1
-    -- slide in and out sideways from the map's edge
+
+    -- the rail: Fieldnotes, then the profession tabs, a gap, Stats and Settings. Only the
+    -- Fieldnotes tab shows while the dock is folded; the rest arrive and leave with the dock.
+    local s = M.S()
+    local shown = {}
+    for _, p in ipairs(TabProfs()) do shown[p.key] = true end
+    wipe(shownTabs)
+    for _, t in ipairs(profTabs) do
+        if shown[t.p.key] then shownTabs[#shownTabs + 1] = t else t:Hide() end
+    end
+    local rail = { homeTab }
+    MapUI.rail = rail
+    for _, t in ipairs(shownTabs) do rail[#rail + 1] = t end
+    for _, t in ipairs(utilTabs) do rail[#rail + 1] = t end
+
+    -- slide in and out sideways from the map's edge, the rail with it
     -- (only a fold or unfold animates; any other redraw just places it)
     local moving = dock.wasOpen ~= nil and dock.wasOpen ~= open
     dock.wasOpen = open
     St.Animate("fn-dock", open and 1 or 0, moving and 0.28 or 0, open and "out" or "in", function(v)
         dock:SetAlpha(v)
         dock:ClearAllPoints()
-        dock:SetPoint(edge, container, mapEdge, dir * (-gap + 24 * (v - 1)), 0)
+        dock:SetPoint(edge, container, mapEdge, dir * (-gap + 24 * (v - 1)), dy)
         -- open, the tab grows by what hides under the dock, and its word and chevron stay centred
         -- on the part that shows
         local tuck = TAB_TUCK * v
@@ -1268,17 +1821,74 @@ local function LayoutDock()
         tab.chevron:SetPoint("BOTTOM", tab, "BOTTOM", shift, TAB_BOTTOM)
         tab:ClearAllPoints()
         if side == "RIGHT" then
-            tab:SetPoint("TOPLEFT", container, "TOPRIGHT", -gap + (DOCK_W - TAB_TUCK) * v, -64)
+            tab:SetPoint("TOPLEFT", container, "TOPRIGHT", -gap + (DOCK_W - TAB_TUCK) * v, dy - TAB_DROP)
         else
-            tab:SetPoint("TOPRIGHT", container, "TOPLEFT", gap - (DOCK_W - TAB_TUCK) * v, -64)
+            tab:SetPoint("TOPRIGHT", container, "TOPLEFT", gap - (DOCK_W - TAB_TUCK) * v, dy - TAB_DROP)
+        end
+        -- the profession tabs hang under it; Stats and Settings sit at the dock's bottom (but never
+        -- over the profession tabs on a short dock). All as wide, fading with the dock.
+        local below = 0
+        local nUtil = #utilTabs
+        -- (offsets from the Fieldnotes tab's bottom edge, which sits TAB_DROP under the dock's top)
+        local profBottom = -(#shownTabs + 1) * (PROF_TAB_H + PROF_TAB_GAP)
+        local utilTop = -(dock:GetHeight() - TAB_DROP * 2) + (tab:GetHeight() or 0)
+            + nUtil * PROF_TAB_H + (nUtil - 1) * PROF_TAB_GAP
+        utilTop = math.min(utilTop, profBottom - UTIL_GAP)
+        for i, t in ipairs(rail) do
+            if t == utilTabs[1] then below = utilTop + PROF_TAB_GAP end
+            below = below - PROF_TAB_GAP
+            t.tuck = tuck
+            ApplyTab(t)
+            t:SetAlpha(v)
+            t:ClearAllPoints()
+            if side == "RIGHT" then
+                t:SetPoint("TOPLEFT", tab, "BOTTOMLEFT", 0, below)
+            else
+                t:SetPoint("TOPRIGHT", tab, "BOTTOMRIGHT", 0, below)
+            end
+            below = below - PROF_TAB_H
+            t.mark:ClearAllPoints()
+            t.mark:SetPoint("CENTER", t, "CENTER", shift, 0)
         end
     end, function()
-        if not DockOpen() then dock:Hide() end
+        if not DockOpen() then
+            dock:Hide()
+            -- back to rest, so the active tab glides out again on the next open
+            for _, t in ipairs(rail) do
+                t:Hide()
+                t.active, t.hover = false, false
+                Glide(t, true)
+            end
+        end
     end)
     if open then dock:Show() end
     -- the tab sits just under the dock, so its inner edge hides beneath the dock's border
     tab:SetFrameLevel(math.max(1, (dock:GetFrameLevel() or 2) - 1))
     tab:Show()
+    for _, t in ipairs(rail) do
+        if open or moving then t:Show() end
+        t:SetFrameLevel(tab:GetFrameLevel())
+        -- the wash is strongest at the dock and fades outward
+        if t.side ~= side then
+            t.side = side
+            ApplyTab(t)
+        end
+        local active
+        if t.p then
+            active = not dock.sheetOpen and s.prof == t.p.key
+            t.rec:SetShown(t.p.key ~= "all" and FN.SessionHas and FN.SessionHas(t.p.key) or false)
+        elseif t == dock.gear then
+            active = dock.sheetOpen == true
+        else
+            active = FN.StatsShown and FN.StatsShown() or false
+        end
+        active = open and active
+        if t.active ~= active then
+            t.active = active
+            Glide(t)
+        end
+    end
+    dock.gear:Tint()
     -- the chevron points out when folded, back toward the map when open
     local outward = side == "RIGHT" and math.pi / 2 or -math.pi / 2
     tab.chevron:SetRotation(open and -outward or outward)
@@ -1286,18 +1896,33 @@ end
 
 local function RenderDock(m)
     local s = M.S()
-    for _, b in ipairs(dock.profs) do
-        local active = b.p.key == "skinning"
-        local rim = active and C.ACCENT or { 0.29, 0.25, 0.20 }
-        b.rim:SetVertexColor(rim[1], rim[2], rim[3], 1)
-        local ink = active and C.TITLE or C.INK2
-        local mark = b.p.icon and b.icon or b.initial
-        if b.p.icon then mark:SetVertexColor(ink[1], ink[2], ink[3]) else mark:SetTextColor(ink[1], ink[2], ink[3]) end
-        mark:SetAlpha(b.p.ready and 1 or 0.45)
-    end
     dock.switch.toggle:SetOn(s.on)
-    dock.prof:SetText("Skinning")
-    dock.place:SetText(m.place or "")
+    local dash = s.prof == "all"
+    local p = M.PROF[s.prof]
+    dock.icon:Set(p)
+    dock.prof:ClearAllPoints()
+    dock.prof:SetPoint("TOPLEFT", PAD + (p and 22 or 0), -PAD - 2)
+    dock.prof:SetText(dash and "Fieldnotes" or p.label)
+    dock.place:SetText(dash and ("All professions" .. (m.place and ("  ·  " .. m.place) or "")) or (m.place or ""))
+    dock.page:SetShown(not dash)
+    dock.dash:SetShown(dash)
+    dock:SetGlow((not dash and not dock.sheetOpen) and p or nil)
+    if dash then
+        dock.dash:Update()
+        dock.session:ClearAllPoints()
+        dock.session:SetPoint("BOTTOMLEFT", dock.body, "BOTTOMLEFT", PAD, FOOTER_H + 8)
+        dock.session:Update()
+        dock.dash:SetAlpha(s.on and 1 or 0.45)
+        dock.gear:Tint()
+        if dock.sheetOpen then SheetLayout() end
+        return
+    end
+    dock.matLabel:SetText(string.upper(p.material))
+    -- the section labels take the profession's hue at the grey's own lightness, so they sit exactly
+    -- where the grey did in the hierarchy, just warmer or cooler with the page
+    local lc = LabelTint(p.color)
+    for _, l in ipairs({ dock.viewLabel, dock.showLabel, dock.matLabel }) do l:SetTextColor(lc[1], lc[2], lc[3]) end
+    dock.dotsLabel:SetText("Every " .. p.unit)
     for _, b in ipairs(dock.modes) do b:SetChosen(b.key == s.mode) end
     for _, b in ipairs(dock.shows) do b:SetChosen(b.key == s.show) end
     dock.leather:Update()
@@ -1324,7 +1949,7 @@ local function RenderDock(m)
     dock.dots:SetAlpha(a * (points and 0.4 or 1))
     dock.dotsLabel:SetAlpha(a * (points and 0.4 or 1))
     dock.gear:Tint()
-    if dock.sheetOpen then sheet.body:Layout(PAD, -44) end
+    if dock.sheetOpen then SheetLayout() end
 end
 
 -- ------------------------------------------------------------
@@ -1387,7 +2012,7 @@ local function BuildToolbar()
     bar.session = Choice(bar, "Start", function()
         if FN.SessionRunning() then FN.SessionTogglePause() else FN.SessionStart() end
         MapUI.Render(model)
-    end, "Start, pause or resume your skinning session")
+    end, "Start, pause or resume your session")
     bar.session.icon = bar.session:CreateTexture(nil, "OVERLAY")
     bar.session.icon:SetSize(9, 9)
     bar.session.icon:SetPoint("LEFT", 9, 0)
@@ -1473,7 +2098,7 @@ local function LayoutToolbar(m)
     Divider(4)
     local running, paused = FN.SessionRunning(), FN.SessionPaused()
     if running then
-        bar.session.text:SetText(Clock(FN.SessionSeconds()) .. "  ·  " .. Plural(FN.session.count, "skin"))
+        bar.session.text:SetText(Clock(FN.SessionSeconds()) .. "  ·  " .. FN.SessionLabel())
         bar.session.icon:SetTexture(St.Icon(paused and "play-white" or "pause-white"))
     else
         bar.session.text:SetText("Start session")
@@ -1586,6 +2211,18 @@ function MapUI.Debug(Size)
             type(room) == "number" and string.format("%.1f", room) or "none", type(h) == "number" and h or 0,
             type(shown) == "number" and shown or 0, all))
     end
+    -- the active tab: its copied page, the light over it, and their layers
+    for _, t in ipairs({ homeTab, dock and dock.stats, dock and dock.gear, unpack(profTabs) }) do
+        local page = t and rawget(t, "page")
+        if t and rawget(t, "active") and page then
+            local light = page.light
+            local _, _, _, la = light:GetVertexColor()
+            FN.Print(string.format("  active tab: out %.2f, page %s level %d, light frame level %d, light %s w %.1f alpha %.2f",
+                rawget(t, "out") or 0, page:IsShown() and "shown" or "hidden", page:GetFrameLevel() or 0,
+                t.mark:GetFrameLevel() or 0, light:IsShown() and "shown" or "hidden", light:GetWidth() or 0,
+                la or 0))
+        end
+    end
 end
 
 function MapUI.Init()
@@ -1595,6 +2232,14 @@ function MapUI.Init()
     St.Animate("fn-overlay", M.S().on and 1 or 0, 0, nil, M.SetOverlayAlpha) -- where the fade starts from
     BuildList()
     BuildDock()
+    MapUI.tab, MapUI.tabs, MapUI.home = tab, profTabs, homeTab -- for /fn debug and the checks
+    MapUI.dock = dock
+    -- for /fn shots: go to a page, open or close the settings
+    function MapUI.GoTo(key) GoTo(key) end
+    function MapUI.OpenSettings(open)
+        if (dock.sheetOpen == true) ~= (open == true) then SetSheet(open == true) end
+        MapUI.Render(model)
+    end
     BuildToolbar()
     WorldMapFrame:HookScript("OnHide", function()
         if list then list:Hide() end

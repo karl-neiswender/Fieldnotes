@@ -660,6 +660,8 @@ Show = function(tab)
     end
 end
 
+function FN.ShareFrame() return frame end
+
 function FN.ShowShare(focusImport)
     if not frame then Build() end
     ui.tab = focusImport and "import" or "share"

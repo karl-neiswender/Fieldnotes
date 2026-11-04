@@ -1,5 +1,27 @@
 # Fieldnotes changelog
 
+## 0.7.0
+
+- **Mining, Herbalism, Fishing and Cloth.** Fieldnotes now records every vein, herb and catch, and
+  every humanoid you loot for cloth, with where you stood and what you got. Cloth counts the loots that
+  dropped nothing too, so it can tell you how often cloth drops.
+- **A tab for each profession** beside the map: the ones your character knows, plus Cloth. Each page
+  has the heat map, Points, Spotlight, its own material list and hot spots.
+- **Home, a dashboard for everything you gather:** a row per profession with how many, where most and
+  your skill. Every gather shows on the map as a dot in its profession's color; hover a row to light its
+  dots.
+- **One session for all of it.** The tracker keeps one clock and adds a row for each profession the
+  first time you gather it: count, per hour, and skill gained, with a warning when a skill reaches its
+  rank's cap (time to visit a trainer). Folded, it is one line of icons and counts.
+- **Start sessions by hand if you like:** Settings > Session turns off starting with your first gather.
+- **Stats and Settings are tabs now,** at the bottom of the rail. Sharing moved into Settings.
+- **A new look:** painted icons for every profession and control, a soft glow in each profession's
+  color, tabs that glide out when chosen, a dock that runs the full height of the map window, and
+  scrolling where a page runs long.
+- Demo mode (`/fn demo`) now includes ore, herbs, fish and cloth.
+- The Stats window and Share still cover skinning only. More professions are coming to both.
+- Tested on Classic Era. Warcraft Forever is supported but unconfirmed until it launches.
+
 ## 0.6.0
 
 - **The map stays clear.** On the small map, Fieldnotes moves into a dock beside the map (on the

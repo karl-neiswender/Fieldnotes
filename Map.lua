@@ -75,8 +75,27 @@ local OTHER_COLOR = { 0.80, 0.78, 0.74 }
 local HIDE_COLOR = { 0.76, 0.62, 0.40 }
 M.PALETTE, M.RUINED_COLOR, M.OTHER_COLOR = PALETTE, RUINED_COLOR, OTHER_COLOR -- the stats window's leather colors
 
+-- The professions, in tab order, with their identity colors (professions v4 mockup, 2026-11-04):
+-- the tab, icon, dashboard row, tracker row and the dashboard's dots. Heat keeps its own ramps.
+--   unit/units: what one record is; material: the list's word; verb: "Nothing <verb> here yet."
+M.PROFS = {
+    { key = "skinning", label = "Skinning", color = { 0.91, 0.50, 0.23 }, unit = "skin", units = "skins",
+        material = "leather", verb = "skinned" },
+    { key = "mining", label = "Mining", color = { 0.95, 0.83, 0.23 }, unit = "vein", units = "veins",
+        material = "ore", verb = "mined" },
+    { key = "herbalism", label = "Herbalism", color = { 0.44, 0.75, 0.31 }, unit = "herb", units = "herbs",
+        material = "herbs", verb = "gathered" },
+    { key = "fishing", label = "Fishing", color = { 0.31, 0.64, 0.88 }, unit = "catch", units = "catches",
+        material = "catch", verb = "fished" },
+    { key = "cloth", label = "Cloth", color = { 0.65, 0.49, 0.86 }, unit = "drop", units = "drops",
+        material = "cloth", verb = "looted for cloth" },
+}
+M.PROF = {}
+for _, p in ipairs(M.PROFS) do M.PROF[p.key] = p end
+
+-- prof: a profession's key, or "all" for the dashboard
 local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "thermal", when = 0, strength = 1,
-    spread = 1, dots = false }
+    spread = 1, dots = false, prof = "skinning" }
 M.DEFAULTS = DEFAULTS
 
 -- the map's settings. leather: 0 (all), an item ID, "hides" or "ruined"
@@ -96,6 +115,7 @@ function M.S()
     -- spread: a multiplier on the size the data suggests (an old "balanced" word reads as 1)
     if type(s.spread) ~= "number" then s.spread = DEFAULTS.spread end
     s.spread = math.max(0.5, math.min(2.5, s.spread))
+    if s.prof ~= "all" and not M.PROF[s.prof] then s.prof = DEFAULTS.prof end
     return s
 end
 local S = M.S
@@ -139,6 +159,15 @@ end
 local function CreatureName(npc)
     local c = FN.View().creatures[npc]
     return (c and c.name) or "Unknown creature"
+end
+
+-- a record's source by name: the creature (skinning, cloth) or the node (mining, herbalism)
+local function SourceName(prof, id)
+    if prof == "mining" or prof == "herbalism" then
+        local n = FN.View().nodes and FN.View().nodes[id]
+        return (n and n.name) or "Unknown node"
+    end
+    return CreatureName(id)
 end
 
 local function Top(counts, n)
@@ -186,43 +215,88 @@ end
 -- ------------------------------------------------------------
 -- Data for the map on screen
 -- ------------------------------------------------------------
-local function Records(mapID, show, days)
+-- one profession's records on a map ("all": every profession's, each tagged r.prof). Cloth
+-- keeps only the loots that dropped cloth: the map shows where it drops.
+local function Records(mapID, show, days, prof)
     local since = (days and days > 0) and (time() - days * 86400) or nil
     local view = FN.View()
-    -- Community: demo mode's sample layer and every imported share (Share.lua)
-    local lists
-    if show == "community" then
-        lists = FN.CommunityLists("skinning", mapID)
-    else
-        lists = { view.events.skinning and view.events.skinning[mapID] or {} }
-    end
+    prof = prof or S().prof
     local me, out = FN.ViewChar(), {}
-    for _, list in ipairs(lists) do
-        for _, str in ipairs(list) do
-            local r = FN.Decode(str)
-            if r and r.x and r.y and (show ~= "me" or r.char == me) and (not since or r.time >= since) then
-                out[#out + 1] = r
+    for _, p in ipairs(M.PROFS) do
+        if prof == "all" or prof == p.key then
+            -- Community: demo mode's sample layer and every imported share (Share.lua: skinning)
+            local lists
+            if show == "community" then
+                lists = p.key == "skinning" and FN.CommunityLists("skinning", mapID) or {}
+            else
+                lists = { view.events[p.key] and view.events[p.key][mapID] or {} }
+            end
+            for _, list in ipairs(lists) do
+                for _, str in ipairs(list) do
+                    local r = FN.Decode(str)
+                    if r and r.x and r.y and (show ~= "me" or r.char == me) and (not since or r.time >= since)
+                        and (p.key ~= "cloth" or next(r.items)) then
+                        r.prof = p.key
+                        out[#out + 1] = r
+                    end
+                end
             end
         end
     end
     return out
 end
+M.Records = Records
+
+-- Per profession, everywhere (for the dashboard): how many, the zone with the most, and for
+-- Cloth every humanoid loot (loots), so it can say how often cloth drops. Kept until the data
+-- or the choice changes.
+local summary, summaryKey
+FN.OnData(function() summary = nil end)
+function M.Summary(show, days)
+    local key = tostring(show) .. ":" .. tostring(days) .. ":" .. tostring(FN.View() ~= FN.db)
+    if summary and summaryKey == key then return summary end
+    local since = (days and days > 0) and (time() - days * 86400) or nil
+    local view, me = FN.View(), FN.ViewChar()
+    summary, summaryKey = {}, key
+    for _, p in ipairs(M.PROFS) do
+        local n, loots, best, bestN = 0, 0, nil, 0
+        if show ~= "community" or p.key == "skinning" then
+            for mapID, list in pairs(view.events[p.key] or {}) do
+                local here = 0
+                for _, str in ipairs(list) do
+                    local r = FN.Decode(str)
+                    if r and (show ~= "me" or r.char == me) and (not since or r.time >= since) then
+                        loots = loots + 1
+                        if p.key ~= "cloth" or next(r.items) then here = here + 1 end
+                    end
+                end
+                n = n + here
+                if here > bestN then best, bestN = mapID, here end
+            end
+        end
+        local info = best and best ~= 0 and C_Map.GetMapInfo(best)
+        summary[p.key] = { n = n, loots = loots, bestZone = info and info.name }
+    end
+    return summary
+end
 
 -- the leather list for the controls: All, each leather most first, then hides and scraps
-local function LeatherList(all)
+local function LeatherList(all, prof)
+    local skinning = (prof or "skinning") == "skinning"
     local counts, hides, ruined = {}, 0, 0
     for _, r in ipairs(all) do
         for id, n in pairs(r.items) do
-            if id == RUINED then
+            if skinning and id == RUINED then
                 ruined = ruined + n
-            elseif HIDES[id] then
+            elseif skinning and HIDES[id] then
                 hides = hides + n
             else
                 counts[id] = (counts[id] or 0) + n
             end
         end
     end
-    local list, colorOf, rank = { { key = 0, label = "All leather" } }, { [RUINED] = RUINED_COLOR }, {}
+    local material = M.PROF[prof or "skinning"] and M.PROF[prof or "skinning"].material or "leather"
+    local list, colorOf, rank = { { key = 0, label = "All " .. material } }, { [RUINED] = RUINED_COLOR }, {}
     for i, id in ipairs(Top(counts, 12)) do
         local color = PALETTE[i] or OTHER_COLOR
         colorOf[id], rank[id] = color, i
@@ -544,13 +618,13 @@ local function DrawContinent(s, mapID, zoneType, model)
     local zones = ZonesUnder(mapID, zoneType)
     local all, perZone = {}, {}
     for _, z in ipairs(zones) do
-        local recs = Records(z.id, s.show, s.when)
+        local recs = Records(z.id, s.show, s.when, s.prof)
         if #recs > 0 then
             perZone[#perZone + 1] = { zone = z, recs = recs }
             for _, r in ipairs(recs) do all[#all + 1] = r end
         end
     end
-    local list, colorOf = LeatherList(all)
+    local list, colorOf = LeatherList(all, s.prof)
     model.leathers, model.colorOf = list, colorOf
     local known = false
     for _, l in ipairs(list) do
@@ -602,11 +676,14 @@ local function DrawContinent(s, mapID, zoneType, model)
             b.label:SetShadowColor(0, 0, 0, 1)
         end
         local names, items = {}, {}
-        for _, npc in ipairs(Top(row.who, 2)) do names[#names + 1] = CreatureName(npc) end
+        if s.prof ~= "all" then
+            for _, npc in ipairs(Top(row.who, 2)) do names[#names + 1] = SourceName(s.prof, npc) end
+        end
         for _, id in ipairs(Top(row.loot, 2)) do items[#items + 1] = ItemName(id) end
+        local unitP = M.PROF[s.prof] or { unit = "gather", units = "gathers" }
         b.zone = {
             id = row.zone.id, name = row.zone.name,
-            summary = row.value .. (row.value == 1 and " skin" or " skins"),
+            summary = row.value .. " " .. (row.value == 1 and unitP.unit or unitP.units),
             who = table.concat(names, ", "), loot = table.concat(items, "  ·  "),
         }
         b:Show()
@@ -616,9 +693,11 @@ local function DrawContinent(s, mapID, zoneType, model)
     model.skins = total
     model.zones = #rows
     model.bestZone = rows[1] and rows[1].zone.name
-    model.scale = "Badge size and color: skins per zone. Click one to open it."
+    model.scale = "Badge size and color: " .. ((M.PROF[s.prof] and M.PROF[s.prof].units) or "gathers")
+        .. " per zone. Click one to open it."
     if #rows == 0 then
-        model.message = s.show == "community" and "Nothing shared on this map yet." or "Nothing skinned on this map yet."
+        model.message = s.show == "community" and "Nothing shared on this map yet."
+            or ("Nothing " .. ((M.PROF[s.prof] and M.PROF[s.prof].verb) or "gathered") .. " on this map yet.")
     end
     -- on the full-screen map the key goes in whichever bottom corner covers fewer badges
     local left, right = 0, 0
@@ -680,6 +759,68 @@ function M.SetOverlayAlpha(a)
     if overlay then overlay:SetAlpha(a) end
 end
 
+-- The dashboard's map: every gather as a dot in its profession's color, no heat (adding the
+-- professions' heat together means nothing). Hovering a dashboard row lights that profession:
+-- the others fade back, its dots grow, glow and sit on top.
+local function DrawDashboard(s, mapID, model)
+    model.kind = "dash"
+    local recs = mapID and Records(mapID, s.show, s.when, "all") or {}
+    model.skins = #recs
+    if #recs == 0 then
+        model.message = s.show == "community" and "Nothing shared for this zone yet." or "Nothing gathered here yet."
+        return
+    end
+    local w, h = overlay:GetSize()
+    if not w or w <= 0 or not h or h <= 0 then return end
+    local lit = M.lit
+    if lit and not M.PROF[lit] then lit = nil end
+    -- the lit profession last, so its dots sit on top (a stable split: others, then the lit one)
+    if lit then
+        local others, mine = {}, {}
+        for _, r in ipairs(recs) do
+            if r.prof == lit then mine[#mine + 1] = r else others[#others + 1] = r end
+        end
+        for _, r in ipairs(mine) do others[#others + 1] = r end
+        recs = others
+    end
+    local step = math.max(1, math.ceil(#recs / MAX_DOTS))
+    local dot = #recs > 800 and 4 or 5.5
+    local n, g = 0, 0
+    for i = 1, #recs, step do
+        local r = recs[i]
+        local c = M.PROF[r.prof].color
+        local on, dim = r.prof == lit, lit and r.prof ~= lit
+        local px, py = r.x / 1000 * w, -r.y / 1000 * h
+        local size = on and dot * 1.35 or dot
+        if on then
+            g = g + 1
+            local glow = Pooled(blobs, g, "ARTWORK", 0, BLOB)
+            glow:ClearAllPoints()
+            glow:SetPoint("CENTER", overlay, "TOPLEFT", px, py)
+            glow:SetSize(size * 4, size * 4)
+            glow:SetVertexColor(c[1], c[2], c[3], 0.35)
+        end
+        n = n + 1
+        local ring = Pooled(rings, n, "ARTWORK", 1, CIRCLE)
+        ring:ClearAllPoints()
+        ring:SetPoint("CENTER", overlay, "TOPLEFT", px, py)
+        ring:SetSize(size + 3, size + 3)
+        ring:SetVertexColor(0.08, 0.055, 0.03, dim and 0.15 or 0.9)
+        local d = Pooled(dots, n, "ARTWORK", 2, CIRCLE)
+        d:ClearAllPoints()
+        d:SetPoint("CENTER", overlay, "TOPLEFT", px, py)
+        d:SetSize(size, size)
+        d:SetVertexColor(c[1], c[2], c[3], dim and 0.18 or 1)
+    end
+end
+
+-- light one profession's dots on the dashboard map (nil: none)
+function M.SetLit(prof)
+    if M.lit == prof then return end
+    M.lit = prof
+    if S().prof == "all" then M.Refresh() end
+end
+
 local function Draw()
     local s = S()
     Layer()
@@ -696,6 +837,7 @@ local function Draw()
     local model = {
         on = s.on, mode = s.mode, show = s.show, leather = s.leather, colors = s.colors, when = s.when,
         inDemo = FN.View() ~= FN.db, kind = "zone", keyCorner = "BOTTOMLEFT", leathers = {}, colorOf = {},
+        prof = s.prof, p = M.PROF[s.prof] or { unit = "gather", units = "gathers", material = "gathers", verb = "gathered" },
         place = mapID and C_Map.GetMapInfo(mapID) and C_Map.GetMapInfo(mapID).name,
     }
     M.model = model
@@ -715,8 +857,14 @@ local function Draw()
         return
     end
 
-    local all = mapID and Records(mapID, s.show, s.when) or {}
-    local list, colorOf, rank = LeatherList(all)
+    if s.prof == "all" then
+        DrawDashboard(s, mapID, model)
+        if FN.MapUI then FN.MapUI.Render(model) end
+        return
+    end
+
+    local all = mapID and Records(mapID, s.show, s.when, s.prof) or {}
+    local list, colorOf, rank = LeatherList(all, s.prof)
     model.leathers, model.colorOf = list, colorOf
     local known = false
     for _, l in ipairs(list) do
@@ -735,16 +883,17 @@ local function Draw()
     model.skins = #recs
 
     if #recs == 0 then
+        local verb = model.p.verb
         if #all > 0 then
-            model.message = "Nothing here matches that leather."
+            model.message = "Nothing here matches that " .. model.p.material .. "."
         elseif s.when > 0 then
-            model.message = string.format("Nothing skinned here in the last %d days.", s.when)
+            model.message = string.format("Nothing %s here in the last %d days.", verb, s.when)
         elseif s.show == "community" then
             model.message = "Nothing shared for this zone yet."
         elseif s.show == "me" then
-            model.message = "This character hasn't skinned here yet."
+            model.message = "This character hasn't " .. verb .. " here yet."
         else
-            model.message = "Nothing skinned here yet."
+            model.message = "Nothing " .. verb .. " here yet."
         end
         if FN.MapUI then FN.MapUI.Render(model) end
         return
@@ -855,7 +1004,7 @@ local function Draw()
         end
         if near > 0 then
             local names, items = {}, {}
-            for _, npc in ipairs(Top(who, 2)) do names[#names + 1] = CreatureName(npc) end
+            for _, npc in ipairs(Top(who, 2)) do names[#names + 1] = SourceName(s.prof, npc) end
             for _, id in ipairs(Top(loot, 2)) do items[#items + 1] = ItemName(id) end
             local p = Pin(i)
             -- the map art is drawn at its own (smaller) scale; size the pin and its number for the
@@ -892,7 +1041,7 @@ local function Draw()
         if m ~= RUINED then loot[m] = (loot[m] or 0) + 1 end
     end
     local topWho, topLoot = Top(who, 1)[1], Top(loot, 1)[1]
-    model.topWho = topWho and CreatureName(topWho)
+    model.topWho = topWho and SourceName(s.prof, topWho)
     model.topLoot = topLoot and ItemName(topLoot)
     if s.mode == "heat" then
         model.peak = rawMax -- the key numbers its ramp from 1 to this

@@ -441,3 +441,101 @@ end
 
 -- where an animation last left its value (nil before the first)
 function St.AnimValue(id) return values[id] end
+
+-- ------------------------------------------------------------
+-- A mouse-wheel scroll area, after Forever Goal Tracker's: content slides under a soft bottom
+-- shade while there is more below (the shade eases away at the end), and a slim bronze thumb
+-- shows where you are. The shade is stacked flat strips, one per pixel, eased, as on FGT (real
+-- gradient calls have come and gone between clients). Anchor o.scroll, put things in o.content
+-- (its top-left is the scroll area's), then o:SetHeight(contentHeight) after each layout.
+--   color: the panel's color where the shade sits, so rows seem to slide under it
+-- ------------------------------------------------------------
+function St.Scroll(parent, color)
+    local o = {}
+    local scroll = CreateFrame("ScrollFrame", nil, parent)
+    scroll:EnableMouseWheel(true)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(1, 1)
+    scroll:SetScrollChild(content)
+    o.scroll, o.content = scroll, content
+
+    color = color or { 0.03, 0.028, 0.025 }
+    local SHADE = 28
+    local fade = CreateFrame("Frame", nil, parent)
+    fade:SetHeight(SHADE)
+    fade:SetFrameLevel(parent:GetFrameLevel() + 20)
+    fade:SetPoint("BOTTOMLEFT", scroll, "BOTTOMLEFT", 0, 0)
+    fade:SetPoint("BOTTOMRIGHT", scroll, "BOTTOMRIGHT", 0, 0)
+    for i = 1, SHADE do
+        local a = (1 - (i - 0.5) / SHADE) ^ 1.6
+        local t = fade:CreateTexture(nil, "OVERLAY")
+        t:SetColorTexture(color[1], color[2], color[3], a)
+        t:SetPoint("BOTTOMLEFT", fade, "BOTTOMLEFT", 0, i - 1)
+        t:SetPoint("BOTTOMRIGHT", fade, "BOTTOMRIGHT", 0, i - 1)
+        t:SetHeight(1)
+    end
+    fade:Hide()
+    o.fade = fade
+
+    local thumb = parent:CreateTexture(nil, "OVERLAY")
+    thumb:SetColorTexture(STYLE.row.edge[1], STYLE.row.edge[2], STYLE.row.edge[3], 0.95)
+    thumb:SetWidth(2)
+    thumb:Hide()
+
+    local function Max() return math.max(0, (content:GetHeight() or 0) - (scroll:GetHeight() or 0)) end
+
+    local fadeTo -- the shade eases in and out over 0.3 s as you reach the end or leave it
+    local function Shade(on)
+        local target = on and 1 or 0
+        if fadeTo == target then return end
+        fadeTo = target
+        if on and not fade:IsShown() then
+            fade:SetAlpha(0)
+            fade:Show()
+        end
+        fade:SetScript("OnUpdate", function(self, dt)
+            local a = self:GetAlpha()
+            a = target > a and math.min(target, a + dt / 0.3) or math.max(target, a - dt / 0.3)
+            self:SetAlpha(a)
+            if a == target then
+                self:SetScript("OnUpdate", nil)
+                if target == 0 then self:Hide() end
+            end
+        end)
+    end
+
+    function o:Update()
+        local max, cur = Max(), scroll:GetVerticalScroll() or 0
+        if cur > max then
+            cur = max
+            scroll:SetVerticalScroll(cur)
+        end
+        Shade(max > 1 and cur < max - 1)
+        local viewH = scroll:GetHeight() or 0
+        if max > 1 and viewH > 0 then
+            local contentH = content:GetHeight()
+            local thumbH = math.max(18, viewH * viewH / contentH)
+            thumb:ClearAllPoints()
+            thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -(cur / max) * (viewH - thumbH))
+            thumb:SetHeight(thumbH)
+            thumb:Show()
+        else
+            thumb:Hide()
+        end
+    end
+    function o:SetHeight(h)
+        content:SetHeight(math.max(1, h))
+        content:SetWidth(scroll:GetWidth() or 1)
+        self:Update()
+    end
+    function o:ScrollTo(v)
+        scroll:SetVerticalScroll(math.max(0, math.min(Max(), v)))
+        self:Update()
+    end
+    scroll:SetScript("OnMouseWheel", function(_, delta) o:ScrollTo((scroll:GetVerticalScroll() or 0) - delta * 36) end)
+    scroll:SetScript("OnSizeChanged", function(self)
+        content:SetWidth(self:GetWidth())
+        o:Update()
+    end)
+    return o
+end

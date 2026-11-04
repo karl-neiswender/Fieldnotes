@@ -536,8 +536,15 @@ function FN.RefreshStats()
     ui.whoEmpty:SetText("Creatures you skin show up here.")
 end
 
+-- the map's Stats tab lights while the window is open, and goes out when it closes
+function FN.StatsFrame() return frame end
+function FN.StatsShown() return frame ~= nil and frame:IsShown() end
+
 function FN.ShowStats()
-    if not frame then Build() end
+    if not frame then
+        Build()
+        frame:HookScript("OnHide", function() if FN.Map and FN.Map.Refresh then FN.Map.Refresh() end end)
+    end
     frame:Show()
     FN.RefreshStats()
 end

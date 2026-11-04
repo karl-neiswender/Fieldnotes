@@ -141,3 +141,98 @@
   to Era. Needs a full client restart (new icon). Not yet seen in game.
 - Session glow shared (St.Glow in Style.lua): the dock's Session row dot breathes like the tracker's
   while a session runs (2026-11-03). Checks pass (29), copied to Era. Not yet seen in game.
+- Professions v4 (2026-11-04, mockup design/professions-v4-2026-11-04 approved by Karl with two changes:
+  hovering a dashboard row lights that profession's dots, Mining is yellow). Built:
+  Recorder.lua records Mining and Herbalism (cast, then loot; source = the node's object ID, names in
+  <store>.nodes), Fishing (IsFishingLoot; source 0) and Cloth (every humanoid kill loot, with its cloth or
+  empty, once per corpse; any creature once it drops cloth; Pick Pocket left out). Map.lua: M.PROFS (identity
+  colors), settings.map.prof ("all" = dashboard), Records per profession, M.Summary, the dashboard map (dots
+  in profession colors, M.SetLit for hover). MapUI.lua: the profession row is gone; profession tabs hang
+  under the Fieldnotes tab (known professions, Cloth, any with notes outside Me); the Fieldnotes tab opens
+  the dashboard (Show, When, a row per profession with count, best zone or cloth rate, skill bar), then
+  folds. Session.lua: one session for every profession, a row each (count, per hour, skill +N or cap note),
+  folded to one line of initials and counts; cap alerts per profession. Demo adds ore, herbs, fish and
+  cloth. Checks pass (38), copied to Era. Not yet seen in game. Stats and Share stay skinning-only; the
+  full-screen toolbar has no profession switch yet; icons are initials until Codex's set.
+- v4 UX pass after Karl's first Elwynn look (2026-11-04): the dock spans the map window's full height
+  (title bar to footer, inset the same at both ends); the tab rail is Fieldnotes, the profession tabs, a
+  gap, then Stats and Settings tabs (the footer is gone; the Settings tab is the old gear, settings fill the
+  dock); only the Fieldnotes tab shows while folded, the rest fade with the dock. Settings gains SESSION
+  ("Start with my first gather", settings.autoSession, default on) and SHARE (opens the share window).
+  Dashboard rows are compact (30 tall, 11/9 type, a color bar instead of the repeated mark, hairline skill
+  bar, cloth as "41% drop rate"), which also clears the session row. Checks pass (39), copied to Era. Not
+  yet seen in game. Open/fold motion waits for Karl's video.
+- Karl's second v4 look (2026-11-04): dashboard row hover is a wash of the profession's color fading left
+  to right (the bar no longer thickens); the tab rail starts 14 under the dock's top (TAB_DROP); the Stats
+  tab lights only while the stats window is open (FN.StatsShown, refreshed on close); Settings and the
+  dashboard scroll (St.Scroll in Style.lua, after FGT's CreateScrollArea: wheel, slim bronze thumb, a
+  28-strip bottom shade that eases away at the end). The profession page still fits by dropping key lines.
+  Checks pass (39), copied to Era. Not yet seen in game.
+- Karl's third v4 look (2026-11-04): When left the dock's settings (the dashboard has it; the full-screen
+  map's settings keep it); Stats and Settings tabs sit at the dock's bottom (never over the profession
+  tabs); settings slide in from the dock's left edge (the dock's content drifts right and fades) with a
+  back chevron before the title instead of an X. Spacing pass on a 4-unit scale (MapUI.lua FIRST_Y,
+  LABEL_GAP 16, CTRL_H 22, GROUP_GAP 16): labels no longer crowd the controls above; dashboard rows 34 tall
+  with 4 between and 6 card padding, more inner padding; settings gaps opened up. Checks pass (39), copied
+  to Era. Not yet seen in game.
+- Codex's icon set (design/icons-v2-2026-11-04, painted silver relief) and logo (design/branding/selected)
+  installed 2026-11-04. tools/icons.py balances the set to one optical size: each 64 px source is scaled by
+  (0.34 / ink coverage) ^ 0.35, capped at a 58 px box, centred, written to Media/icons/*-white.tga (gear
+  included; its source saved as gear-64.png). Coverage went from 28-71% to 28-41%; review sheet
+  Balanced-sheet.png. Used: profession tabs and dock title, Stats and Settings tabs (both 16 now), tracker
+  rows (icon on the color chip) and its folded line (inline icons), the warning triangle before every cap
+  note, the share arrow on Settings' Share button. Media/icon.tga (the logo, 64 px) is the TOC IconTexture.
+  Checks pass (39), copied to Era. Needs a full client restart (new and changed textures). Not yet seen.
+- Rail tabs, Karl's notes (2026-11-04): a Home tab (Codex's book, balanced by tools/icons.py) opens the
+  dashboard; the Fieldnotes tab now only opens and closes, and opening lands on Home; tabs never fold
+  the dock. Every rail icon rests in one silver (REST in MapUI.lua); color is for the active tab only (its
+  profession's, gold for Home, Stats, Settings). No left edge: the active tab has a soft glow behind its
+  icon and a wash of its color fading outward, and reaches TAB_SLIDE (8) further out; hovered, 0.4 of
+  that. One eased value per tab (Glide/ApplyTab, 0.22 s) drives width, color, glow and wash, so every
+  change glides; folding resets them, so the active tab glides out again on open. Checks pass (39),
+  copied to Era. Needs a full client restart (book icon). Not yet seen in game.
+- Rail tabs, Karl's next look (2026-11-04): inactive tabs are plain (a texture's alpha did not hide a
+  gradient's colour in game, so each inactive tab kept a tint: the wash is now hidden, and rebuilt with its
+  alpha inside the gradient while active). No glow around the icon (it muddied it). Active: the icon in its
+  color, a wash fading out from the dock, and an 8 px light along the edge shared with the dock (edgeLight).
+  Checks pass (39), copied to Era (/reload is enough). Not yet seen in game.
+- Active tab light redrawn (2026-11-04): in game the HGradient wash came out as a solid gold block, so the
+  light is 14 flat strips from the dock-side edge outward (alpha 0.55(1-x)^4 + 0.16(1-x)), as FGT builds
+  its fades. The scroll thumb moved inside the dock's border. Checks pass (39), copied to Era. Not yet seen.
+- Active tab light, third try (2026-11-04): the strips banded. Now one texture, Media/fade.tga (256x4
+  white, alpha (1-x)^2.2, smooth because the game filters it), tinted to the tab's color at 0.42 alpha,
+  flipped by tex coords for a dock on the left. The dashboard row hover uses the same texture (0.22).
+  Checks pass (39), copied to Era. Needs a full client restart (new texture). Not yet seen in game.
+- Rail tabs refinement (2026-11-04, Karl approved): the active tab joins the dock. A seam frame (7 wide,
+  4 into the dock, above the dock's border) is filled with the dock's own fill at that height plus the
+  light's first tint, hiding the borders that read as a black bar; the active tab's fill becomes the dock's
+  fill at its height (DockFill: STYLE.dock's gradient plus the grime's top lift). The light is softer and
+  longer: peak 0.28, Media/fade.tga now (1-x)^1.4. Inactive tabs are recessed (fill x0.72). All eased by
+  the tab's one value. Checks pass (39), copied to Era. Needs a full client restart (fade.tga changed).
+  Not yet seen in game.
+- Active tab, fourth pass (2026-11-04, Karl: not blending, light should be subtler and come from the right):
+  the guessed seam color showed as a lighter block. Now each tab carries a copy of the dock's own background
+  (STYLE.dock gradient and St.Grime on the dock's rectangle, extended right), seen through a clipping window
+  (a child of the dock, above its border) over the tab and 5 px of the dock's edge; shown while active, it
+  erases the border between them. The light comes in from the tab's outer edge (peak 0.14, 85% of the tab).
+  Icons sit above the copy. Checks pass (39), copied to Era (/reload). Not yet seen in game.
+- 2026-11-04: the tab light had vanished (a texture on the clipping window drew under its child frames);
+  it now has its own frame above the copied page, peak 0.2. Profession pages get a glow (Karl): Media/radial
+  (256 px, smooth radial alpha), tinted to the profession, alpha 0.16, centred on the title icon with a
+  radius of half the dock's height, cut to the dock by texture coordinates, under all content; fades in
+  0.4 s on a page change, none on Home or with Settings open. Checks pass (39), copied to Era. Needs a full
+  client restart (new texture). Not yet seen in game.
+- Tab light, still invisible though /fn debug had it shown at 0.34 (2026-11-04): moved onto the icon's
+  frame (BACKGROUND layer, under the icon), the layer known to draw above the copied page; the page and the
+  light use corner anchors only (the TOP/BOTTOM plus LEFT/RIGHT anchors were over-constrained). /fn debug
+  prints the active tab's page, layers and light. Checks pass (39), copied to Era (/reload). Not yet seen.
+- The tab light shows now (Karl, 2026-11-04: "looking great"). Profession pages' section labels (VIEW, SHOW,
+  the material) take the profession's hue at the grey label's lightness (LabelTint: luminance-matched,
+  x1.12, softened 30% toward the grey). Checks pass (39), copied to Era (/reload). Not yet seen.
+- 0.7.0 release prep (2026-11-04): TOC 0.7.0 with new Notes; CHANGELOG 0.7.0; README and ROADMAP rewritten
+  for five professions; reports/CurseForge-description-0.7.0.md and CurseForge-gallery-0.7.0.md (FGT's
+  format, AI disclaimer). Shots.lua: /fn shots stages ten demo scenes (dashboard, heat, herbalism, points,
+  community, continent, session, settings, stats, share), takes TGA screenshots and saves each subject's
+  pixel rect in FieldnotesDB.shotRects; tools/shots.py crops the newest Era burst into Screenshots/ after a
+  /reload. Screenshots/ is left out of the package and the Era copy. Checks pass (39), copied to Era.
+  Waiting on: Karl's /fn shots run, the CurseForge project (ID for the TOC, CF_API_KEY secret), the tag.

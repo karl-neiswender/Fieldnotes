@@ -1,32 +1,62 @@
 local ADDON, FN = ...
 
--- Skinning detection.
+-- Gathering detection: one record per gather, the same shape for every profession.
 --
--- A skin is a Skinning cast on a corpse followed by the loot window. The cast is noted when it
--- is sent (with the corpse's name), cleared if it fails, and the next loot window within a few
--- seconds is taken as the skin. Loot without a Skinning cast before it (an ordinary kill) is
--- never counted.
+-- Skinning, Mining, Herbalism: the profession's cast is noted when it is sent (with its target's
+--   name), cleared if it fails, and the next loot window within a few seconds is the gather.
+--   Skinning's source is the creature; Mining's and Herbalism's is the node (its object ID).
+-- Fishing: a loot window the game marks as fishing loot (IsFishingLoot), or, on a client without
+--   that, loot from no creature soon after a Fishing cast. The source is 0: where you stood.
+-- Cloth: an ordinary kill's loot (no gathering cast before it). Every loot of a humanoid is
+--   recorded, with its cloth or with nothing, so cloth can show a drop rate. A creature of
+--   another type counts once it has dropped cloth (Felcloth from demons). A corpse opened twice
+--   counts once. Pick Pocket's loot never counts.
 
--- Skinning's ranks (Apprentice to Artisan); the spell's own name also counts, for other ranks
-local SKINNING_SPELLS = { [8613] = true, [8617] = true, [8618] = true, [10768] = true }
-local WINDOW = 6 -- seconds from sending the cast to the loot window
-local skinName
+local PROFS = {
+    -- spell IDs by rank (Apprentice to Artisan), and a spell whose name is the skill line's
+    skinning = { spells = { 8613, 8617, 8618, 10768 }, window = 6 },
+    mining = { spells = { 2575, 2576, 3564, 10248 }, window = 10 },
+    herbalism = { spells = { 2366, 2368, 3570, 11993 }, window = 10, skillNames = { "Herbalism" } },
+    fishing = { spells = { 7620, 7731, 7732, 18248 }, window = 35 },
+}
+FN.GATHER_PROFS = PROFS
+local PICK_POCKET = 921
+local CLOTH = { [2589] = true, [2592] = true, [4306] = true, [4338] = true, [14047] = true, [14256] = true }
+FN.CLOTH_ITEMS = CLOTH
 
-local pending -- { cast, name, guid, sent }
-local lastLootAt = 0
+-- spellID -> profession, and each profession's spell name (filled at login, in the client's language)
+local bySpell, spellName = {}, {}
+for prof, p in pairs(PROFS) do
+    for _, id in ipairs(p.spells) do bySpell[id] = prof end
+end
+local pickName
 
-local function IsSkinning(spellID)
-    if SKINNING_SPELLS[spellID] then return true end
-    if not skinName or not spellID then return false end
-    return (GetSpellInfo(spellID)) == skinName
+local function SpellName(id)
+    if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
+    return GetSpellInfo and (GetSpellInfo(id)) or nil
 end
 
--- "Creature-0-1234-0-56-2522-0000ABCD" -> 2522
-local function NpcFromGUID(guid)
+local function ProfOfSpell(spellID)
+    if not spellID then return nil end
+    if bySpell[spellID] then return bySpell[spellID] end
+    local name = SpellName(spellID)
+    if not name then return nil end
+    for prof, n in pairs(spellName) do
+        if n == name then return prof end
+    end
+end
+
+local function IsPickPocket(spellID)
+    return spellID == PICK_POCKET or (pickName and SpellName(spellID) == pickName)
+end
+
+-- "Creature-0-1234-0-56-2522-0000ABCD" -> 2522; "GameObject-0-...-1731-..." for nodes
+local function IdFromGUID(guid, kind)
     if type(guid) ~= "string" then return nil end
-    local kind, _, _, _, _, npc = strsplit("-", guid)
-    if kind == "Creature" then return tonumber(npc) end
+    local k, _, _, _, _, id = strsplit("-", guid)
+    if k == kind then return tonumber(id) end
 end
+local function NpcFromGUID(guid) return IdFromGUID(guid, "Creature") end
 FN.NpcFromGUID = NpcFromGUID
 
 -- What we last saw of each nearby creature: right-clicking a corpse to skin it does not target
@@ -46,17 +76,25 @@ local function Remember(unit)
     seen[guid] = { name = UnitName(unit), type = UnitCreatureType(unit), level = UnitLevel(unit) }
 end
 
--- the skinning rank, and the most the current rank allows (75 for Apprentice, and so on)
-local function SkinningSkill()
-    if not skinName or not GetNumSkillLines then return 0 end
+-- a profession's rank, and the most the current rank allows (75 for Apprentice, and so on)
+function FN.ProfessionSkill(prof)
+    if not GetNumSkillLines then return 0 end
+    local want = spellName[prof]
+    local extra = PROFS[prof] and PROFS[prof].skillNames
+    if not want and not extra then return 0 end
     for i = 1, GetNumSkillLines() do
         local name, isHeader, _, rank, _, _, maxRank = GetSkillLineInfo(i)
-        if not isHeader and name == skinName then return rank or 0, maxRank end
+        if not isHeader and name then
+            local match = name == want
+            if not match and extra then
+                for _, e in ipairs(extra) do match = match or name == e end
+            end
+            if match then return rank or 0, maxRank end
+        end
     end
     return 0
 end
-
-FN.SkinningSkill = SkinningSkill
+function FN.SkinningSkill() return FN.ProfessionSkill("skinning") end
 
 local function PlayerPosition()
     if not (C_Map and C_Map.GetBestMapForUnit) then return 0 end
@@ -70,12 +108,16 @@ local function PlayerPosition()
 end
 FN.PlayerPosition = PlayerPosition
 
-local function LootSourceGUID()
+-- the loot window's source: a creature's GUID, or else a node's
+local function LootSource()
     if not GetLootSourceInfo then return nil end
+    local node
     for slot = 1, GetNumLootItems() do
         local guid = GetLootSourceInfo(slot)
-        if NpcFromGUID(guid) then return guid end
+        if NpcFromGUID(guid) then return guid, "creature" end
+        if IdFromGUID(guid, "GameObject") then node = node or guid end
     end
+    if node then return node, "node" end
 end
 
 function FN.NoteCreature(npc, info, fallbackName, store)
@@ -95,15 +137,30 @@ function FN.NoteCreature(npc, info, fallbackName, store)
             c.maxLevel = math.max(c.maxLevel or lvl, lvl)
         end
     end
+    return c
 end
 
-local function RecordSkin(cast)
+-- nodes by object ID: { name } ("Copper Vein", "Peacebloom")
+function FN.NoteNode(id, name, store)
+    if not id or id == 0 then return end
+    store = store or FN.db
+    store.nodes = store.nodes or {}
+    local n = store.nodes[id]
+    if not n then
+        n = {}
+        store.nodes[id] = n
+    end
+    n.name = name or n.name
+end
+
+-- the loot window's items: { itemID = count } and their links, for the chat line
+local function ReadLoot(keep)
     local items, links = {}, {}
     for slot = 1, GetNumLootItems() do
         if LootSlotHasItem(slot) then
             local link = GetLootSlotLink(slot)
             local id = link and tonumber(link:match("item:(%d+)"))
-            if id then
+            if id and (not keep or keep[id]) then
                 local _, _, qty = GetLootSlotInfo(slot)
                 qty = qty or 1
                 items[id] = (items[id] or 0) + qty
@@ -111,25 +168,74 @@ local function RecordSkin(cast)
             end
         end
     end
-    if not next(items) then return end
+    return items, links
+end
 
-    local guid = LootSourceGUID() or cast.guid
-    local npc = NpcFromGUID(guid)
-    local info = guid and seen[guid]
-    FN.NoteCreature(npc, info, cast.name)
-
+local function Record(prof, source, items, links, who)
     local mapID, x, y = PlayerPosition()
-    FN.Add("skinning", mapID, {
-        x = x, y = y, time = time(), npc = npc or 0, char = FN.CharIndex(),
-        skill = SkinningSkill(), items = items,
+    FN.Add(prof, mapID, {
+        x = x, y = y, time = time(), npc = source or 0, char = FN.CharIndex(),
+        skill = PROFS[prof] and FN.ProfessionSkill(prof) or 0, items = items,
     })
-    if FN.SessionAdd then FN.SessionAdd(npc, items) end
-
-    if FN.db.settings.chat then
-        local who = (info and info.name) or cast.name or "Unknown creature"
-        FN.Print(who .. "  " .. table.concat(links, ", "))
+    if FN.SessionGather then
+        FN.SessionGather(prof, source, items)
+    elseif prof == "skinning" and FN.SessionAdd then
+        FN.SessionAdd(source, items)
+    end
+    if FN.db.settings.chat and #links > 0 then
+        FN.Print((who or "") .. "  " .. table.concat(links, ", "))
     end
 end
+
+-- Skinning, Mining or Herbalism, from the cast that was pending
+local function RecordCast(cast)
+    local items, links = ReadLoot()
+    if not next(items) then return end
+    local guid, kind = LootSource()
+    if cast.prof == "skinning" then
+        guid = (kind == "creature" and guid) or cast.guid
+        local npc = NpcFromGUID(guid)
+        local info = guid and seen[guid]
+        FN.NoteCreature(npc, info, cast.name)
+        Record("skinning", npc, items, links, (info and info.name) or cast.name or "Unknown creature")
+    else
+        local node = kind == "node" and IdFromGUID(guid, "GameObject") or nil
+        FN.NoteNode(node, cast.name)
+        Record(cast.prof, node, items, links, cast.name or "")
+    end
+end
+
+local function RecordFishing()
+    local items, links = ReadLoot()
+    if not next(items) then return end
+    Record("fishing", 0, items, links, spellName.fishing or "Fishing")
+end
+
+-- an ordinary kill's loot: counts for Cloth when the creature is a humanoid or has dropped cloth
+local looted, lootedCount = {}, 0
+local function RecordKill(guid)
+    local npc = NpcFromGUID(guid)
+    if not npc or looted[guid] then return end
+    local items, links = ReadLoot(CLOTH)
+    local info = seen[guid]
+    local known = FN.db.creatures[npc]
+    local humanoid = (info and info.type == FN.HUMANOID) or (known and (known.type == FN.HUMANOID or known.cloth))
+    if not humanoid and not next(items) then return end
+    looted[guid] = true
+    lootedCount = lootedCount + 1
+    if lootedCount > 300 then
+        wipe(looted)
+        lootedCount = 0
+    end
+    local c = FN.NoteCreature(npc, info)
+    if c and next(items) then c.cloth = true end
+    Record("cloth", npc, items, links, (info and info.name) or (c and c.name) or "")
+end
+
+local pending -- { prof, cast, name, guid, sent }
+local fishingAt -- GetTime() of the last Fishing cast, for clients without IsFishingLoot
+local pickAt = 0
+local lastLootAt = 0
 
 local f = CreateFrame("Frame")
 local function On(event)
@@ -144,6 +250,32 @@ On("LOOT_READY")
 On("LOOT_OPENED")
 On("LOOT_CLOSED")
 
+local function OnLoot()
+    -- both loot events can fire for one loot window: take the first
+    local now = GetTime()
+    if now - lastLootAt < 0.5 then return end
+    lastLootAt = now
+    if pending and now - pending.sent > (PROFS[pending.prof].window or 6) then pending = nil end
+    if pending then
+        local cast = pending
+        pending = nil
+        RecordCast(cast)
+        return
+    end
+    if now - pickAt < 3 then return end
+    local guid, kind = LootSource()
+    local fishing = IsFishingLoot and IsFishingLoot()
+    if not IsFishingLoot then
+        fishing = fishingAt and now - fishingAt < PROFS.fishing.window and kind ~= "creature"
+    end
+    if fishing then
+        fishingAt = nil
+        RecordFishing()
+    elseif kind == "creature" then
+        RecordKill(guid)
+    end
+end
+
 f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     if not FN.db then return end
     if event == "UPDATE_MOUSEOVER_UNIT" then
@@ -152,35 +284,45 @@ f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
         Remember("target")
     elseif event == "UNIT_SPELLCAST_SENT" then
         -- unit, target name, cast GUID, spell ID
-        if a1 ~= "player" or not IsSkinning(a4) then return end
-        Remember("mouseover")
-        Remember("target")
+        if a1 ~= "player" then return end
+        if IsPickPocket(a4) then
+            pickAt = GetTime()
+            return
+        end
+        local prof = ProfOfSpell(a4)
+        if not prof then return end
+        if prof == "fishing" then
+            fishingAt = GetTime()
+            return
+        end
         local guid
-        for _, unit in ipairs({ "mouseover", "target" }) do
-            if not guid and UnitExists(unit) and UnitIsDead(unit) and UnitName(unit) == a2 then
-                guid = UnitGUID(unit)
+        if prof == "skinning" then
+            Remember("mouseover")
+            Remember("target")
+            for _, unit in ipairs({ "mouseover", "target" }) do
+                if not guid and UnitExists(unit) and UnitIsDead(unit) and UnitName(unit) == a2 then
+                    guid = UnitGUID(unit)
+                end
             end
         end
-        pending = { cast = a3, name = a2 ~= "" and a2 or nil, guid = guid, sent = GetTime() }
+        pending = { prof = prof, cast = a3, name = a2 ~= "" and a2 or nil, guid = guid, sent = GetTime() }
     elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
         -- unit, cast GUID, spell ID
         if a1 == "player" and pending and a2 == pending.cast then pending = nil end
     elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
-        -- both can fire for one loot window: take the first
-        if not pending or GetTime() - lastLootAt < 0.5 then return end
-        if GetTime() - pending.sent > WINDOW then
-            pending = nil
-            return
-        end
-        lastLootAt = GetTime()
-        local cast = pending
-        pending = nil
-        RecordSkin(cast)
+        OnLoot()
     elseif event == "LOOT_CLOSED" then
         lastLootAt = 0
     end
 end)
 
 table.insert(FN.onLogin, function()
-    skinName = GetSpellInfo(8613)
+    for prof, p in pairs(PROFS) do spellName[prof] = SpellName(p.spells[1]) end
+    pickName = SpellName(PICK_POCKET)
 end)
+
+-- the game's word for humanoid creatures (UnitCreatureType is in the client's language)
+FN.HUMANOID = ({
+    deDE = "Humanoid", frFR = "Humanoïde", esES = "Humanoide", esMX = "Humanoide",
+    ptBR = "Humanoide", itIT = "Umanoide", ruRU = "Гуманоид", koKR = "인간형", zhCN = "人型生物", zhTW = "人型生物",
+})[GetLocale and GetLocale() or "enUS"] or "Humanoid"

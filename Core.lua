@@ -5,12 +5,15 @@ _G.Fieldnotes = FN
 --   chars      { "Name-Realm", ... }   records point at a character by its position here;
 --                                      only ever read locally, never shared
 --   creatures  { [npcID] = { name, type, minLevel, maxLevel } }
---   events     { [profession] = { [mapID] = { record, ... } } }
+--   events     { [profession] = { [mapID] = { record, ... } } }   skinning, mining, herbalism,
+--                                      fishing, cloth
+--   nodes      { [objectID] = { name } }   mining veins and herbs, as creatures are for skins
 --   settings   { chat = true, demo = false }
 --   demo       sample data in the same shape (chars, creatures, events), only while loaded
 --
 -- One record per gather, the same shape for every profession, kept as text so years of
--- skinning stay small:  "x:y:time:npcID:char:skill:itemID=count,itemID=count"
+-- skinning stay small:  "x:y:time:source:char:skill:itemID=count,itemID=count"
+--   source the creature (skinning, cloth), the node (mining, herbalism) or 0 (fishing)
 --   x, y   position on the zone map, 0-1000 (empty when the game gives none, as in instances)
 --   time   seconds since 1970 (time())
 FN.DB_VERSION = 1

@@ -105,14 +105,14 @@ SlashCmdList.FIELDNOTES = function(msg)
     elseif msg == "tracker" then
         FN.db.settings.tracker = FN.db.settings.tracker == false
         if FN.db.settings.tracker then
-            FN.Print("The session tracker will show while you skin.")
+            FN.Print("The session tracker will show while you gather.")
         else
             FN.HideTracker()
             FN.Print("The session tracker is off. /fn tracker brings it back.")
         end
     elseif msg == "chat" then
         FN.db.settings.chat = not FN.db.settings.chat
-        FN.Print("A chat line for each skin is now " .. (FN.db.settings.chat and "on." or "off."))
+        FN.Print("A chat line for each gather is now " .. (FN.db.settings.chat and "on." or "off."))
     elseif msg == "demo" then
         FN.DemoLoad()
         FN.ShowStats()
@@ -120,15 +120,18 @@ SlashCmdList.FIELDNOTES = function(msg)
         FN.DemoClear()
     elseif msg == "fake" then
         FN.DemoFakeSkin()
+    elseif msg == "shots" or msg:match("^shots %w+") then
+        FN.TakeShots(msg:match("^shots (%S+)"))
     else
         FN.Print("/fn  open or close your skinning stats")
         FN.Print("/fn share  copy your notes as one line of text to paste anywhere")
         FN.Print("/fn import  paste someone else's notes into your Community layer")
         FN.Print("/fn summary  the same numbers in chat")
         FN.Print("/fn tracker  turn the session tracker on or off")
-        FN.Print("/fn chat  turn the chat line for each skin on or off")
+        FN.Print("/fn chat  turn the chat line for each gather on or off")
         FN.Print("/fn demo  load sample data to try Fieldnotes (your own records stay as they are)")
         FN.Print("/fn fake  pretend to skin something where you stand (demo mode only)")
         FN.Print("/fn demo off  remove the sample data")
+        FN.Print("/fn shots  take the gallery screenshots (sample data, put back after)")
     end
 end

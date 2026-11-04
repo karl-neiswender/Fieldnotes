@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldnotes professions v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gold: #ffd75e; --accent: #ffd100;
+  --text: #e8e8e8; --ink2: #bdbdbd; --sub: #8a8a8a;
+  --edge: #54492f; --rule: #544a33;
+  /* profession identity colors (Map.lua would own these) */
+  --skinning: #e8803a; --mining: #f2d43a; --herbalism: #6fbf4f; --fishing: #4fa3e0; --cloth: #a77ddc;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 40% 40%, #2a3138 0%, #11161b 70%); color: var(--text);
+  font-family: Marcellus, Georgia, serif; min-height: 100vh; }
+button { font-family: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.stage { width: 1440px; margin: 0 auto; padding: 28px 0 40px; }
+.top { display: flex; align-items: flex-end; justify-content: space-between; margin: 0 0 16px; }
+.top h1 { font-weight: 400; font-size: 22px; color: var(--gold); margin: 0; }
+.top p { margin: 4px 0 0; color: var(--sub); font-size: 13px; }
+.compare { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink2); }
+.row { display: flex; align-items: flex-start; }
+
+/* map window */
+.mapwin { width: 900px; height: 680px; position: relative; border-radius: 6px; background: #17140f;
+  box-shadow: 0 0 0 2px #5a4a2a, 0 0 0 4px #1a160f, 0 18px 50px rgba(0,0,0,.6); flex: none; }
+.mapwin .title { height: 30px; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(#2a241a, #120f0a); border-bottom: 1px solid #5a4a2a; font-size: 17px; color: var(--gold); }
+.mapwin .art { position: absolute; left: 8px; top: 38px; right: 8px; bottom: 34px; overflow: hidden; border-radius: 3px; }
+.mapwin .foot { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 22px; background: linear-gradient(#2c2a27, #151412); border-radius: 2px; }
+canvas { position: absolute; inset: 0; }
+
+/* dock */
+.dock { width: 290px; height: 664px; margin: 8px 0 0 -6px; position: relative; border: 1px solid var(--edge); border-radius: 0 7px 7px 0;
+  background: linear-gradient(#2a2017, #0b0806); overflow: hidden; padding: 16px; z-index: 1; flex: none; }
+.dock > * { position: relative; }
+.head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 6px; }
+.head h2 { margin: 0; font-weight: 400; font-size: 22px; color: var(--gold); text-shadow: 1px 1px 0 #33240a; display: flex; align-items: center; gap: 8px; }
+.head span { color: var(--sub); font-size: 13px; }
+.label { font-size: 12px; letter-spacing: .5px; color: var(--sub); margin: 10px 0 4px; }
+.choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.choice { height: 27px; border: 1px solid #6b5e42; border-radius: 3px; background: linear-gradient(#3d3933, #14130f); color: var(--ink2); font-size: 14px; }
+.choice.on { border-color: var(--accent); background: linear-gradient(#614a0f, #1c1404); color: var(--gold); }
+.card { border: 1px solid #47423a; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 10px 12px 8px; margin-top: 12px; }
+.big { font-size: 24px; margin-bottom: 2px; }
+.kv { display: flex; justify-content: space-between; font-size: 14px; line-height: 22px; }
+.kv span { color: var(--sub); }
+.dropdown { width: 100%; height: 29px; display: flex; align-items: center; gap: 9px; padding: 0 12px; text-align: left;
+  border: 1px solid #6b5e42; border-radius: 3px; background: linear-gradient(#3d3933, #14130f); color: var(--ink2); font-size: 14px; }
+.dropdown em { margin-left: auto; font-style: normal; }
+
+/* dashboard rows: one per profession */
+.prow { display: grid; grid-template-columns: 26px 1fr auto; column-gap: 10px; align-items: center; width: 100%;
+  padding: 7px 8px; border: 0; border-left: 2px solid transparent; background: transparent; color: var(--text); text-align: left; border-radius: 0 3px 3px 0; }
+.prow + .prow { margin-top: 2px; }
+.prow:hover { background: rgba(255,209,0,.07); border-left-color: var(--c); }
+.prow b { font-weight: 400; font-size: 15px; }
+.prow .n { font-size: 15px; text-align: right; }
+.prow small { grid-column: 2 / 4; font-size: 12px; color: var(--sub); display: flex; justify-content: space-between; margin-top: 1px; }
+.skill { grid-column: 2 / 4; height: 3px; border-radius: 2px; background: #2e2a24; margin-top: 5px; position: relative; overflow: hidden; }
+.skill i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); }
+.prow.none { opacity: .45; }
+.ico { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 4px; grid-row: span 3; }
+.ico svg { width: 18px; height: 18px; }
+
+.session { position: absolute; left: 16px; right: 16px; bottom: 58px; height: 40px; display: flex; align-items: center; gap: 9px;
+  border: 1px solid #47423a; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 0 10px 0 14px; font-size: 14px; }
+.session .dot { width: 9px; height: 9px; border-radius: 50%; background: #4cd964; box-shadow: 0 0 8px #4cd964; }
+.session b { font-weight: 400; color: var(--gold); font-size: 15px; }
+.session .mini { display: flex; gap: 8px; margin-left: auto; color: var(--ink2); }
+.session .mini span { display: flex; align-items: center; gap: 3px; }
+.session .mini i { width: 7px; height: 7px; border-radius: 50%; }
+.footer { position: absolute; left: 16px; right: 16px; bottom: 0; height: 46px; border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: repeat(3, 1fr); place-items: center; color: var(--ink2); font-size: 18px; }
+
+/* the tab stack on the dock's right edge */
+.tabs { display: flex; flex-direction: column; gap: 4px; margin-top: 70px; margin-left: -1px; flex: none; }
+.tab { width: 34px; border: 1px solid var(--edge); border-left: 0; border-radius: 0 7px 7px 0;
+  background: linear-gradient(90deg, #1d1610, #0b0806); color: var(--ink2); padding: 0; position: relative; }
+.tab.word { height: 104px; writing-mode: vertical-rl; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; color: var(--gold); }
+.tab.prof { height: 38px; display: grid; place-items: center; }
+.tab.prof svg { width: 18px; height: 18px; opacity: .7; }
+.tab.on { background: linear-gradient(90deg, #2a2017, #15100b); border-color: var(--c, var(--accent)); }
+.tab.on::before { content: ""; position: absolute; left: -1px; top: 6px; bottom: 6px; width: 2px; background: var(--c, var(--accent)); }
+.tab.prof.on svg { opacity: 1; }
+.tab.prof:hover svg { opacity: 1; }
+.tab .rec { position: absolute; right: 3px; top: 3px; width: 6px; height: 6px; border-radius: 50%; background: #4cd964; box-shadow: 0 0 5px #4cd964; }
+
+/* the session tracker */
+.trk { width: 260px; margin-left: 40px; border: 1px solid var(--edge); border-radius: 6px; background: linear-gradient(#2a2017, #0b0806);
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); flex: none; }
+.trk .h { display: flex; align-items: center; gap: 8px; padding: 9px 10px 8px 12px; border-bottom: 1px solid var(--rule); }
+.trk .h .dot { width: 9px; height: 9px; border-radius: 50%; background: #4cd964; box-shadow: 0 0 8px #4cd964; }
+.trk .h b { font-weight: 400; color: var(--gold); font-size: 15px; }
+.trk .h .clock { color: var(--text); font-size: 14px; }
+.trk .h .ctl { margin-left: auto; display: flex; gap: 6px; color: var(--ink2); font-size: 12px; }
+.trk .h .ctl button { width: 20px; height: 20px; border: 0; background: transparent; color: var(--ink2); padding: 0; }
+.trk .body { padding: 6px 10px 10px; }
+.trow { display: grid; grid-template-columns: 22px 1fr auto auto; column-gap: 8px; align-items: center; padding: 6px 0; }
+.trow + .trow { border-top: 1px solid rgba(84,74,51,.5); }
+.trow .ico { width: 22px; height: 22px; grid-row: span 2; }
+.trow .ico svg { width: 15px; height: 15px; }
+.trow b { font-weight: 400; font-size: 14px; }
+.trow .c { font-size: 14px; text-align: right; }
+.trow .r { font-size: 12px; color: var(--sub); text-align: right; width: 52px; }
+.trow small { grid-column: 2 / 5; font-size: 12px; color: var(--sub); }
+.trow small em { font-style: normal; color: #ff9f40; }
+.trow.new { animation: rise .5s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(-4px); } }
+.trk .loot { border-top: 1px solid var(--rule); margin-top: 4px; padding-top: 8px; font-size: 12px; color: var(--ink2); line-height: 19px; }
+.trk .loot span { color: var(--sub); }
+.trk.folded .body { display: none; }
+.trk .line { display: none; gap: 10px; padding: 0 12px 9px; font-size: 14px; }
+.trk.folded .line { display: flex; }
+.trk .line span { display: flex; align-items: center; gap: 4px; }
+.trk .line i { width: 8px; height: 8px; border-radius: 50%; }
+.trk .add { display: flex; gap: 4px; flex-wrap: wrap; padding: 0 10px 10px; }
+.trk .add button { font-size: 11px; height: 22px; padding: 0 7px; border: 1px solid #47423a; border-radius: 3px; background: #15120e; color: var(--sub); }
+
+/* notes */
+.notes { width: 1440px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin-top: 26px; font-size: 13px; line-height: 1.5; color: var(--ink2); }
+.notes h3 { margin: 0 0 4px; font-weight: 400; font-size: 15px; color: var(--gold); }
+.notes p { margin: 0 0 8px; }
+.sw { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.sw div { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.sw i { width: 14px; height: 14px; border-radius: 3px; }
+.muted { color: var(--sub); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="top">
+    <div>
+      <h1>Fieldnotes v4: a tab per profession, a dashboard, one session tracker</h1>
+      <p>Mockup for approval (2026-11-04). Click the tabs on the dock's edge. Try the tracker's buttons. Sample data, Dun Morogh. Icons are placeholders until Codex's set.</p>
+    </div>
+    <div class="compare" role="group" aria-label="Mining color">
+      Mining color
+      <button class="choice" id="mSand" style="width:90px">Sand</button>
+      <button class="choice on" id="mYellow" style="width:90px">Yellow</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="mapwin">
+      <div class="title">Dun Morogh</div>
+      <div class="art"><canvas id="parch" width="884" height="608"></canvas><canvas id="layer" width="884" height="608"></canvas></div>
+      <div class="foot"></div>
+    </div>
+
+    <aside class="dock" id="dock" aria-label="Fieldnotes"></aside>
+    <div class="tabs" id="tabs" role="tablist" aria-label="Fieldnotes pages"></div>
+
+    <section class="trk" id="trk" aria-label="Session tracker">
+      <div class="h">
+        <i class="dot"></i><b>Session</b><span class="clock" id="clock">42:10</span>
+        <div class="ctl"><button title="Pause">❚❚</button><button title="End">■</button><button id="fold" title="Fold">⌃</button></div>
+      </div>
+      <div class="line" id="line"></div>
+      <div class="body" id="tbody"></div>
+      <div class="add" id="add"></div>
+    </section>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>1. A tab for each profession</h3>
+      <p>The Fieldnotes tab stays on top and opens the dashboard. Under it, one small tab per profession, in that profession's color. Only professions this character knows get a tab, plus Cloth for everyone. In Account view, any profession with notes shows.</p>
+      <p>A green dot on a tab means this session is recording it. Click Fieldnotes again on any page to fold the dock, as now.</p>
+    </div>
+    <div>
+      <h3>2. The dashboard</h3>
+      <p>One row per profession: count for the When choice, the zone you gather it most, skill and cap. Click a row to open its tab. On the map, every gather is a dot in its profession's color, no heat (adding five professions' heat together means nothing). View and the key belong to the profession tabs.</p>
+    </div>
+    <div>
+      <h3>3. One session for everything</h3>
+      <p>One clock. A row appears the first time you gather something new this session (try the buttons under the tracker). Each row: count, per hour on the shared clock, skill +N, and the cap note when it applies. Loot is the session's top items across all of them.</p>
+      <p>Folded, it is one line: clock, then a colored dot and count per profession.</p>
+    </div>
+    <div>
+      <h3>4. Colors</h3>
+      <div class="sw" id="sw"></div>
+      <p style="margin-top:8px">Identity colors only: icon, tab edge, dots, rows. The heat ramps (Thermal, Solar, Snowfall) stay as they are on the profession tabs.</p>
+      <p class="muted">Pure yellow mining sits close to the gold chosen state and next to orange skinning. Sand keeps it yellow but apart. Compare with the switch at the top right.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const ICON = {
+    skinning: '<path d="M4 4c3 1 5 1 8 0s5-1 8 0c-1 4-1 6 0 9-2 4-5 6-8 7-3-1-6-3-8-7 1-3 1-5 0-9z" fill="currentColor"/>',
+    mining: '<path d="M3 9c5-5 13-5 18 0l-2 1c-4-3-10-3-14 0z M11 9h2l1 12h-4z" fill="currentColor"/>',
+    herbalism: '<path d="M12 21V10 M12 12c-5 0-7-3-7-7 4 0 7 2 7 7z M12 10c0-5 3-7 7-7 0 4-2 7-7 7z" stroke="currentColor" stroke-width="2" fill="currentColor"/>',
+    fishing: '<path d="M2 12c4-5 10-5 14 0-4 5-10 5-14 0z M16 12l6-4v8z" fill="currentColor"/>',
+    cloth: '<path d="M4 5h16v3H4z M5 10h14v3H5z M4 15h16v3H4z" fill="currentColor"/>',
+    all: '<path d="M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z" fill="currentColor"/>',
+  };
+  const svg = (k) => `<svg viewBox="0 0 24 24">${ICON[k]}</svg>`;
+  const P = [
+    { k: "skinning", name: "Skinning", n: 1279, zone: "Dun Morogh", skill: [118, 150], unit: "skins", top: "Light Leather" },
+    { k: "mining", name: "Mining", n: 412, zone: "Loch Modan", skill: [95, 150], unit: "veins", top: "Copper Ore" },
+    { k: "herbalism", name: "Herbalism", n: 0, zone: "", skill: null, unit: "herbs", top: "" },
+    { k: "fishing", name: "Fishing", n: 86, zone: "Dun Morogh", skill: [75, 75], unit: "catches", top: "Raw Longjaw Mud Snapper" },
+    { k: "cloth", name: "Cloth", n: 233, zone: "Westfall", skill: null, unit: "drops", top: "Linen Cloth", note: "from 610 humanoid loots, 38%" },
+  ];
+  const color = (k) => getComputedStyle(document.documentElement).getPropertyValue("--" + k).trim();
+  const known = P.filter(p => p.k !== "herbalism"); // this character has no Herbalism: no tab
+  let page = "all", hoverK = null;
+
+  // tabs
+  const tabs = document.getElementById("tabs");
+  function drawTabs() {
+    tabs.innerHTML = "";
+    const word = document.createElement("button");
+    word.className = "tab word" + (page === "all" ? " on" : "");
+    word.innerHTML = "Fieldnotes <span>›</span>";
+    word.title = "Dashboard";
+    word.onclick = () => go("all");
+    tabs.appendChild(word);
+    known.forEach(p => {
+      const b = document.createElement("button");
+      b.className = "tab prof" + (page === p.k ? " on" : "");
+      b.style.setProperty("--c", color(p.k));
+      b.style.color = color(p.k);
+      b.title = p.name;
+      b.innerHTML = svg(p.k) + (session.has(p.k) ? '<i class="rec"></i>' : "");
+      b.onclick = () => go(p.k);
+      tabs.appendChild(b);
+    });
+  }
+
+  // dock pages
+  const dock = document.getElementById("dock");
+  const fmt = (n) => n.toLocaleString("en-US");
+  function sessionRow() {
+    const mini = [...session.keys()].map(k => `<span><i style="background:${color(k)}"></i>${session.get(k).n}</span>`).join("");
+    return `<div class="session"><i class="dot"></i><b>42:10</b><div class="mini">${mini}</div></div>
+      <div class="footer"><span title="Stats">▮▮▮</span><span title="Share">⇪</span><span title="Map settings">⚙</span></div>`;
+  }
+  function drawDock() {
+    if (page === "all") {
+      const rows = P.map(p => {
+        const c = color(p.k);
+        const has = p.n > 0;
+        const sk = p.skill ? `${p.skill[0]} / ${p.skill[1]}` : (p.k === "cloth" ? "no skill" : "not learned");
+        const pct = p.skill ? p.skill[0] / p.skill[1] * 100 : 0;
+        return `<button class="prow${has ? "" : " none"}" style="--c:${c}" data-k="${p.k}">
+          <span class="ico" style="color:${c};background:${c}22">${svg(p.k)}</span>
+          <b>${p.name}</b><span class="n">${has ? fmt(p.n) : "–"}</span>
+          <small><span>${has ? (p.note || "most in " + p.zone) : "nothing yet"}</span><span>${sk}</span></small>
+          ${p.skill ? `<span class="skill"><i style="width:${pct}%"></i></span>` : ""}
+        </button>`;
+      }).join("");
+      dock.innerHTML = `
+        <div class="head"><h2>Fieldnotes</h2><span>All professions</span></div>
+        <div class="label">SHOW</div>
+        <div class="choices"><button class="choice">Me</button><button class="choice on">Account</button><button class="choice">Community</button></div>
+        <div class="label">WHEN</div>
+        <div class="choices"><button class="choice on">All time</button><button class="choice">30 days</button><button class="choice">7 days</button></div>
+        <div class="card" style="padding:6px 4px">${rows}</div>
+        ${sessionRow()}`;
+      dock.querySelectorAll(".prow").forEach(r => {
+        if (known.some(p => p.k === r.dataset.k)) r.onclick = () => go(r.dataset.k);
+        const lit = (on) => { hoverK = on ? r.dataset.k : null; drawMap(); };
+        r.onmouseenter = () => lit(true); r.onmouseleave = () => lit(false);
+        r.onfocus = () => lit(true); r.onblur = () => lit(false);
+      });
+    } else {
+      const p = P.find(x => x.k === page), c = color(p.k);
+      const mat = { skinning: "LEATHER", mining: "ORE", fishing: "CATCH", cloth: "CLOTH" }[p.k];
+      dock.innerHTML = `
+        <div class="head"><h2><span style="color:${c};display:flex">${svg(p.k)}</span>${p.name}</h2><span>Dun Morogh</span></div>
+        <div class="label">VIEW</div>
+        <div class="choices"><button class="choice on">Heat</button><button class="choice">Points</button><button class="choice">Spotlight</button></div>
+        <div class="label">SHOW</div>
+        <div class="choices"><button class="choice">Me</button><button class="choice on">Account</button><button class="choice">Community</button></div>
+        <div class="label">${mat}</div>
+        <button class="dropdown">All ${mat.toLowerCase()}<em>⌄</em></button>
+        <div class="card">
+          <div class="big">${fmt(p.n)} ${p.unit}</div>
+          <div class="kv"><span>Main ${mat.toLowerCase()}</span>${p.top}</div>
+          ${p.note ? `<div class="kv"><span>Drop rate</span>38%</div>` : ""}
+          <div class="kv"><span>Skill</span>${p.skill ? p.skill[0] + " / " + p.skill[1] : "none"}</div>
+          <p class="muted" style="margin:8px 0 0">Key and hot spots as in v3, unchanged.</p>
+        </div>
+        ${sessionRow()}`;
+    }
+  }
+
+  // the map
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const gauss = () => { let u = 0; for (let i = 0; i < 6; i++) u += rnd(); return u / 3 - 1; };
+  const W = 884, H = 608;
+  const p = document.getElementById("parch").getContext("2d");
+  const g = p.createRadialGradient(W * .45, H * .45, 40, W * .5, H * .5, W * .75);
+  g.addColorStop(0, "#d6b878"); g.addColorStop(1, "#9c7740");
+  p.fillStyle = g; p.fillRect(0, 0, W, H);
+  p.strokeStyle = "rgba(96,70,36,.5)"; p.lineWidth = 1.3;
+  for (let i = 0; i < 460; i++) {
+    const x = rnd() * W, y = rnd() * H;
+    if (Math.hypot((x - 440) / 1.4, y - 310) < 140) continue;
+    p.beginPath(); p.moveTo(x - 8, y + 5); p.lineTo(x - 2, y - 5); p.lineTo(x + 2, y); p.lineTo(x + 6, y - 6); p.lineTo(x + 11, y + 5); p.stroke();
+  }
+  p.fillStyle = "#8fa4a8"; p.strokeStyle = "#6e5530";
+  p.beginPath(); p.ellipse(300, 280, 34, 22, 0, 0, 7); p.fill(); p.stroke();
+  p.font = "11px Marcellus, serif"; p.fillStyle = "rgba(70,52,28,.8)"; p.textAlign = "center";
+  p.fillText("KHARANOS", 450, 350); p.fillText("BREWNALL VILLAGE", 230, 270);
+  const pts = { skinning: [], mining: [], fishing: [], cloth: [] };
+  const cl = (k, cx, cy, sx, sy, n) => { for (let i = 0; i < n; i++) pts[k].push([cx + gauss() * sx, cy + gauss() * sy]); };
+  cl("skinning", 280, 190, 60, 45, 140); cl("skinning", 620, 410, 60, 45, 110); cl("skinning", 470, 360, 45, 35, 60);
+  cl("mining", 150, 450, 30, 60, 40); cl("mining", 760, 160, 45, 30, 35); cl("mining", 540, 110, 50, 20, 25);
+  for (let i = 0; i < 26; i++) pts.fishing.push([300 + gauss() * 30, 280 + gauss() * 20]);
+  cl("cloth", 700, 330, 40, 30, 30); cl("cloth", 390, 480, 50, 30, 20);
+  const L = document.getElementById("layer").getContext("2d");
+  function drawMap() {
+    L.clearRect(0, 0, W, H);
+    const show = page === "all" ? Object.keys(pts) : [page];
+    if (page !== "all") {
+      // a profession page: its heat, as today
+      L.globalCompositeOperation = "lighter";
+      (pts[page] || []).forEach(([x, y]) => {
+        const r = L.createRadialGradient(x, y, 0, x, y, 34);
+        r.addColorStop(0, "rgba(255,120,40,.10)"); r.addColorStop(1, "rgba(255,120,40,0)");
+        L.fillStyle = r; L.beginPath(); L.arc(x, y, 34, 0, 7); L.fill();
+      });
+      L.globalCompositeOperation = "source-over";
+      return;
+    }
+    // hovering a dashboard row: the others fade back, its dots grow and glow, drawn on top
+    const order = hoverK ? show.filter(k => k !== hoverK).concat(pts[hoverK] ? [hoverK] : []) : show;
+    order.forEach(k => {
+      const c = color(k), lit = hoverK === k, dim = hoverK && !lit;
+      L.globalAlpha = dim ? .18 : 1;
+      (pts[k] || []).forEach(([x, y]) => {
+        if (lit) {
+          const r = L.createRadialGradient(x, y, 0, x, y, 9);
+          r.addColorStop(0, c + "66"); r.addColorStop(1, c + "00");
+          L.fillStyle = r; L.beginPath(); L.arc(x, y, 9, 0, 7); L.fill();
+        }
+        L.fillStyle = "rgba(20,14,6,.55)"; L.beginPath(); L.arc(x, y, lit ? 4.6 : 3.6, 0, 7); L.fill();
+        L.fillStyle = c; L.beginPath(); L.arc(x, y, lit ? 3.4 : 2.6, 0, 7); L.fill();
+      });
+    });
+    L.globalAlpha = 1;
+  }
+
+  // the session: one clock, a row per profession as it first appears
+  const session = new Map([
+    ["skinning", { n: 34, skill: 6, loot: "Light Leather 41" }],
+    ["mining", { n: 9, skill: 3, loot: "Copper Ore 18" }],
+  ]);
+  const MIN = 42 + 10 / 60;
+  const trk = document.getElementById("trk"), tbody = document.getElementById("tbody"), line = document.getElementById("line");
+  function drawTracker(fresh) {
+    tbody.innerHTML = [...session.keys()].map(k => {
+      const pr = P.find(x => x.k === k), s = session.get(k), c = color(k);
+      const ph = Math.round(s.n / MIN * 60);
+      let sub = s.skill ? `Skill ${pr.skill ? pr.skill[0] : ""} · +${s.skill} this session` : "no skill";
+      if (k === "fishing") sub = `<em>Capped · train Journeyman</em>`;
+      if (k === "cloth") sub = "38% of humanoid loots";
+      return `<div class="trow${k === fresh ? " new" : ""}">
+        <span class="ico" style="color:${c};background:${c}22">${svg(k)}</span>
+        <b>${pr.name}</b><span class="c">${s.n}</span><span class="r">${ph}/hr</span>
+        <small>${sub}</small></div>`;
+    }).join("") + `<div class="loot"><span>TOP LOOT</span><br>${[...session.values()].map(s => s.loot).join("<br>")}</div>`;
+    line.innerHTML = [...session.keys()].map(k => `<span><i style="background:${color(k)}"></i>${session.get(k).n}</span>`).join("");
+    const add = document.getElementById("add");
+    const left = known.filter(x => !session.has(x.k));
+    add.innerHTML = left.map(x => `<button data-k="${x.k}">+ ${x.name.toLowerCase()} something</button>`).join("");
+    add.querySelectorAll("button").forEach(b => b.onclick = () => {
+      const loot = { fishing: "Raw Brilliant Smallfish 7", cloth: "Linen Cloth 12" }[b.dataset.k];
+      session.set(b.dataset.k, { n: b.dataset.k === "cloth" ? 12 : 7, skill: 0, loot });
+      redraw(b.dataset.k);
+    });
+  }
+  document.getElementById("fold").onclick = () => trk.classList.toggle("folded");
+
+  // colors legend + mining compare
+  function drawSwatches() {
+    document.getElementById("sw").innerHTML = P.map(x => `<div><i style="background:${color(x.k)}"></i>${x.name}</div>`).join("")
+      + `<div><i style="background:var(--accent)"></i>Gold (chosen)</div>`;
+  }
+  const sand = document.getElementById("mSand"), yel = document.getElementById("mYellow");
+  sand.onclick = () => { document.documentElement.style.setProperty("--mining", "#d8c27a"); sand.classList.add("on"); yel.classList.remove("on"); redraw(); };
+  yel.onclick = () => { document.documentElement.style.setProperty("--mining", "#f2d43a"); yel.classList.add("on"); sand.classList.remove("on"); redraw(); };
+
+  function go(k) { page = k; redraw(); }
+  function redraw(fresh) { drawTabs(); drawDock(); drawMap(); drawTracker(fresh); drawSwatches(); }
+  redraw();
+})();
+</script>
+</body>
+</html>
