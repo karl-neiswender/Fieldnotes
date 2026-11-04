@@ -236,3 +236,6 @@
   pixel rect in FieldnotesDB.shotRects; tools/shots.py crops the newest Era burst into Screenshots/ after a
   /reload. Screenshots/ is left out of the package and the Era copy. Checks pass (39), copied to Era.
   Waiting on: Karl's /fn shots run, the CurseForge project (ID for the TOC, CF_API_KEY secret), the tag.
+- CurseForge project created (2026-11-04): Fieldnotes, ID 1783590 (in the TOC), MIT, 3rd-party distribution
+  allowed, categories Professions + Map & Minimap, Skinning, Mining, Herbalism. Awaiting moderation. Pushed.
+  Still to do: CF_API_KEY repo secret, the v0.7.0 tag (Karl's go), gallery shots.
