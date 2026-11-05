@@ -349,3 +349,13 @@
   PARKED: smooth continent<->zone zoom transition. Map.lua has a fade-in on map change plus fading
   badge copies (GhostBadges); `/fn debug` shows they fire, but Karl saw no difference in game. Next try:
   tie the blend to OpenMap's zoom (OpenMapAPI.GetView) instead of the map-ID change. Not committed.
+- Hot spots hidden until hovered (2026-11-05, Karl chose option E from inline mockups). Each pin is
+  an invisible hover area the size of its cluster (HIT_REACH 2.2 cells either side; peaks are 6 apart,
+  so areas never overlap) that takes no clicks (SetMouseClickEnabled(false), guarded; without it the
+  area shrinks back to the marker). Hover or a lit dock row fades in the marker, rank and gold ring
+  (St.DUR.quick); the tooltip follows after 0.15 s, anchored to the marker. A ping shows it for the
+  ripple. Settings > HOT SPOTS > "Always show hot spots" (settings.map.spotsShown, default off).
+  Checks pass (43), copied to Era and Forever. Seen in Karl's recording (Dun Morogh, Skinning and
+  Mining): hover, dock rows and the fade all work. Fixed from it: the tooltip said "skins" on every
+  page; it now uses the profession's word (veins, herbs...). Still to confirm: map clicks pass
+  through the hover areas.

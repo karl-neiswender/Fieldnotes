@@ -111,7 +111,7 @@ for _, p in ipairs(M.PROFS) do M.PROF[p.key] = p end
 
 -- prof: a profession's key, or "all" for the dashboard
 local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "thermal", when = 0, strength = 1,
-    spread = 1, dots = false, prof = "skinning" }
+    spread = 1, dots = false, prof = "skinning", spotsShown = false }
 M.DEFAULTS = DEFAULTS
 
 -- the map's settings. leather: 0 (all), an item ID, "hides" or "ruined"
@@ -423,31 +423,62 @@ end
 local function PinTooltip(self)
     local p = self.info
     if not p then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    -- the pin is a wide hover area now; the tooltip sits by its marker, not past the area's edge
+    GameTooltip:SetOwner(self, "ANCHOR_NONE")
+    GameTooltip:ClearAllPoints()
+    GameTooltip:SetPoint("BOTTOMLEFT", self.mark, "TOPRIGHT", 6, 6)
     GameTooltip:SetText("Hot spot " .. (p.rank or ""), ACCENT[1], ACCENT[2], ACCENT[3])
-    GameTooltip:AddLine(p.count .. (p.count == 1 and " skin here" or " skins here"), 1, 1, 1)
+    -- the profession's own word: "45 veins here", not "45 skins here" (seen on Mining, 2026-11-05)
+    local u = M.PROF[M.S().prof] or { unit = "gather", units = "gathers" }
+    GameTooltip:AddLine(p.count .. " " .. (p.count == 1 and u.unit or u.units) .. " here", 1, 1, 1)
     if p.who ~= "" then GameTooltip:AddLine(p.who, SOFT[1], SOFT[2], SOFT[3], true) end
     if p.loot ~= "" then GameTooltip:AddLine(p.loot, SOFT[1], SOFT[2], SOFT[3], true) end
     GameTooltip:AddLine(p.coords, DIM[1], DIM[2], DIM[3])
     GameTooltip:Show()
 end
 
+-- Hot spots hide until asked for (Karl, 2026-11-05): the heat already shows where the activity
+-- is. Each pin is an invisible hover area about the size of its cluster; moving over it, or
+-- lighting its row in the dock, shows the marker (disc, rank, gold ring) and, a beat later, the
+-- tooltip. The area takes no clicks where the client allows it, so the map's own clicks (zoom
+-- out, waypoints) still work. Peaks sit at least 6 cells apart (Peaks), and the area reaches
+-- HIT_REACH cells either side, so two areas never overlap. settings.map.spotsShown keeps every
+-- marker showing.
+local HIT_REACH = 2.2 -- cells (times GRID_SCALE) either side of the peak
+local TIP_DELAY = 0.15 -- seconds before the tooltip follows the marker
+local PASS_CLICKS = CreateFrame("Button").SetMouseClickEnabled ~= nil
+
+-- marker shown: always-show on, or the pin lit (hovered, its dock row lit) or pinging
+local function MarkShown(p, instant)
+    local show = M.S().spotsShown or p.lit or p.pingAt ~= nil
+    St.Animate("fnpin" .. p.i, show and 1 or 0, (instant or not St.DUR) and 0 or St.DUR.quick, "soft", function(v)
+        p.mark:SetAlpha(v)
+        p.mark:SetShown(v > 0)
+    end)
+end
+
 local function Pin(i)
     local p = pins[i]
     if p then return p end
     p = CreateFrame("Button", nil, overlay)
+    p.i = i
     p:SetFrameLevel(overlay:GetFrameLevel() + 10)
-    p.disc = p:CreateTexture(nil, "ARTWORK")
+    if PASS_CLICKS then p:SetMouseClickEnabled(false) end
+    -- the marker: its own frame, centred in the hover area, hidden at rest
+    p.mark = CreateFrame("Frame", nil, p)
+    p.mark:SetPoint("CENTER")
+    p.mark:Hide()
+    p.disc = p.mark:CreateTexture(nil, "ARTWORK")
     p.disc:SetAllPoints()
     p.disc:SetTexture(CIRCLE)
     p.disc:SetVertexColor(1, 0.96, 0.86, 1)
-    p.dot = p:CreateTexture(nil, "OVERLAY")
+    p.dot = p.mark:CreateTexture(nil, "OVERLAY")
     p.dot:SetPoint("CENTER")
     p.dot:SetTexture(CIRCLE)
     p.dot:SetVertexColor(INK[1], INK[2], INK[3], 1)
     -- its rank above it, and a gold ring that lights with its row in the dock's hot spots list
-    p.num = St.Title(p, 13)
-    p.num:SetPoint("BOTTOM", p, "TOP", 0, 1)
+    p.num = St.Title(p.mark, 13)
+    p.num:SetPoint("BOTTOM", p.mark, "TOP", 0, 1)
     p.num:SetTextColor(1, 1, 1)
     p.num:SetShadowColor(0, 0, 0, 1)
     p.ring = p:CreateTexture(nil, "BACKGROUND")
@@ -466,11 +497,15 @@ local function Pin(i)
         if j > 1 then p.ripples[j - 1] = t end
     end
     p:SetScript("OnEnter", function(self)
-        PinTooltip(self)
+        self.hover = true
         M.LightPin(self.rank, true, true)
+        C_Timer.After(TIP_DELAY, function()
+            if self.hover and self:IsShown() then PinTooltip(self) end
+        end)
     end)
     p:SetScript("OnLeave", function(self)
-        GameTooltip:Hide()
+        self.hover = false
+        if not GameTooltip.IsOwned or GameTooltip:IsOwned(self) then GameTooltip:Hide() end
         M.LightPin(self.rank, false, true)
     end)
     pins[i] = p
@@ -499,7 +534,7 @@ local function EaseOut(t) return 1 - (1 - t) ^ 3 end
 
 local function PinMotion(p)
     local k = p.k or 1
-    local base = p:GetWidth() + 10 * k
+    local base = (p.size or p:GetWidth()) + 10 * k
     local now = GetTime()
     if p.lit then
         local t = (now % PULSE) / PULSE
@@ -524,7 +559,10 @@ local function PinMotion(p)
                 rip:Hide()
             end
         end
-        if not pinging then p.pingAt = nil end
+        if not pinging then
+            p.pingAt = nil
+            MarkShown(p) -- the ping is over: hide the marker again unless it is lit
+        end
     end
     if not p.lit and not pinging then p:SetScript("OnUpdate", nil) end
 end
@@ -536,16 +574,20 @@ local function PinRest(p)
     p.pulse:Hide()
     for _, rip in ipairs(p.ripples) do rip:Hide() end
     p:SetScript("OnUpdate", nil)
+    MarkShown(p, true)
 end
 
 function M.LightPin(rank, on, fromPin)
     local p = rank and byRank[rank]
     if p and p:IsShown() then
-        local base = p:GetWidth() + 10 * (p.k or 1)
-        p.lit = on and true or false
+        local base = (p.size or p:GetWidth()) + 10 * (p.k or 1)
+        -- the dock's row going dark leaves the pin lit while the cursor is still over it
+        p.lit = (on or p.hover) and true or false
+        on = p.lit
         p.ring:SetSize(base, base)
         p.ring:SetAlpha(1)
         p.ring:SetShown(on)
+        MarkShown(p)
         if on then
             p:SetScript("OnUpdate", PinMotion)
         elseif not p.pingAt then
@@ -560,6 +602,7 @@ function M.PingPin(rank)
     local p = rank and byRank[rank]
     if not (p and p:IsShown()) then return end
     p.pingAt = GetTime()
+    MarkShown(p)
     p:SetScript("OnUpdate", PinMotion)
 end
 
@@ -1155,12 +1198,20 @@ local function Draw()
             -- screen so they read the same at any map size
             local k = PinScale()
             local pin = (i == 1 and 16 or 12) * k
-            p:SetSize(pin, pin)
+            p.size = pin
+            p.mark:SetSize(pin, pin)
+            -- the hover area: the cluster's reach, or just the marker where clicks can't pass through
+            if PASS_CLICKS then
+                p:SetSize(math.max(pin, 2 * HIT_REACH * GRID_SCALE / cols * w),
+                    math.max(pin, 2 * HIT_REACH * GRID_SCALE / rows * h))
+            else
+                p:SetSize(pin, pin)
+            end
             p.dot:SetSize(pin / 2, pin / 2)
             p.k = k
             p.num:SetFont(STANDARD_TEXT_FONT, 13 * k, "OUTLINE")
             p.num:ClearAllPoints()
-            p.num:SetPoint("BOTTOM", p, "TOP", 0, k)
+            p.num:SetPoint("BOTTOM", p.mark, "TOP", 0, k)
             p:ClearAllPoints()
             p:SetPoint("CENTER", overlay, "TOPLEFT", hx * w, -hy * h)
             local rankN = #model.spots + 1
