@@ -27,7 +27,7 @@ local ui -- shared with Map.lua (FN.Map.ui)
 
 local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local BLOB = "Interface\\AddOns\\Fieldnotes\\Media\\blob" -- the soft round glow
-local DOCK_W = 228
+local DOCK_W = 272 -- (228 until stats v5 moved the stats into the dock, 2026-11-05)
 local PAD = 12
 local INNER = DOCK_W - PAD * 2
 local TAB_W = 34 -- every tab beside the dock, the Fieldnotes tab and the rail alike: squares, like the character window's
@@ -1352,7 +1352,10 @@ local TAB_SLIDE = 8 -- how much further the active tab reaches out (hover: 0.4 o
 -- Over it, a faint light of the tab's color comes in from the tab's outer edge.
 local SEAM_IN = 5 -- how far into the dock the window reaches (past the dock's border)
 local RECESS = 0.72 -- inactive tabs: a shade darker, as if they sat behind the page
-local LIGHT_PEAK = 0.34 -- at the outer edge; 0.14 and 0.2 did not show in game
+local LIGHT_PEAK = 0.24 -- at the outer edge; 0.14 and 0.2 did not show in game, 0.34 was a little strong (Karl, 2026-11-05)
+-- The open tab's gold edge (Karl, 2026-11-05): one gold for every tab, whatever its profession.
+-- Full along the outer edge, fading along the top and bottom toward the dock.
+local EDGE_GOLD = { 1.00, 0.82, 0.00 } -- (the chosen gold, STYLE.rowSel's edge, as on the Fieldnotes tab)
 
 local function PageCopy(t)
     local clip = CreateFrame("Frame", nil, dock)
@@ -1385,10 +1388,66 @@ local function PageCopy(t)
     t.page = clip
 end
 
+-- the open tab's gold edge: three lines on the icon's frame (the layer that draws above the page
+-- copy, as the light does), the outer one solid, top and bottom fading toward the dock
+-- The open tab's frame, from the game's own art (Karl, 2026-11-05: the flat gold lines had no
+-- rounded, bevelled corners): the side tab the character window uses (LargeSideTabButtonTemplate,
+-- as the Fieldnotes tab is), chosen, without its icon or mouse, laid behind ours and fitted to the
+-- part of the tab past the dock. Made once per tab; nil where the client has no such template.
+local NATIVE_H = 54 -- the template's own height (seen in game, /fn debug 2026-11-05)
+local function TabArt(t)
+    local art = rawget(t, "art")
+    if art ~= nil then return art or nil end
+    local ok, f = pcall(CreateFrame, "Frame", nil, t, "LargeSideTabButtonTemplate")
+    if ok and f and type(f.Icon) == "table" and f.SetChecked then
+        f:EnableMouse(false)
+        f.Icon:Hide()
+        f:SetChecked(true)
+        f:Hide()
+        t.art = f
+        return f
+    end
+    t.art = false
+end
+
+local function TabEdge(t, a)
+    local art = TabArt(t)
+    if art then
+        local show = a > 0.01 and t:IsShown()
+        art:SetShown(show)
+        if not show then return end
+        -- the template's art is drawn for its own size: scale it to ours, and size it (in its own
+        -- units) to the part of the tab that shows beside the dock
+        local h = t:GetHeight() or PROF_TAB_H
+        local k = h / NATIVE_H
+        local w = math.max(h, (t:GetWidth() or TAB_W) - (t.tuck or 0))
+        art:SetScale(k)
+        art:SetSize(w / k, NATIVE_H)
+        art:ClearAllPoints()
+        if t.side ~= "LEFT" then
+            art:SetPoint("TOPRIGHT", t, "TOPRIGHT", 0, 0)
+        else
+            art:SetPoint("TOPLEFT", t, "TOPLEFT", 0, 0)
+        end
+        art:SetAlpha(a)
+        -- above the page's copy, under the icon
+        art:SetFrameLevel(math.max(1, (t.mark:GetFrameLevel() or 3) - 1))
+        return
+    end
+    -- No template (Classic Era): the tab's own border, the game's rounded tooltip edge, turns gold
+    -- as it opens, as the Fieldnotes tab's does there (the flat gold lines had square corners)
+    if t.SetBackdropBorderColor then
+        local r0 = STYLE.dock.edge
+        local g = EDGE_GOLD
+        t:SetBackdropBorderColor(r0[1] + (g[1] - r0[1]) * a, r0[2] + (g[2] - r0[2]) * a, r0[3] + (g[3] - r0[3]) * a, 1)
+    end
+end
+
 ApplyTab = function(t)
     local v = t.out or 0
     local a = math.max(0, (v - 0.4) / 0.6) -- how active it looks: nothing while only hovered
     t:SetWidth(TAB_W + (t.tuck or 0) + TAB_SLIDE * v)
+    TabEdge(t, a)
     -- at rest the tab is recessed, a shade darker than the page
     local d = STYLE.dock
     St.VGradient(t.etchBg, { d.top[1] * RECESS, d.top[2] * RECESS, d.top[3] * RECESS },
@@ -1463,6 +1522,7 @@ end
 GoTo = function(key)
     local s = M.S()
     if list then list:Hide() end
+    dock.statsOpen = false
     if dock.sheetOpen then
         SetSheet(false)
         if DockOpen() and s.prof == key then
@@ -1486,6 +1546,7 @@ end
 
 SetSheet = function(open)
     dock.sheetOpen = open
+    if open then dock.statsOpen = false end
     ui.gear = dock.gear
     dock.gear.open = open
     dock.gear:Tint()
@@ -1869,6 +1930,9 @@ local function BuildDock()
     dock.key:SetPoint("TOPLEFT", PAD, y)
     body = shared
     dock.dash = Dashboard(body)
+    -- the Stats page (StatsPage.lua): opened by the Stats tab, in place of the old stats window
+    dock.statsPage = FN.StatsPage.Build(body, { inner = INNER, pad = PAD, top = FIRST_Y + SCROLL_TOP, ctrlH = CTRL_H,
+        Dropdown = Dropdown, ShowProvider = ShowProvider, WhenProvider = WhenProvider, DockScroll = DockScroll })
     dock.session = SessionCard(body, INNER)
 
     -- the settings page: no panel of its own, it rises inside the dock (which clips it)
@@ -1909,6 +1973,7 @@ local function BuildDock()
             FN.db.settings.dockOpen = false
         else
             FN.db.settings.dockOpen = true
+            dock.statsOpen = false
             local s = M.S()
             if s.prof ~= "all" then
                 s.prof = "all"
@@ -1981,7 +2046,7 @@ local function BuildDock()
     -- rest, 0.4 hovered, 1 active) drives all of it, eased, so every change glides.
     local function RailTab(icon, color, name, tipText, onClick)
         local t = St.Frame("Button", dockClip)
-        St.Etch(t, STYLE.dock, 8)
+        St.Etch(t, STYLE.dock, 12) -- (12, as the Fieldnotes tab: its open gold border matches)
         t:SetSize(TAB_W, PROF_TAB_H)
         t.color = color
         t.out, t.tuck = 0, 0
@@ -2035,9 +2100,8 @@ local function BuildDock()
     -- Stats and Settings, at the dock's bottom. Settings opens the settings page inside the dock
     -- (at rest its icon turns a darker gold while anything differs from the defaults); Stats opens
     -- the stats window.
-    dock.stats = RailTab("stats-white", C.TITLE, "Stats", "Your gathering stats", function()
-        FN.ToggleStats()
-        MapUI.Render(model)
+    dock.stats = RailTab("stats-white", C.TITLE, "Stats", "Charts of your gathering", function()
+        MapUI.OpenStats(not dock.statsOpen)
     end)
     dock.stats.p = false
     function dock.stats:Tint() ApplyTab(self) end
@@ -2119,12 +2183,18 @@ local function Neighbours(side, gap, dy, needH)
     local k = (container:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
     local winRight, winLeft = MapEdge()
     winRight, winLeft = (winRight or 0) * k, (winLeft or 0) * k
-    -- our column, folded and open both, so the tab does not jump when the dock opens
+    -- the strip where our tab hangs folded: on the map window's edge, as wide as the tab. Only side
+    -- tabs there matter: open, the dock (a layer up) covers that edge, and its own tab rides on the
+    -- dock's far side. (The open dock's whole width once counted too, so a tooltip over the dock
+    -- pushed the rail down, 2026-11-05.)
+    local tw = math.max(HOME_W, tab and tab:GetWidth() or HOME_W)
     local xlo, xhi
     if side == "RIGHT" then
-        xlo, xhi = cr - gap * k, cr + (-gap + DOCK_W - TAB_TUCK + HOME_W + TAB_TUCK) * k
+        xlo = cr - gap * k
+        xhi = xlo + tw * k
     else
-        xlo, xhi = cl + (gap - DOCK_W + TAB_TUCK - HOME_W - TAB_TUCK) * k, cl + gap * k
+        xhi = cl + gap * k
+        xlo = xhi - tw * k
     end
     wipe(obstacles)
     wipe(nbInfo)
@@ -2132,14 +2202,17 @@ local function Neighbours(side, gap, dy, needH)
     local function Consider(f)
         if f == WorldMapFrame or (f.IsForbidden and f:IsForbidden()) then return end -- (the game's own protected frames refuse a tainted caller)
         if not (f.IsVisible and f:IsVisible()) or IsOurs(f) then return end
+        -- a tooltip is not a tab
+        if (f.GetObjectType and f:GetObjectType() == "GameTooltip") or (f.GetFrameStrata and f:GetFrameStrata() == "TOOLTIP") then return end
         local w, h = f:GetWidth(), f:GetHeight()
         if not (w and h) or w < 10 or h < 10 or w > 110 or h > 260 then return end
         local l, b, r, t = ScreenRect(f)
         if not l or r <= xlo or l >= xhi then return end
-        -- out past the window's edge on our side; a widget inside the map is not a tab
+        -- hung on the window's edge on our side (as Spoken Places finds side tabs): it starts at
+        -- the edge, its middle out past it; a widget inside the map is not a tab
         local mid = (l + r) / 2
-        if side == "RIGHT" and mid < winRight - 4 then return end
-        if side == "LEFT" and mid > winLeft + 4 then return end
+        if side == "RIGHT" and (mid < winRight - 4 or l < winRight - 12) then return end
+        if side == "LEFT" and (mid > winLeft + 4 or r > winLeft + 12) then return end
         obstacles[#obstacles + 1] = b
         obstacles[#obstacles + 1] = t
     end
@@ -2229,7 +2302,7 @@ local function LayoutDock()
     if wantScan or GetTime() - lastScan > 1.5 then
         wantScan = false
         lastScan = GetTime()
-        local needH = (tab:GetHeight() or HOME_H) + (#shownTabs + 1) * (PROF_TAB_H + PROF_TAB_GAP)
+        local needH = tab:GetHeight() or HOME_H
         local ok, drop, shift = pcall(Neighbours, side, gap, dy, needH)
         homeDrop, homeX = ok and drop or 0, ok and shift or 0
         nbInfo.err = (not ok) and tostring(drop) or nil
@@ -2325,12 +2398,12 @@ local function LayoutDock()
         end
         local active
         if t.p then
-            active = not dock.sheetOpen and s.prof == t.p.key
+            active = not dock.sheetOpen and not dock.statsOpen and s.prof == t.p.key
             t.rec:SetShown(t.p.key ~= "all" and FN.SessionHas and FN.SessionHas(t.p.key) or false)
         elseif t == dock.gear then
             active = dock.sheetOpen == true
         else
-            active = FN.StatsShown and FN.StatsShown() or false
+            active = dock.statsOpen == true
         end
         active = open and active
         if t.active ~= active then
@@ -2345,6 +2418,25 @@ end
 local function RenderDock(m)
     local s = M.S()
     dock.switch:Sync()
+    dock.statsPage:SetShown(dock.statsOpen == true)
+    if dock.statsOpen then
+        local P = M.PROF[s.statsProf]
+        dock.icon:Set(nil)
+        dock.prof:ClearAllPoints()
+        dock.prof:SetPoint("TOPLEFT", PAD, -PAD - 2)
+        dock.prof:SetText("Stats")
+        dock.place:SetText((P and P.label or "All professions") .. (m.place and ("  ·  " .. m.place) or ""))
+        dock.page:Hide()
+        dock.dash:Hide()
+        dock:SetGlow(nil)
+        dock.statsPage:Update()
+        dock.session:ClearAllPoints()
+        dock.session:SetPoint("BOTTOMLEFT", dock.body, "BOTTOMLEFT", PAD, FOOTER_H + 8)
+        dock.session:Update()
+        dock.gear:Tint()
+        if dock.sheetOpen then SheetLayout() end
+        return
+    end
     local dash = s.prof == "all"
     local p = M.PROF[s.prof]
     dock.icon:Set(p)
@@ -2796,6 +2888,23 @@ function MapUI.Debug(Size)
                 rawget(t, "out") or 0, page:IsShown() and "shown" or "hidden", page:GetFrameLevel() or 0,
                 t.mark:GetFrameLevel() or 0, light:IsShown() and "shown" or "hidden", light:GetWidth() or 0,
                 la or 0))
+            -- its frame: the game's side tab art (TabArt), or the flat lines where there is none
+            local art = rawget(t, "art")
+            if art then
+                FN.Print(string.format("  tab frame: game art %s, scale %.2f, %dx%d, level %d, alpha %.2f",
+                    art:IsShown() and "shown" or "hidden", art:GetScale() or 0, art:GetWidth() or 0, art:GetHeight() or 0,
+                    art:GetFrameLevel() or 0, art:GetAlpha() or 0))
+                -- what the template draws with, so its pieces can be matched
+                for _, r in ipairs({ art:GetRegions() }) do
+                    if r.GetObjectType and r:GetObjectType() == "Texture" then
+                        local layer = r:GetDrawLayer()
+                        FN.Print(string.format("   piece %s %s %s %dx%d", tostring(layer), r:IsShown() and "shown" or "hidden",
+                            tostring((r.GetAtlas and r:GetAtlas()) or r:GetTexture()), r:GetWidth() or 0, r:GetHeight() or 0))
+                    end
+                end
+            else
+                FN.Print("  tab frame: flat lines (" .. (art == false and "this client has no side tab template" or "not made yet") .. ")")
+            end
         end
     end
 end
@@ -2817,6 +2926,14 @@ function MapUI.Init()
         if (dock.sheetOpen == true) ~= (open == true) then SetSheet(open == true) end
         MapUI.Render(model)
     end
+    -- the Stats page (the Stats tab, /fn): open or close it in the dock
+    function MapUI.OpenStats(open)
+        if list then list:Hide() end
+        if open and dock.sheetOpen then SetSheet(false) end
+        dock.statsOpen = open == true
+        if open then FN.db.settings.dockOpen = true end
+        MapUI.Render(model)
+    end
     BuildToolbar()
     MapUI.key = hudKey -- for the checks
     -- other add-ons build their map tabs a moment after the map opens: look, then look again
@@ -2830,4 +2947,28 @@ function MapUI.Init()
         if dock.sheetOpen then SetSheet(false) end
         if pop.open then SetPop(false) end
     end)
+end
+
+-- ------------------------------------------------------------
+-- Stats: a page in the dock (StatsPage.lua). /fn, the toolbar's Stats and /fn shots come here.
+-- ------------------------------------------------------------
+function FN.StatsShown()
+    return dock ~= nil and dock.statsOpen == true and WorldMapFrame:IsShown() and ui.layout == "dock"
+end
+-- the dock while the Stats page shows (/fn shots frames it), else nil
+function FN.StatsFrame() return FN.StatsShown() and dock or nil end
+function FN.HideStats()
+    if dock and dock.statsOpen then MapUI.OpenStats(false) end
+end
+function FN.ShowStats()
+    if not dock then return end
+    if not WorldMapFrame:IsShown() and ToggleWorldMap then ToggleWorldMap() end
+    MapUI.OpenStats(true)
+    -- the full-screen map has no dock: say where the stats are
+    if WorldMapFrame:IsShown() and not UseDock() then
+        FN.Print("Stats open in the map's side panel: make the map smaller to see them.")
+    end
+end
+function FN.ToggleStats()
+    if FN.StatsShown() then FN.HideStats() else FN.ShowStats() end
 end

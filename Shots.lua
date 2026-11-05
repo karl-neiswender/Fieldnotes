@@ -58,7 +58,7 @@ end
 local function Stage(shot)
     local s = FN.Map.S()
     if FN.HideTracker then FN.HideTracker() end
-    if FN.StatsFrame and FN.StatsFrame() then FN.StatsFrame():Hide() end
+    if FN.HideStats then FN.HideStats() end
     if FN.ShareFrame and FN.ShareFrame() then FN.ShareFrame():Hide() end
     if shot.map then
         s.on = true
@@ -152,7 +152,7 @@ function FN.TakeShots(only)
         FN.db.settings.dockOpen, FN.db.settings.trackerCompact = dockOpen, compact
         FN.Map.SetLit(nil)
         FN.MapUI.OpenSettings(false)
-        if FN.StatsFrame and FN.StatsFrame() then FN.StatsFrame():Hide() end
+        if FN.HideStats then FN.HideStats() end
         if FN.ShareFrame and FN.ShareFrame() then FN.ShareFrame():Hide() end
         if not hadDemo then FN.DemoClear() end
         if setCVar then

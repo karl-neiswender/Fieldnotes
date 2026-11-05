@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldnotes stats v5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gold: #ffd75e; --accent: #ffd100; --edgegold: #ffd133;
+  --text: #e8e8e8; --ink2: #bdbdbd; --sub: #999; --faint: #6d665a;
+  --edge: #54492f; --rule: #3d362a; --well: #15120e;
+  /* identity colors, 2026-11-05: Mining red, Treasure takes Mining's old gold */
+  --skinning: #e8803a; --mining: #e35445; --herbalism: #6fbf4f; --fishing: #4fa3e0; --cloth: #a77ddc; --treasure: #f2d43a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 30% 30%, #2a3138 0%, #11161b 70%); color: var(--text);
+  font-family: Marcellus, Georgia, serif; min-height: 100vh; }
+button { font-family: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.stage { max-width: 1240px; margin: 0 auto; padding: 28px 16px 48px; }
+.top h1 { font-weight: 400; font-size: 22px; color: var(--gold); margin: 0; }
+.top p { margin: 4px 0 18px; color: var(--sub); font-size: 13px; max-width: 760px; line-height: 1.5; }
+.row { display: flex; align-items: flex-start; gap: 0; flex-wrap: wrap; }
+
+/* the map window's edge, for scale */
+.mapedge { width: 70px; height: 720px; border-radius: 6px 0 0 6px; background: linear-gradient(90deg, #8a7444 0%, #b99a5c 60%, #5a4a2a 100%);
+  box-shadow: inset -2px 0 0 #5a4a2a, inset -4px 0 0 #1a160f; opacity: .55; flex: none; }
+
+/* the dock, wider (228 to 272 in game; drawn here at 1.25x) */
+.dock { width: 340px; height: 720px; position: relative; border: 1px solid var(--edge); border-radius: 0 8px 8px 0;
+  background: linear-gradient(#2a2017, #0b0806); flex: none; display: flex; flex-direction: column; }
+.head { padding: 16px 16px 8px; }
+.head h2 { margin: 0; font-weight: 400; font-size: 22px; color: var(--gold); text-shadow: 1px 1px 0 #33240a; }
+.head small { color: var(--sub); font-size: 13px; }
+.drops { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 16px; }
+.dd { height: 30px; display: flex; align-items: center; padding: 0 10px; border: 1px solid #6b5e42; border-radius: 3px;
+  background: linear-gradient(#3d3933, #14130f); color: var(--ink2); font-size: 14px; }
+.dd em { margin-left: auto; font-style: normal; font-size: 11px; }
+.chips { display: flex; gap: 4px; padding: 10px 16px 8px; }
+.chip { flex: 1; height: 30px; border: 1px solid #4a4336; border-radius: 3px; background: linear-gradient(#2a2620, #100e0b);
+  display: grid; place-items: center; color: var(--ink2); font-size: 13px; padding: 0; }
+.chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); display: block; }
+.chip.all { flex: 1.6; }
+.chip.on { border-color: var(--accent); background: linear-gradient(#614a0f, #1c1404); color: var(--gold); }
+.chip:hover:not(.on) { border-color: #8a7a52; }
+
+/* the page scrolls, like a phone */
+.scroll { flex: 1; overflow-y: auto; padding: 4px 16px 16px; scrollbar-width: thin; scrollbar-color: #5a4a2a transparent; }
+.sect { margin-top: 14px; }
+.sect h3 { margin: 0 0 6px; font-weight: 400; font-size: 12px; letter-spacing: .6px; color: var(--sub); text-transform: uppercase;
+  display: flex; justify-content: space-between; align-items: baseline; }
+.sect h3 span { text-transform: none; letter-spacing: 0; color: var(--faint); font-size: 12px; }
+.card { border: 1px solid #47423a; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 10px 10px 8px; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.kpi { border: 1px solid #47423a; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 8px 10px 7px; }
+.kpi b { display: block; font-weight: 400; font-size: 22px; line-height: 26px; }
+.kpi span { font-size: 12px; color: var(--sub); }
+.kpi small { display: block; font-size: 11px; color: var(--faint); margin-top: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 11px; color: var(--ink2); }
+.legend span { display: flex; align-items: center; gap: 4px; }
+.legend i { width: 8px; height: 8px; border-radius: 2px; }
+svg { display: block; overflow: visible; }
+svg .hit { cursor: default; }
+svg .hit:hover { filter: brightness(1.25); }
+.donut { display: grid; grid-template-columns: 128px 1fr; gap: 10px; align-items: center; }
+.dlist { font-size: 12px; line-height: 20px; }
+.dlist > div { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 6px; align-items: center; padding: 0 4px; border-radius: 2px; }
+.dlist > div:hover, .dlist > div.lit { background: rgba(255,209,0,.08); }
+.dlist i { width: 8px; height: 8px; border-radius: 2px; }
+.dlist em { font-style: normal; color: var(--sub); width: 34px; text-align: right; }
+.bars > div { display: grid; grid-template-columns: 18px 1fr; gap: 7px; align-items: center; padding: 3px 4px; border-radius: 2px; }
+.bars > div:hover { background: rgba(255,209,0,.07); }
+.bars .sq { width: 18px; height: 18px; border-radius: 2px; border: 1px solid #000; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.bars .lab { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px; }
+.bars .lab span { color: var(--sub); }
+.bars .track { height: 5px; border-radius: 3px; background: #2e2a24; overflow: hidden; }
+.bars .track i { display: block; height: 100%; border-radius: 3px; }
+.note { font-size: 11px; color: var(--faint); margin-top: 6px; line-height: 1.4; }
+.empty { font-size: 12px; color: var(--sub); padding: 8px 2px; }
+
+/* rail beside the dock (the open tab with the new gold edge) */
+.tabs { display: flex; flex-direction: column; gap: 5px; margin-top: 16px; margin-left: -1px; flex: none; }
+.tab { width: 42px; height: 42px; border: 1px solid #3a3226; border-left: 0; border-radius: 0 6px 6px 0; display: grid; place-items: center;
+  background: linear-gradient(#17120d, #070605); position: relative; }
+.tab i { width: 12px; height: 12px; border-radius: 50%; background: var(--c, #ccc); opacity: .55; }
+.tab.home { width: 54px; height: 54px; border-color: #806020; background: linear-gradient(#2b2213, #0d0a06); }
+.tab.home i { width: 26px; height: 26px; border-radius: 4px; background: linear-gradient(135deg, #2b6fbf, #e3a23a 60%, #b4422e); opacity: 1; }
+.tab.gap { margin-top: 18px; }
+.tab.on { background: linear-gradient(90deg, #2a2017, #1f1810); }
+.tab.on i { opacity: 1; }
+/* the gold edge: full on the outer side, fading along top and bottom toward the dock */
+.tab.on::after { content: ""; position: absolute; inset: 1px 1px 1px 0; border-radius: 0 5px 5px 0; pointer-events: none;
+  border: 2px solid transparent; border-left: 0;
+  background: linear-gradient(90deg, rgba(255,209,51,0), var(--edgegold)) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+
+/* WoW-style tooltip */
+#tip { position: fixed; pointer-events: none; z-index: 10; min-width: 140px; max-width: 240px; padding: 7px 9px 6px; border-radius: 4px;
+  background: rgba(8, 10, 22, .94); border: 1px solid #8a8a8a; box-shadow: 0 0 0 1px #000, 0 6px 16px rgba(0,0,0,.6);
+  font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 16px; color: #fff; display: none; }
+#tip b { display: block; font-size: 13px; margin-bottom: 2px; }
+#tip .kv { display: flex; justify-content: space-between; gap: 12px; }
+#tip .kv span:last-child { color: #fff; }
+#tip .kv span:first-child { color: #ffd100; }
+#tip .dim { color: #9a9a9a; }
+
+/* notes */
+.notes { flex: 1; min-width: 300px; margin-left: 34px; font-size: 13px; line-height: 1.55; color: var(--ink2); }
+.notes h3 { margin: 0 0 4px; font-weight: 400; font-size: 15px; color: var(--gold); }
+.notes p, .notes li { margin: 0 0 8px; }
+.notes ol, .notes ul { padding-left: 18px; margin: 0 0 12px; }
+.notes .q { border-left: 2px solid var(--accent); padding: 2px 0 2px 10px; margin: 10px 0; color: var(--text); }
+@media (max-width: 760px) { .notes { margin: 24px 0 0; } .mapedge { display: none; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="top">
+    <h1>Fieldnotes stats v5: stats inside the dock, as a phone-style page of charts</h1>
+    <p>The Stats tab stops opening a separate window. The dock grows a little wider and the page scrolls top to bottom:
+      headline numbers, then one chart per question. Every chart answers on hover with a game-style tooltip.
+      Pick a profession with the chips; "All" compares them. Data here is made up, shaped like the demo.</p>
+  </div>
+
+  <div class="row">
+    <div class="mapedge" aria-hidden="true"></div>
+    <div class="dock" role="region" aria-label="Fieldnotes dock, Stats page">
+      <div class="head"><h2>Stats</h2><small id="where">All professions · Account · All time</small></div>
+      <div class="drops"><div class="dd">Account<em>▼</em></div><div class="dd">All time<em>▼</em></div></div>
+      <div class="chips" id="chips"></div>
+      <div class="scroll" id="page"></div>
+    </div>
+    <div class="tabs" aria-hidden="true">
+      <div class="tab home"><i></i></div>
+      <div class="tab" style="--c:var(--gold)"><i></i></div>
+      <div class="tab" style="--c:var(--skinning)"><i></i></div>
+      <div class="tab" style="--c:var(--mining)"><i></i></div>
+      <div class="tab" style="--c:var(--herbalism)"><i></i></div>
+      <div class="tab" style="--c:var(--fishing)"><i></i></div>
+      <div class="tab" style="--c:var(--cloth)"><i></i></div>
+      <div class="tab" style="--c:var(--treasure)"><i></i></div>
+      <div class="tab gap on" style="--c:var(--gold)"><i></i></div>
+      <div class="tab" style="--c:#bbb"><i></i></div>
+    </div>
+
+    <div class="notes">
+      <h3>What changes</h3>
+      <ol>
+        <li><b>No stats window.</b> The Stats tab (bar-chart icon) opens a page inside the dock, like Settings does. The old window and <code>/fn</code> stats go.</li>
+        <li><b>The dock is wider:</b> 228 to 272 (about a fifth). The map's own size is untouched; the toolbar on the full-screen map keeps its key.</li>
+        <li><b>One vertical page that scrolls</b> with the mouse wheel: numbers first, then charts, each answering one question.</li>
+        <li><b>Chips</b> pick All or one profession. A profession adds its own card at the bottom (Skinning: ruined rate and creatures; Cloth: drop rate by creature; Treasure: best chests).</li>
+        <li><b>Hover anything</b> for a tooltip in the game's own style. Hovering a donut slice or legend row lights both.</li>
+      </ol>
+      <h3>The charts</h3>
+      <ul>
+        <li><b>Last 30 days:</b> a column a day, stacked by profession.</li>
+        <li><b>Profession mix:</b> a donut with the total in the middle.</li>
+        <li><b>When you gather:</b> day by hour, darker where you gather most.</li>
+        <li><b>Top loot:</b> bars with the item's own icon; hover for per-gather rate.</li>
+        <li><b>Best zones:</b> gathers per hour of active time, from sessions in the records.</li>
+        <li><b>Skill climb:</b> a line per skilled profession over the period.</li>
+      </ul>
+      <h3>How it is built in game</h3>
+      <p>Bars, columns and the grid are plain textures, pooled and redrawn only when the page, filter or data changes.
+        The donut is a ring cut into 90 thin wedges (one rotated texture each), colored by share. Lines are
+        rotated 2px textures between points. Text is the game's fonts; the tooltip is GameTooltip.</p>
+      <p class="muted" style="color:var(--sub)">Not a phone UI: no swiping. The wheel scrolls, the chips filter, hover explains.</p>
+      <div class="q">To approve: the wider dock, dropping the window, the six charts and their order. Anything to cut or add?</div>
+      <h3>Also in this build (already in game)</h3>
+      <p>Tab wash softer (0.34 to 0.24), and the open tab gets a gold edge: full on its outer side, fading along the top and
+        bottom toward the dock, the same gold on every tab. Shown on the Stats tab at right.</p>
+    </div>
+  </div>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+// ---------------------------------------------------------------- sample data (seeded, demo-shaped)
+let seed = 20261105;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
+const PROFS = [
+  { key: 'skinning', label: 'Skinning', unit: 'skins', w: 1.0, skill: [140, 205] },
+  { key: 'mining', label: 'Mining', unit: 'veins', w: .45, skill: [95, 150] },
+  { key: 'herbalism', label: 'Herbalism', unit: 'herbs', w: .5, skill: [110, 160] },
+  { key: 'fishing', label: 'Fishing', unit: 'catches', w: .35, skill: [60, 110] },
+  { key: 'cloth', label: 'Cloth', unit: 'drops', w: .4 },
+  { key: 'treasure', label: 'Treasure', unit: 'chests', w: .04 },
+];
+PROFS.forEach(p => p.color = css(p.key));
+const ZONES = ['Stranglethorn Vale', 'Arathi Highlands', 'Wetlands', 'Loch Modan', 'Dun Morogh', 'Westfall'];
+const LOOT = {
+  skinning: [['Medium Leather', '#8a6a3c'], ['Light Leather', '#b4925a'], ['Ruined Leather Scraps', '#6b5b4a'], ['Medium Hide', '#7a5230']],
+  mining: [['Tin Ore', '#9aa3a8'], ['Copper Ore', '#c0743a'], ['Coarse Stone', '#8a857c'], ['Shadowgem', '#6a4ea0']],
+  herbalism: [['Bruiseweed', '#7a9a4a'], ['Briarthorn', '#9a6a3a'], ['Mageroyal', '#c0a050'], ['Swiftthistle', '#5a9a8a']],
+  fishing: [['Raw Bristle Whisker Catfish', '#8a8a6a'], ['Raw Longjaw Mud Snapper', '#6a8aa0'], ['Oily Blackmouth', '#4a5a6a']],
+  cloth: [['Wool Cloth', '#c8c0b0'], ['Linen Cloth', '#e0d8c0'], ['Silk Cloth', '#d8d0e8']],
+  treasure: [['Lesser Healing Potion', '#c03030'], ['Malachite', '#40a070'], ['Tough Jerky', '#a06a40'], ['Moss Agate', '#7a9a8a']],
+};
+const DAYS = 30, DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const recs = []; // { p, day (0 oldest), dow, hour, zone, items }
+for (let d = 0; d < DAYS; d++) {
+  const dow = (d + 2) % 7, busy = (dow >= 5 ? 1.7 : 1) * (rand() < .25 ? 0.15 : 1);
+  PROFS.forEach(p => {
+    const n = Math.round(p.w * busy * (18 + rand() * 30));
+    for (let i = 0; i < n; i++) {
+      const evening = rand() < .7;
+      const hour = evening ? 18 + Math.floor(rand() * 6) : 10 + Math.floor(rand() * 8);
+      const zi = Math.min(ZONES.length - 1, Math.floor(Math.pow(rand(), 1.6) * ZONES.length));
+      const items = {}; const L = LOOT[p.key];
+      L.forEach((it, k) => { if (rand() < (k === 0 ? .9 : .45 / k)) items[it[0]] = 1 + Math.floor(rand() * (p.key === 'cloth' ? 2 : 3)); });
+      recs.push({ p: p.key, day: d, dow, hour, zone: ZONES[zi], items });
+    }
+  });
+}
+
+// ---------------------------------------------------------------- tooltip
+const tip = document.getElementById('tip');
+function showTip(e, html) {
+  tip.innerHTML = html; tip.style.display = 'block';
+  const r = tip.getBoundingClientRect(); let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+const hideTip = () => tip.style.display = 'none';
+const kv = (a, b) => `<div class="kv"><span>${a}</span><span>${b}</span></div>`;
+const fmt = n => n.toLocaleString('en-US');
+function wire(el, html) { el.addEventListener('mousemove', e => showTip(e, typeof html === 'function' ? html() : html)); el.addEventListener('mouseleave', hideTip); }
+
+// ---------------------------------------------------------------- page
+let pick = 'all';
+const chips = document.getElementById('chips');
+[{ key: 'all', label: 'All' }, ...PROFS].forEach(p => {
+  const b = document.createElement('button');
+  b.className = 'chip' + (p.key === 'all' ? ' all' : '');
+  b.style.setProperty('--c', p.color || '');
+  b.innerHTML = p.key === 'all' ? 'All' : '<i></i>';
+  b.setAttribute('aria-label', p.label);
+  b.onclick = () => { pick = p.key; render(); };
+  wire(b, `<b>${p.label}</b><span class="dim">${p.key === 'all' ? 'Compare every profession' : 'Only ' + p.label.toLowerCase()}</span>`);
+  b.dataset.key = p.key; chips.appendChild(b);
+});
+
+const NS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+const sect = (page, title, aside) => { const s = document.createElement('div'); s.className = 'sect'; s.innerHTML = `<h3>${title}<span>${aside || ''}</span></h3>`; page.appendChild(s); return s; };
+const card = s => { const c = document.createElement('div'); c.className = 'card'; s.appendChild(c); return c; };
+
+function render() {
+  [...chips.children].forEach(b => b.classList.toggle('on', b.dataset.key === pick));
+  const P = pick === 'all' ? null : PROFS.find(p => p.key === pick);
+  document.getElementById('where').textContent = (P ? P.label : 'All professions') + ' · Account · All time';
+  const rs = P ? recs.filter(r => r.p === pick) : recs;
+  const profs = P ? [P] : PROFS;
+  const unit = P ? P.unit : 'gathers';
+  const page = document.getElementById('page'); page.innerHTML = ''; hideTip();
+
+  // headline numbers
+  const days = new Set(rs.map(r => r.day)).size;
+  const byZone = {}; rs.forEach(r => byZone[r.zone] = (byZone[r.zone] || 0) + 1);
+  const topZone = Object.entries(byZone).sort((a, b) => b[1] - a[1])[0];
+  const hours = days * 1.6;
+  const k = document.createElement('div'); k.className = 'kpis'; page.appendChild(k);
+  [[fmt(rs.length), unit[0].toUpperCase() + unit.slice(1), 'in 30 days'],
+   [Math.round(rs.length / hours), 'Per hour', 'active time, best ' + Math.round(rs.length / hours * 1.4)],
+   [days, 'Days out', 'of the last 30'],
+   [topZone ? topZone[0].split(' ')[0] : '-', 'Top zone', topZone ? fmt(topZone[1]) + ' ' + unit : '']].forEach(([v, l, s], i) => {
+    const d = document.createElement('div'); d.className = 'kpi';
+    d.innerHTML = `<b style="${i === 3 ? 'font-size:18px' : ''}">${v}</b><span>${l}</span><small>${s}</small>`;
+    k.appendChild(d);
+    wire(d, `<b>${l}</b>` + (i === 0 ? kv('This period', fmt(rs.length)) + kv('Per day out', Math.round(rs.length / Math.max(1, days)))
+      : i === 1 ? kv('Average', Math.round(rs.length / hours) + '/hr') + kv('Best session', Math.round(rs.length / hours * 1.4) + '/hr') + '<span class="dim">Hours count time between gathers, gaps over 5 min left out</span>'
+      : i === 2 ? kv('Days with gathers', days) + kv('Quiet days', DAYS - days)
+      : kv(topZone[0], fmt(topZone[1])) + kv('Share', Math.round(topZone[1] / rs.length * 100) + '%')));
+  });
+
+  // last 30 days: stacked columns
+  {
+    const s = sect(page, 'Last 30 days', 'a column a day'); const c = card(s);
+    const W = 284, H = 96, bw = W / DAYS;
+    const per = []; for (let d = 0; d < DAYS; d++) { per[d] = {}; profs.forEach(p => per[d][p.key] = 0); }
+    rs.forEach(r => per[r.day][r.p]++);
+    const max = Math.max(1, ...per.map(o => Object.values(o).reduce((a, b) => a + b, 0)));
+    const svg = svgEl('svg', { width: '100%', viewBox: `0 0 ${W} ${H + 14}` }, c);
+    [0.5, 1].forEach(f => svgEl('line', { x1: 0, x2: W, y1: H - H * f, y2: H - H * f, stroke: '#3a342a', 'stroke-dasharray': '2 3' }, svg));
+    per.forEach((o, d) => {
+      let y = H; const g = svgEl('g', { class: 'hit' }, svg);
+      profs.forEach(p => { const h = o[p.key] / max * (H - 4); if (h > 0) { svgEl('rect', { x: d * bw + 1, y: y - h, width: bw - 2, height: h, fill: p.color, rx: 1 }, g); y -= h; } });
+      svgEl('rect', { x: d * bw, y: 0, width: bw, height: H, fill: 'transparent' }, g);
+      const date = new Date(2026, 9, 7 + d);
+      const label = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      wire(g, () => `<b>${label}</b>` + profs.filter(p => o[p.key]).map(p => kv(`<span style="color:${p.color}">${p.label}</span>`, o[p.key])).join('')
+        + (Object.values(o).some(v => v) ? '' : '<span class="dim">Nothing gathered</span>'));
+    });
+    ['30 days ago', '2 weeks', 'Today'].forEach((t, i) => svgEl('text', { x: [0, W / 2, W][i], y: H + 12, fill: '#7a7266', 'font-size': 9, 'text-anchor': ['start', 'middle', 'end'][i] }, svg).textContent = t);
+    if (!P) { const lg = document.createElement('div'); lg.className = 'legend'; lg.innerHTML = PROFS.map(p => `<span><i style="background:${p.color}"></i>${p.label}</span>`).join(''); c.appendChild(lg); }
+  }
+
+  // profession mix (All) or material mix (one profession): donut
+  {
+    const parts = P
+      ? Object.entries(rs.reduce((o, r) => { for (const n in r.items) o[n] = (o[n] || 0) + r.items[n]; return o; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5)
+        .map(([n, v], i) => ({ label: n, v, color: (LOOT[pick].find(x => x[0] === n) || [0, '#888'])[1] }))
+      : PROFS.map(p => ({ label: p.label, v: rs.filter(r => r.p === p.key).length, color: p.color }));
+    const total = parts.reduce((a, b) => a + b.v, 0);
+    const s = sect(page, P ? 'What it gave' : 'Profession mix', P ? 'items, top five' : 'share of gathers'); const c = card(s);
+    const wrap = document.createElement('div'); wrap.className = 'donut'; c.appendChild(wrap);
+    const svg = svgEl('svg', { width: 128, height: 128, viewBox: '-64 -64 128 128' }, wrap);
+    const list = document.createElement('div'); list.className = 'dlist'; wrap.appendChild(list);
+    let a0 = -Math.PI / 2; const R = 58, r = 38;
+    const arcs = parts.map((pt, i) => {
+      const a1 = a0 + pt.v / total * Math.PI * 2, big = a1 - a0 > Math.PI ? 1 : 0;
+      const P1 = [Math.cos(a0), Math.sin(a0)], P2 = [Math.cos(a1), Math.sin(a1)];
+      const d = `M${P1[0] * R},${P1[1] * R}A${R},${R} 0 ${big} 1 ${P2[0] * R},${P2[1] * R}L${P2[0] * r},${P2[1] * r}A${r},${r} 0 ${big} 0 ${P1[0] * r},${P1[1] * r}Z`;
+      const path = svgEl('path', { d, fill: pt.color, stroke: '#0d0c0b', 'stroke-width': 1.2, class: 'hit' }, svg);
+      a0 = a1;
+      const row = document.createElement('div');
+      row.innerHTML = `<i style="background:${pt.color}"></i><span>${pt.label}</span><span>${fmt(pt.v)}</span><em>${Math.round(pt.v / total * 100)}%</em>`;
+      list.appendChild(row);
+      const html = `<b style="color:${pt.color}">${pt.label}</b>` + kv(P ? 'Items' : 'Gathers', fmt(pt.v)) + kv('Share', (pt.v / total * 100).toFixed(1) + '%');
+      const on = v => { row.classList.toggle('lit', v); path.style.filter = v ? 'brightness(1.3)' : ''; path.setAttribute('transform', v ? `scale(1.04)` : ''); };
+      [path, row].forEach(el => { wire(el, html); el.addEventListener('mouseenter', () => on(true)); el.addEventListener('mouseleave', () => on(false)); });
+      return path;
+    });
+    svgEl('text', { x: 0, y: 2, fill: '#e8e8e8', 'font-size': 18, 'text-anchor': 'middle' }, svg).textContent = fmt(total);
+    svgEl('text', { x: 0, y: 16, fill: '#8a8a8a', 'font-size': 9, 'text-anchor': 'middle' }, svg).textContent = P ? 'items' : 'gathers';
+  }
+
+  // when you gather: day x hour
+  {
+    const s = sect(page, 'When you gather', 'day by hour'); const c = card(s);
+    const grid = Array.from({ length: 7 }, () => Array(24).fill(0)); rs.forEach(r => grid[r.dow][r.hour]++);
+    const max = Math.max(1, ...grid.flat()); const cw = 11, ch = 11, L = 22;
+    const svg = svgEl('svg', { width: '100%', viewBox: `0 0 ${L + 24 * cw} ${7 * ch + 14}` }, c);
+    const base = P ? P.color : '#ffd100';
+    grid.forEach((row, d) => {
+      svgEl('text', { x: 0, y: d * ch + 8.5, fill: '#7a7266', 'font-size': 8 }, svg).textContent = DAY[d];
+      row.forEach((v, h) => {
+        const t = v / max;
+        const rect = svgEl('rect', { x: L + h * cw, y: d * ch, width: cw - 1.5, height: ch - 1.5, rx: 1.5, class: 'hit',
+          fill: v ? base : '#2a2620', 'fill-opacity': v ? (0.15 + 0.85 * Math.pow(t, .7)).toFixed(2) : 1 }, svg);
+        const hr = h === 0 ? '12 am' : h < 12 ? h + ' am' : h === 12 ? '12 pm' : (h - 12) + ' pm';
+        wire(rect, `<b>${['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'][d]}, ${hr}</b>` + kv(unit[0].toUpperCase() + unit.slice(1), v) + (v === max ? '<span class="dim">Your busiest hour</span>' : ''));
+      });
+    });
+    [0, 6, 12, 18].forEach(h => svgEl('text', { x: L + h * cw, y: 7 * ch + 11, fill: '#7a7266', 'font-size': 8 }, svg).textContent = ['12a', '6a', '12p', '6p'][h / 6]);
+  }
+
+  // top loot
+  {
+    const tot = {}; rs.forEach(r => { for (const n in r.items) tot[n] = (tot[n] || 0) + r.items[n]; });
+    const top = Object.entries(tot).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const s = sect(page, 'Top loot', 'by count'); const c = card(s); const bars = document.createElement('div'); bars.className = 'bars'; c.appendChild(bars);
+    const all = Object.values(LOOT).flat();
+    top.forEach(([n, v]) => {
+      const col = (all.find(x => x[0] === n) || [0, '#888'])[1];
+      const pk = Object.keys(LOOT).find(k => LOOT[k].some(x => x[0] === n)); const pc = css(pk);
+      const d = document.createElement('div');
+      d.innerHTML = `<div class="sq" style="background:linear-gradient(135deg,${col},#1a1712)"></div><div><div class="lab">${n}<span>${fmt(v)}</span></div><div class="track"><i style="width:${v / top[0][1] * 100}%;background:${pc}"></i></div></div>`;
+      bars.appendChild(d);
+      const n2 = rs.filter(r => r.items[n]).length;
+      wire(d, `<b>${n}</b>` + kv('Looted', fmt(v)) + kv('From', fmt(n2) + ' ' + unit) + kv('Each time', (v / n2).toFixed(1)) + `<span class="dim">${PROFS.find(p => p.key === pk).label}</span>`);
+    });
+  }
+
+  // best zones per hour
+  {
+    const s = sect(page, 'Best zones', P ? P.unit + ' per hour' : 'gathers per hour'); const c = card(s); const bars = document.createElement('div'); bars.className = 'bars'; c.appendChild(bars);
+    const z = ZONES.map((name, i) => { const n = byZone[name] || 0; const h = Math.max(.4, n / (40 + i * 9)); return { name, n, h, rate: Math.round(n / h) }; })
+      .filter(o => o.n).sort((a, b) => b.rate - a.rate).slice(0, 5);
+    z.forEach(o => {
+      const d = document.createElement('div');
+      d.innerHTML = `<div class="sq" style="background:#2a2620;display:grid;place-items:center;font-size:10px;color:#bdbdbd">${o.name[0]}</div><div><div class="lab">${o.name}<span>${o.rate}/hr</span></div><div class="track"><i style="width:${o.rate / z[0].rate * 100}%;background:${P ? P.color : '#ffd100'}"></i></div></div>`;
+      bars.appendChild(d);
+      wire(d, `<b>${o.name}</b>` + kv('Per hour', o.rate) + kv('Gathered', fmt(o.n)) + kv('Time here', o.h.toFixed(1) + ' hr'));
+    });
+  }
+
+  // skill climb
+  {
+    const sk = profs.filter(p => p.skill);
+    const s = sect(page, 'Skill climb', 'over 30 days'); const c = card(s);
+    if (!sk.length) { c.innerHTML = `<div class="empty">${P.label} has no skill to climb. Every character opens chests and loots cloth.</div>`; }
+    else {
+      const W = 284, H = 90, lo = Math.min(...sk.map(p => p.skill[0])) - 10, hi = Math.max(...sk.map(p => p.skill[1])) + 10;
+      const X = d => d / (DAYS - 1) * W, Y = v => H - (v - lo) / (hi - lo) * H;
+      const svg = svgEl('svg', { width: '100%', viewBox: `0 0 ${W} ${H + 12}` }, c);
+      [75, 150, 225].filter(v => v > lo && v < hi).forEach(v => {
+        svgEl('line', { x1: 0, x2: W, y1: Y(v), y2: Y(v), stroke: '#5a4a2a', 'stroke-dasharray': '3 3' }, svg);
+        svgEl('text', { x: W, y: Y(v) - 3, fill: '#8a7444', 'font-size': 8, 'text-anchor': 'end' }, svg).textContent = 'cap ' + v;
+      });
+      sk.forEach(p => {
+        const pts = []; let v = p.skill[0];
+        for (let d = 0; d < DAYS; d++) { v = Math.min(p.skill[1], v + (p.skill[1] - p.skill[0]) / DAYS * (0.3 + rand() * 1.4)); pts.push([d, Math.round(v)]); }
+        svgEl('polyline', { points: pts.map(([d, v]) => `${X(d)},${Y(v)}`).join(' '), fill: 'none', stroke: p.color, 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+        pts.filter((_, i) => i % 3 === 0 || i === DAYS - 1).forEach(([d, v]) => {
+          const dot = svgEl('circle', { cx: X(d), cy: Y(v), r: 3.2, fill: p.color, stroke: '#0d0c0b', 'stroke-width': 1, class: 'hit' }, svg);
+          wire(dot, `<b style="color:${p.color}">${p.label} ${v}</b>` + kv('Day', new Date(2026, 9, 7 + d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) + kv('Gained so far', '+' + (v - p.skill[0])));
+        });
+      });
+      if (!P) { const lg = document.createElement('div'); lg.className = 'legend'; lg.innerHTML = sk.map(p => `<span><i style="background:${p.color}"></i>${p.label}</span>`).join(''); c.appendChild(lg); }
+    }
+  }
+
+  // a profession's own card
+  if (P) {
+    const s = sect(page, { skinning: 'Ruined and creatures', cloth: 'Drop rate by creature', treasure: 'Best chests', mining: 'Veins', herbalism: 'Herbs', fishing: 'Waters' }[pick], 'this profession only');
+    const c = card(s); const bars = document.createElement('div'); bars.className = 'bars'; c.appendChild(bars);
+    const rows = {
+      skinning: [['Ruined scraps', 14, '%'], ['Stranglethorn Tiger', 312, ''], ['Young Panther', 241, ''], ['Elder Gorilla', 120, '']],
+      cloth: [['Defias Pillager', 46, '%'], ['Bloodscalp Warrior', 41, '%'], ['Kobold Miner', 28, '%'], ['Murloc Raider', 6, '%']],
+      treasure: [['Solid Chest', 9, ''], ['Battered Chest', 7, ''], ['Tattered Chest', 4, '']],
+      mining: [['Tin Vein', 188, ''], ['Copper Vein', 140, ''], ['Silver Vein', 9, '']],
+      herbalism: [['Bruiseweed', 160, ''], ['Briarthorn', 121, ''], ['Mageroyal', 98, '']],
+      fishing: [['Coast', 140, ''], ['Lakes', 98, ''], ['Rivers', 52, '']],
+    }[pick];
+    const max = Math.max(...rows.map(r => r[1]));
+    rows.forEach(([n, v, u]) => {
+      const d = document.createElement('div');
+      d.innerHTML = `<div class="sq" style="background:#2a2620"></div><div><div class="lab">${n}<span>${v}${u}</span></div><div class="track"><i style="width:${v / max * 100}%;background:${P.color}"></i></div></div>`;
+      bars.appendChild(d);
+      wire(d, `<b>${n}</b>` + kv(u === '%' ? 'Rate' : 'Count', v + u));
+    });
+    if (pick === 'cloth') c.insertAdjacentHTML('beforeend', '<div class="note">Of humanoid loots: how often each creature dropped cloth.</div>');
+  }
+  const end = document.createElement('div'); end.className = 'note'; end.style.marginTop = '14px'; end.textContent = 'Hover any bar, slice or square for details.';
+  page.appendChild(end);
+}
+render();
+</script>
+</body>
+</html>

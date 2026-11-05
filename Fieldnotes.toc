@@ -18,6 +18,6 @@ Stats.lua
 Demo.lua
 Map.lua
 MapUI.lua
-Panel.lua
+StatsPage.lua
 Share.lua
 Shots.lua

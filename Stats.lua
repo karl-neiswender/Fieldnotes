@@ -123,7 +123,7 @@ SlashCmdList.FIELDNOTES = function(msg)
     elseif msg == "shots" or msg:match("^shots %w+") then
         FN.TakeShots(msg:match("^shots (%S+)"))
     else
-        FN.Print("/fn  open or close your skinning stats")
+        FN.Print("/fn  open or close your stats (in the map's side panel)")
         FN.Print("/fn share  copy your notes as one line of text to paste anywhere")
         FN.Print("/fn import  paste someone else's notes into your Community layer")
         FN.Print("/fn summary  the same numbers in chat")

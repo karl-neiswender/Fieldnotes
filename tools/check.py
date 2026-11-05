@@ -60,6 +60,7 @@ function Widget:GetStringHeight() return 12 end
 function Widget:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
 function Widget:CreateTexture() local t = NewWidget("texture"); t.owner = self; textures[#textures + 1] = t; return t end
 function Widget:CreateFontString() return NewWidget("fontstring") end
+function Widget:CreateLine() local l = NewWidget("line"); l.owner = self; return l end
 function Widget:Click() if self.scripts.OnClick then self.scripts.OnClick(self) end end
 textures = {}
 function CreateFrame(kind, name, parent) local f = NewWidget(kind); f.parent = parent; return f end
@@ -406,15 +407,32 @@ print("map        layouts: maximized " .. tostring(toolbarLayout) .. ", small " 
 local layouts = (toolbarLayout == "toolbar" and dockLayout == "dock" and sessionOn and not ns.SessionRunning()) and 1 or 0
 local mapResult = layouts .. "," .. continentBadges .. "," .. spot .. "," .. hides .. "," .. settingsOpen .. "," .. recent .. "," .. heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off .. "," .. spotsListed .. "," .. heatDots
 
--- 7. the stats window on the demo
+-- 7. the Stats page in the dock, on the demo: /fn opens it, the Stats tab closes it again
+WorldMapFrame:Show()
 SlashCmdList.FIELDNOTES("")
-SlashCmdList.FIELDNOTES("")
-local u = ns.statsUI
+local page = ns.MapUI.dock.statsPage
+local opened = ns.StatsShown() and page:IsShown()
+local mapS = FieldnotesDB.settings.map
+mapS.statsProf, mapS.show, mapS.when = "skinning", "account", 0
+page:Update()
+local u = page
 local stats = u.tiles[1].value.text .. "|" .. u.tiles[2].value.text .. "|" .. u.tiles[3].value.text .. "|" .. u.tiles[4].value.text
-FieldnotesDB.settings.statsShow = "me"
-ns.RefreshStats()
+mapS.show = "me"
+page:Update()
 local meSkins = u.tiles[1].value.text
-FieldnotesDB.settings.statsShow = "account"
+mapS.show = "account"
+-- All: every profession counted, the donut drawn, a profession's own card only for a profession
+mapS.statsProf = "all"
+page:Update()
+local allCount = #page.data.recs
+local skinOnly = 0
+for _ in pairs(page.data.byProf) do skinOnly = skinOnly + 1 end
+mapS.statsProf = "cloth"
+page:Update()
+local clothCard = next(page.data.cloth) ~= nil
+mapS.statsProf = "all"
+ns.MapUI.dock.stats.scripts.OnClick(ns.MapUI.dock.stats)
+statsPageOk = opened and not ns.StatsShown() and skinOnly >= 5 and allCount > 3000 and clothCard
 
 -- 8. sharing in demo mode: a round trip, a cut-off paste, an import into the demo's Community
 local text, shSkins, shZones = ns.Share.Make(nil)
@@ -540,8 +558,10 @@ def play(flavor, stubs, verbose):
         ("skill cap: one trainer alert, the tracker folds and opens", bool(cap_alert)),
         ("share: demo text reads back whole, a cut-off paste is caught, import adds to Community", bool(demo_share)),
         ("share: demo text and your own text are refused; someone else's joins Community", real_share == "ok"),
-        ("stats window fills its tiles", stats.split("|")[0].replace(",", "").isdigit() and stats.split("|")[1] != "-"),
-        ("stats window: Me counts fewer skins than Account",
+        ("stats page: /fn opens it in the dock, the Stats tab closes it; All counts every profession",
+         rt.globals().statsPageOk is True),
+        ("stats page fills its numbers", stats.split("|")[0].replace(",", "").isdigit() and stats.split("|")[1] != "-"),
+        ("stats page: Me counts fewer skins than Account",
          0 < int(me_skins.replace(",", "")) < int(stats.split("|")[0].replace(",", ""))),
     ]
     good = True
