@@ -1424,43 +1424,69 @@ end
 -- as the Fieldnotes tab is), chosen, without its icon or mouse, laid behind ours and fitted to the
 -- part of the tab past the dock. Made once per tab; nil where the client has no such template.
 local NATIVE_H = 54 -- the template's own height (seen in game, /fn debug 2026-11-05)
+-- Every rail tab wears the game's side tab now (Karl, 2026-11-05, Forever: only the open tab had it,
+-- and its art kept the template's own size, centred, so a dark gap sat at the dock's edge and the
+-- tab's own etched box showed past the gold). Two copies per tab: the plain one always, the chosen
+-- (gold) one over it at the tab's active strength, so the gold fades in as before. Each piece is
+-- stretched to fill its frame, which is fitted to the part of the tab beside the dock.
+local function NewArt(t, chosen)
+    local ok, f = pcall(CreateFrame, "Frame", nil, t, "LargeSideTabButtonTemplate")
+    if not (ok and f and type(f.Icon) == "table" and f.SetChecked) then return nil end
+    f:EnableMouse(false)
+    f.Icon:Hide()
+    f:SetChecked(chosen)
+    for _, r in ipairs({ f:GetRegions() }) do
+        if r ~= f.Icon and r.GetObjectType and r:GetObjectType() == "Texture" then
+            r:ClearAllPoints()
+            r:SetAllPoints(f)
+        end
+    end
+    f:Hide()
+    return f
+end
+
 local function TabArt(t)
     local art = rawget(t, "art")
     if art ~= nil then return art or nil end
-    local ok, f = pcall(CreateFrame, "Frame", nil, t, "LargeSideTabButtonTemplate")
-    if ok and f and type(f.Icon) == "table" and f.SetChecked then
-        f:EnableMouse(false)
-        f.Icon:Hide()
-        f:SetChecked(true)
-        f:Hide()
-        t.art = f
-        return f
+    local plain = NewArt(t, false)
+    local gold = plain and NewArt(t, true)
+    if plain and gold then
+        t.art, t.artOn = plain, gold
+        return plain
     end
     t.art = false
+end
+
+local function FitArt(t, art, level)
+    local h = t:GetHeight() or PROF_TAB_H
+    local k = h / NATIVE_H
+    local w = math.max(h, (t:GetWidth() or TAB_W) - (t.tuck or 0))
+    art:SetScale(k)
+    art:SetSize(w / k, NATIVE_H)
+    art:ClearAllPoints()
+    if t.side ~= "LEFT" then
+        art:SetPoint("TOPRIGHT", t, "TOPRIGHT", 0, 0)
+    else
+        art:SetPoint("TOPLEFT", t, "TOPLEFT", 0, 0)
+    end
+    art:SetFrameLevel(level)
 end
 
 local function TabEdge(t, a)
     local art = TabArt(t)
     if art then
-        local show = a > 0.01 and t:IsShown()
+        local gold = t.artOn
+        local show = t:IsShown()
         art:SetShown(show)
+        gold:SetShown(show and a > 0.01)
         if not show then return end
-        -- the template's art is drawn for its own size: scale it to ours, and size it (in its own
-        -- units) to the part of the tab that shows beside the dock
-        local h = t:GetHeight() or PROF_TAB_H
-        local k = h / NATIVE_H
-        local w = math.max(h, (t:GetWidth() or TAB_W) - (t.tuck or 0))
-        art:SetScale(k)
-        art:SetSize(w / k, NATIVE_H)
-        art:ClearAllPoints()
-        if t.side ~= "LEFT" then
-            art:SetPoint("TOPRIGHT", t, "TOPRIGHT", 0, 0)
-        else
-            art:SetPoint("TOPLEFT", t, "TOPLEFT", 0, 0)
+        -- above the page's copy, under the icon: the plain frame, then the gold one over it
+        local level = math.max(t:GetFrameLevel() + 1, (t.mark:GetFrameLevel() or 3) - 2)
+        FitArt(t, art, level)
+        if a > 0.01 then
+            FitArt(t, gold, level + 1)
+            gold:SetAlpha(a)
         end
-        art:SetAlpha(a)
-        -- above the page's copy, under the icon
-        art:SetFrameLevel(math.max(1, (t.mark:GetFrameLevel() or 3) - 1))
         return
     end
     -- No template (Classic Era): the tab's own border, the game's rounded tooltip edge, turns gold
@@ -1476,6 +1502,9 @@ ApplyTab = function(t)
     local v = t.out or 0
     local a = math.max(0, (v - 0.4) / 0.6) -- how active it looks: nothing while only hovered
     t:SetWidth(TAB_W + (t.tuck or 0) + TAB_SLIDE * v)
+    -- the icon's frame sits at one level, open or not, so the game art (two levels under it) is
+    -- always above the tab's own fill and the page copy
+    if dock then t.mark:SetFrameLevel(dock:GetFrameLevel() + 4 + 5) end
     TabEdge(t, a)
     -- at rest the tab is recessed, a shade darker than the page
     local d = STYLE.dock
@@ -1499,7 +1528,7 @@ ApplyTab = function(t)
     page.copy:SetFrameLevel(base + 1)
     page.grime:SetFrameLevel(base + 1)
     -- the icon (and the session dot on it) stays above the copy
-    t.mark:SetFrameLevel(base + 3)
+    t.mark:SetFrameLevel(base + 5)
     page:ClearAllPoints()
     if right then
         page:SetPoint("TOPLEFT", t, "TOPLEFT", tuck - SEAM_IN, -3)

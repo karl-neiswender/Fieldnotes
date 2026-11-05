@@ -359,3 +359,14 @@
   Mining): hover, dock rows and the fade all work. Fixed from it: the tooltip said "skins" on every
   page; it now uses the profession's word (veins, herbs...). Still to confirm: map clicks pass
   through the hover areas.
+- Rail tab frames on Forever (2026-11-05, Karl's screenshot: "funky"): the open tab's game art kept the
+  template's own size, centred, so a dark gap sat at the dock edge and the tab's etched box showed past
+  the gold; closed tabs had a different frame. Now every rail tab wears LargeSideTabButtonTemplate (a
+  plain copy always, a chosen copy over it at the tab's active strength), every piece stretched to fill
+  the visible part of the tab. Icon frame at dock level +9 always, art two under it. Era keeps the
+  gold-turning tooltip border. Checks pass (43), copied to Era and Forever. Not yet seen in game: watch
+  for stretched bevel corners (the art is about 1.3x wider than its own shape).
+- v0.8.0 release (2026-11-05, Karl's go): TOC 0.8.0 (Notes add treasure chests), CHANGELOG 0.8.0
+  (Treasure, Stats page, hidden hot spots, Home dashboard, full-screen toolbar, profession colors,
+  Forever side tabs, OpenMap, fixes). Includes the rail tab frame fix, unseen in game (Karl chose to
+  ship it). Tag v0.8.0 pushed to trigger the CurseForge workflow.

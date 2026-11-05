@@ -1,5 +1,31 @@
 # Fieldnotes changelog
 
+## 0.8.0
+
+- **Treasure.** A new tab for every character: world chests you open, what they held and where.
+  A chest counts once, however many times you open it, and quest crates are left out.
+- **Stats live in the dock now,** as a scrolling page of charts: the last 30 days, your profession
+  mix, when you gather (day by hour), top loot, best zones per hour and your skill climb. Hover any
+  bar, slice, square or row for its numbers. The separate Stats window is gone.
+- **Hot spots stay out of the way.** The map shows only the heat until you hover a hot spot or its
+  row in the key, then its number, a gold ring and the details appear. Settings > Hot spots >
+  "Always show hot spots" brings them back for good.
+- **A new Home dashboard:** Show and When as two dropdowns, a row per profession with its count,
+  how many on the map you're looking at, and your skill. Professions you haven't learned fold into
+  one line.
+- **The full-screen map** has a toolbar across the top with a button for Home and each profession,
+  and a glass key in the corner listing the hot spots. On Points, click a material in the key to
+  show only its dots.
+- **Colors per profession:** Mining is red, Treasure is gold, and every material keeps to its
+  profession's hue.
+- **Side tabs use the game's own tab art on Warcraft Forever** and stack neatly with other
+  add-ons' map tabs.
+- Works with OpenMap: the heat sits above its map art, and dots and badges keep their size as you
+  zoom.
+- Fixed: item names and icons missing on Warcraft Forever, a rare error in the animations, and hot
+  spot tooltips saying "skins" on every profession's page.
+- Community sharing is switched off for now ("Coming soon") while it's finished.
+
 ## 0.7.0
 
 - **Mining, Herbalism, Fishing and Cloth.** Fieldnotes now records every vein, herb and catch, and

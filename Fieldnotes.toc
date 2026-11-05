@@ -1,9 +1,9 @@
 ## Interface: 11509, 16001
 ## Title: |cffe9b265Fieldnotes|r
-## Notes: A gathering journal. Remembers every skin, vein, herb, catch and cloth drop: what it gave you and where.
+## Notes: A gathering journal. Remembers every skin, vein, herb, catch, cloth drop and treasure chest: what it gave you and where.
 ## Author: Karl
 ## IconTexture: Interface\AddOns\Fieldnotes\Media\icon
-## Version: 0.7.0
+## Version: 0.8.0
 ## SavedVariables: FieldnotesDB
 ## Category: Professions
 ## X-Category: Professions
