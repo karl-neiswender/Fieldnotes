@@ -4,6 +4,9 @@
 2. Loads them against a small stand-in for the WoW API and plays a few skins:
    a real skin is recorded once (even when both loot events fire), an ordinary kill's loot
    and a failed cast are not, and /fn runs without errors.
+3. Plays it all twice: as Classic Era (the old item globals, GetItemInfo) and as Forever (only
+   C_Item, and the game's side tab template). Forever dropped the old globals, which broke every
+   item page there while these checks, Era-only, still passed (2026-11-05).
 
 Run from the repository folder:  python3 tools/check.py
 Needs lupa. It reuses Forever Goal Tracker's copy (tools/.py) when that checkout sits next to
@@ -97,7 +100,7 @@ function UnitGUID(u) return units[u] and units[u].guid end
 function UnitCreatureType(u) return units[u] and units[u].type or "Beast" end
 function UnitLevel(u) return units[u] and units[u].level or 0 end
 SPELLS = { [8613] = "Skinning", [8618] = "Skinning", [2575] = "Mining", [2366] = "Herb Gathering",
-  [7620] = "Fishing", [921] = "Pick Pocket" }
+  [7620] = "Fishing", [921] = "Pick Pocket", [3365] = "Opening" }
 function GetSpellInfo(id) return SPELLS[id] or "Other" end
 function IsFishingLoot() return fishingLoot end
 function GetNumSkillLines() return 1 end
@@ -118,7 +121,7 @@ C_Map = {
 function GetZoneText() return "Stranglethorn Vale" end
 loot = {}
 function GetNumLootItems() return #loot end
-function LootSlotHasItem(i) return loot[i] ~= nil end
+function LootSlotHasItem(i) return loot[i] ~= nil and not loot[i].money end
 function GetLootSlotLink(i) return "|cffffffff|Hitem:" .. loot[i].id .. "::::::::|h[x]|h|r" end
 function GetLootSlotInfo(i) return "icon", "x", loot[i].n end
 function GetLootSourceInfo(i) return loot[i] and loot[i].guid, 1 end
@@ -128,6 +131,27 @@ UIParent = NewWidget("frame")
 UISpecialFrames = {}
 function GetItemIcon() return 134400 end
 C_Timer = { After = function(_, fn) fn() end }
+"""
+
+# Forever, over the Era stand-in above: no old item globals (only C_Item), and the game's side tab
+# (LargeSideTabButtonTemplate: a Frame, clicked through its own handler, with no OnClick script)
+FOREVER = r"""
+GetItemInfo, GetItemIcon = nil, nil
+C_Item = { GetItemInfo = function(id) return nil end, GetItemIconByID = function() return 134400 end }
+local plainFrame = CreateFrame
+function CreateFrame(kind, name, parent, tmpl)
+  local f = plainFrame(kind, name, parent)
+  if tmpl == "LargeSideTabButtonTemplate" then
+    f.Icon = NewWidget("texture"); f.w, f.h = 54, 54
+    f.SetCustomOnMouseUpHandler = function(self, fn) self.scripts.OnClick = fn end
+    f.SetChecked = function(self, v) assert(type(v) == "boolean", "SetChecked wants true or false") end
+    f.SetScript = function(self, k, fn)
+      if k == "OnClick" or k == "OnEnter" or k == "OnLeave" then error("the side tab has no " .. k .. " script") end
+      self.scripts[k] = fn
+    end
+  end
+  return f
+end
 """
 
 PLAY = r"""
@@ -210,6 +234,23 @@ gatherResult = (mined and "m" or "-") .. (fished and "f" or "-") .. (clothOk and
 units.target = nil
 -- the tracker: one session, a row per profession in the order first gathered
 sessionOrder = table.concat(ns.session.order, ",")
+
+-- treasure: a chest opened (money in it) counts once though opened twice; a quest crate does not
+local chest = "GameObject-0-1-0-1-2843-00000CCC"
+now = now + 10
+Fire("UNIT_SPELLCAST_SENT", "player", "Battered Chest", "cast-7", 3365)
+now = now + 2
+loot = { { id = 118, n = 1, guid = chest }, { money = true, guid = chest } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+now = now + 5
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+now = now + 5
+Fire("UNIT_SPELLCAST_SENT", "player", "Crate of Supplies", "cast-8", 3365)
+now = now + 2
+loot = { { id = 5000, n = 1, guid = "GameObject-0-1-0-1-9999-00000DDD" } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+treasureOk = Count("treasure") == 1 and Last("treasure"):find(":2843:1:0:118=1$") ~= nil
+  and FieldnotesDB.nodes[2843].name == "Battered Chest"
 
 SlashCmdList.FIELDNOTES("summary")
 SlashCmdList.FIELDNOTES("")
@@ -437,19 +478,24 @@ for name in FILES:
         print("COMPILE    " + err)
 print(("compile    " if ok else "COMPILE    ") + ", ".join(FILES))
 
-if ok:
-    rt.execute(STUB)
+def play(flavor, stubs, verbose):
+    rt = lua51.LuaRuntime()
+    for stub in stubs:
+        rt.execute(stub)
+    if not verbose:
+        rt.execute("print = function() end")  # the Lua side's own info lines: the first pass says them
     g = rt.globals()
     g.FILES = rt.table_from(FILES)
     g.SOURCES = rt.table_from(sources)
     count, first, cname, clevel, chat, refused, demo_count, faked, real_kept, cleared, map_result, stats, me_skins, tracker, demo_share, real_share, cap_alert = rt.execute(PLAY)
-    print("share      real: %s" % real_share)
-    print("stats      tiles %s, Me %s" % (stats, me_skins))
+    say = print if verbose else (lambda *_: None)
+    say("share      real: %s" % real_share)
+    say("stats      tiles %s, Me %s" % (stats, me_skins))
     layouts, continent, spot, hides, settings_open, recent, heat, p_me, p_all, p_comm, empty, off, spots_listed, heat_dots = [int(v) for v in map_result.split(",")]
-    print("map        continent badges %d" % continent)
-    print("map        spotlight %d, hides %d, last 7 days %d, settings panel %s" % (spot, hides, recent, "open" if settings_open else "closed"))
-    print("map        heat %d, points me %d / account %d / community %d, empty map %d, off %d" % (heat, p_me, p_all, p_comm, empty, off))
-    print("demo       %d sample skins" % demo_count)
+    say("map        continent badges %d" % continent)
+    say("map        spotlight %d, hides %d, last 7 days %d, settings panel %s" % (spot, hides, recent, "open" if settings_open else "closed"))
+    say("map        heat %d, points me %d / account %d / community %d, empty map %d, off %d" % (heat, p_me, p_all, p_comm, empty, off))
+    say("demo       %d sample skins" % demo_count)
     checks = [
         ("one skin recorded, not four", count == 1),
         ("record holds place, time, creature, character, skill and loot",
@@ -460,6 +506,7 @@ if ok:
         ("cloth: humanoid loots counted once each, with or without cloth; Pick Pocket left out",
          rt.globals().gatherResult[2] == "c"),
         ("other professions leave skinning alone", rt.globals().gatherResult[3] == "s"),
+        ("treasure: a chest recorded once with its object; a quest crate is not", rt.globals().treasureOk is True),
         ("tracker: one session, a row per profession in the order gathered",
          rt.globals().sessionOrder == "skinning,cloth,mining,fishing"),
         ("dashboard: every gather a dot, no heat", rt.globals().dashResult[0] == "d" and rt.globals().dashResult[3] == "m"),
@@ -497,13 +544,24 @@ if ok:
         ("stats window: Me counts fewer skins than Account",
          0 < int(me_skins.replace(",", "")) < int(stats.split("|")[0].replace(",", ""))),
     ]
+    good = True
     for label, passed in checks:
-        ok = ok and passed
-        print(("ok         " if passed else "FAIL       ") + label)
+        good = good and passed
+        if verbose or not passed:
+            print(("ok         " if passed else "FAIL       ") + ("" if verbose else "[" + flavor + "] ") + label)
     for e in rt.globals().commandErrors.values():
-        print("COMMAND    " + e)
-    if not ok:
+        print("COMMAND    [" + flavor + "] " + e)
+    if not good:
         print("record: " + str(first))
         print(chat)
+    if not verbose:
+        n = sum(1 for _, passed in checks if passed)
+        print("%-10s %d of %d checks pass" % (flavor, n, len(checks)))
+    return good
+
+
+if ok:
+    ok = play("era", [STUB], True)
+    ok = play("forever", [STUB, FOREVER], False) and ok
 
 sys.exit(0 if ok else 1)

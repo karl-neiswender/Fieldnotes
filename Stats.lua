@@ -7,7 +7,7 @@ local session = FN.session -- Session.lua
 -- Words and numbers
 -- ------------------------------------------------------------
 local function ItemText(id)
-    local _, link = GetItemInfo(id)
+    local _, link = FN.ItemInfo(id)
     return link or ("item " .. id)
 end
 
@@ -37,7 +37,7 @@ end
 local function AnyUncached(ids)
     local missing = false
     for id in pairs(ids) do
-        if not GetItemInfo(id) then missing = true end
+        if not FN.ItemInfo(id) then missing = true end
     end
     return missing
 end

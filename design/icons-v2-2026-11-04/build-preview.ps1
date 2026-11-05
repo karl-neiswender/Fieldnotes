@@ -1,7 +1,7 @@
 Add-Type -AssemblyName System.Drawing
 $root = $PSScriptRoot
-$names = @('skinning','mining','herbalism','fishing','cloth','play','pause','stop','statistics','share','warning','book')
-$labels = @('Skinning','Mining','Herbalism','Fishing','Cloth','Play','Pause','Stop','Statistics','Share','Warning','Book')
+$names = @('skinning','mining','herbalism','fishing','cloth','play','pause','stop','statistics','share','warning','book','treasure')
+$labels = @('Skinning','Mining','Herbalism','Fishing','Cloth','Play','Pause','Stop','Statistics','Share','Warning','Book','Treasure')
 
 function New-Icon($name) {
     $source = [System.Drawing.Bitmap]::new((Join-Path $root ($name + '.png')))
@@ -36,7 +36,7 @@ function New-Icon($name) {
     return $icon
 }
 
-$sheet = [System.Drawing.Bitmap]::new(1080, 695, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$sheet = [System.Drawing.Bitmap]::new(1080, 830, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $canvas = [System.Drawing.Graphics]::FromImage($sheet)
 $canvas.Clear([System.Drawing.Color]::FromArgb(255, 20, 19, 17))
 $canvas.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias

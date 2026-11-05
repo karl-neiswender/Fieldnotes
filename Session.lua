@@ -382,7 +382,7 @@ function FN.UpdateTracker()
     local capNote
     for _, key in ipairs(session.order) do
         local rank, cap = Skill(key)
-        if not capNote and key ~= "cloth" and Capped(rank, cap) then capNote = ProfInfo(key).label .. " " .. CapNote(cap) end
+        if not capNote and not ProfInfo(key).anyone and Capped(rank, cap) then capNote = ProfInfo(key).label .. " " .. CapNote(cap) end
     end
 
     local open = not compact
@@ -486,8 +486,8 @@ function FN.UpdateTracker()
     for i, row in ipairs(ui.loot) do
         local id = ids[i]
         if id then
-            local name = GetItemInfo(id)
-            row.icon:SetTexture(GetItemIcon and GetItemIcon(id) or nil)
+            local name = FN.ItemInfo(id)
+            row.icon:SetTexture(FN.ItemIcon(id))
             row.name:SetText(name or "...")
             row.count:SetText("x " .. loot[id])
             row.icon:ClearAllPoints()
@@ -544,7 +544,7 @@ function FN.SessionGather(prof, source, items)
     end
     local e = session.profs[prof]
     if not e then
-        e = { count = 0, loots = 0, skillStart = prof ~= "cloth" and FN.ProfessionSkill and FN.ProfessionSkill(prof) or nil }
+        e = { count = 0, loots = 0, skillStart = not ProfInfo(prof).anyone and FN.ProfessionSkill and FN.ProfessionSkill(prof) or nil }
         session.profs[prof] = e
         session.order[#session.order + 1] = prof
     end

@@ -79,6 +79,7 @@ local COPPER, TIN, IRON, ROUGH, COARSE = 2770, 2771, 2772, 2835, 2836
 local PEACE, SILVER, EARTH, MAGE, BRIAR, BRUISE, KINGS = 2447, 765, 2449, 785, 2450, 2453, 3356
 local SMALLFISH, SNAPPER, CATFISH, COD = 6291, 6289, 6308, 6362
 local LINEN, WOOL, SILK = 2589, 2592, 4306
+local POTION, JERKY, WATER, MALACHITE, ARROW = 118, 117, 159, 774, 2512
 local GATHERS = {
     mining = {
         [1426] = { { 990501, "Copper Vein", 1, { { 600, 400, 14 }, { 470, 440, 14 } }, { { COPPER, 1, 3 }, { ROUGH, 0.6, 2 } } } },
@@ -110,6 +111,14 @@ local GATHERS = {
         [1436] = { { 990704, "Defias Pillager", 0, { { 430, 650, 20 }, { 450, 260, 16 } }, { { LINEN, 0.3, 2 }, { WOOL, 0.25, 1 } } } },
         [1413] = { { 990705, "Kolkar Bloodcharger", 0, { { 450, 300, 22 } }, { { WOOL, 0.35, 2 } } } },
         [1434] = { { 990706, "Bloodscalp Warrior", 0, { { 440, 150, 16 } }, { { SILK, 0.4, 2 } } } },
+    },
+    -- treasure: a few chests where camps and ruins are; far fewer than other gathers
+    treasure = {
+        [1426] = { { 990801, "Battered Chest", 0, { { 300, 560, 14 }, { 680, 560, 16 } },
+            { { POTION, 0.6, 2 }, { JERKY, 0.5, 3 }, { LINEN, 0.4, 2 } } } },
+        [1429] = { { 990802, "Battered Chest", 0, { { 420, 790, 16 } }, { { POTION, 0.6, 2 }, { WATER, 0.5, 3 } } } },
+        [1436] = { { 990803, "Tattered Chest", 0, { { 450, 270, 18 } }, { { MALACHITE, 0.4, 1 }, { ARROW, 0.5, 200 } } } },
+        [1434] = { { 990804, "Solid Chest", 0, { { 420, 360, 18 } }, { { MALACHITE, 0.5, 1 }, { WOOL, 0.4, 2 } } } },
     },
 }
 FN.DEMO_GATHERS = GATHERS
@@ -208,7 +217,7 @@ function FN.DemoLoad()
 
     -- veins, herbs, catches and humanoid loots, in the same sessions as skins
     local gathered = 0
-    for _, prof in ipairs({ "mining", "herbalism", "fishing", "cloth" }) do
+    for _, prof in ipairs({ "mining", "herbalism", "fishing", "cloth", "treasure" }) do
         local zones = {}
         for mapID in pairs(GATHERS[prof]) do zones[#zones + 1] = mapID end
         table.sort(zones)
@@ -221,7 +230,9 @@ function FN.DemoLoad()
                 end
                 for _, spot in ipairs(g[4]) do
                     sessionLeft = 0
-                    for _ = 1, (prof == "cloth" and 70 or 35) + math.floor(Rand() * 50) do
+                    local runs = prof == "treasure" and (6 + math.floor(Rand() * 8))
+                        or ((prof == "cloth" and 70 or 35) + math.floor(Rand() * 50))
+                    for _ = 1, runs do
                         local t, char = NextSkin(now)
                         local items = {}
                         for _, l in ipairs(g[5]) do
@@ -231,7 +242,7 @@ function FN.DemoLoad()
                         FN.Add(prof, mapID, {
                             x = Clamp(spot[1] + Gauss() * spot[3]), y = Clamp(spot[2] + Gauss() * spot[3]),
                             time = t, npc = g[1], char = char,
-                            skill = prof == "cloth" and 0 or g[3] + math.floor(Rand() * 20), items = items,
+                            skill = (prof == "cloth" or prof == "treasure") and 0 or g[3] + math.floor(Rand() * 20), items = items,
                         }, store)
                         gathered = gathered + 1
                     end
@@ -278,7 +289,7 @@ function FN.DemoFakeSkin()
 
     local links = {}
     for id, n in pairs(items) do
-        local _, link = GetItemInfo(id)
+        local _, link = FN.ItemInfo(id)
         link = link or ("item " .. id)
         links[#links + 1] = n > 1 and (link .. " x" .. n) or link
     end

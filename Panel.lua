@@ -34,7 +34,7 @@ end
 
 local function ItemName(id)
     if id == RUINED then return "Ruined scraps" end
-    return (GetItemInfo(id)) or "..."
+    return (FN.ItemInfo(id)) or "..."
 end
 
 local function ZoneName(mapID)

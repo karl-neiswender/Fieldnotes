@@ -18,6 +18,17 @@ _G.Fieldnotes = FN
 --   time   seconds since 1970 (time())
 FN.DB_VERSION = 1
 
+-- Item lookups that work on every client: Forever has only the C_Item versions, Era the old
+-- globals. ItemInfo returns what GetItemInfo does (name, link, ...); nil until the game has the item.
+function FN.ItemInfo(id)
+    if C_Item and C_Item.GetItemInfo then return C_Item.GetItemInfo(id) end
+    if GetItemInfo then return GetItemInfo(id) end
+end
+function FN.ItemIcon(id)
+    if C_Item and C_Item.GetItemIconByID then return C_Item.GetItemIconByID(id) end
+    if GetItemIcon then return GetItemIcon(id) end
+end
+
 local DEFAULT_SETTINGS = { chat = true }
 
 local ACCENT = "|cffe9b265"

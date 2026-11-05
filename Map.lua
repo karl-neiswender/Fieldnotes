@@ -71,14 +71,16 @@ local PALETTE = {
     { 0.890, 0.604, 0.231 }, { 0.953, 0.875, 0.659 }, { 0.247, 0.561, 0.541 }, { 0.541, 0.208, 0.149 },
 }
 -- the other professions' materials keep to their profession's hue (Karl, 2026-11-04): mining
--- yellows, herbs greens, fish blues, cloth purples. Strongest first, then pale, deep, and a
+-- reds, herbs greens, fish blues, cloth purples, treasure golds (mining's old yellows; mining took
+-- red, 2026-11-05). Strongest first, then pale, deep, and a
 -- neighbouring hue, so each still reads apart from the others.
 local PALETTES = {
     skinning = PALETTE,
-    mining = { { 0.95, 0.80, 0.15 }, { 0.99, 0.93, 0.60 }, { 0.70, 0.52, 0.08 }, { 0.84, 0.66, 0.30 } },
+    mining = { { 0.88, 0.27, 0.22 }, { 0.98, 0.68, 0.60 }, { 0.58, 0.13, 0.11 }, { 0.80, 0.30, 0.46 } },
     herbalism = { { 0.40, 0.76, 0.27 }, { 0.74, 0.90, 0.54 }, { 0.18, 0.48, 0.20 }, { 0.62, 0.70, 0.24 } },
     fishing = { { 0.27, 0.62, 0.92 }, { 0.64, 0.85, 0.98 }, { 0.14, 0.36, 0.70 }, { 0.30, 0.70, 0.74 } },
     cloth = { { 0.66, 0.45, 0.90 }, { 0.86, 0.75, 0.98 }, { 0.42, 0.25, 0.66 }, { 0.82, 0.46, 0.78 } },
+    treasure = { { 0.95, 0.80, 0.15 }, { 0.99, 0.93, 0.60 }, { 0.70, 0.52, 0.08 }, { 0.84, 0.66, 0.30 } },
 }
 M.PALETTES = PALETTES
 local RUINED_COLOR = { 0.56, 0.54, 0.50 }
@@ -89,17 +91,20 @@ M.PALETTE, M.RUINED_COLOR, M.OTHER_COLOR = PALETTE, RUINED_COLOR, OTHER_COLOR --
 -- The professions, in tab order, with their identity colors (professions v4 mockup, 2026-11-04):
 -- the tab, icon, dashboard row, tracker row and the dashboard's dots. Heat keeps its own ramps.
 --   unit/units: what one record is; material: the list's word; verb: "Nothing <verb> here yet."
+--   anyone: no skill to learn, so every character has it (a tab for everyone, never "Not learned")
 M.PROFS = {
     { key = "skinning", label = "Skinning", color = { 0.91, 0.50, 0.23 }, unit = "skin", units = "skins",
         material = "leather", verb = "skinned" },
-    { key = "mining", label = "Mining", color = { 0.95, 0.83, 0.23 }, unit = "vein", units = "veins",
+    { key = "mining", label = "Mining", color = { 0.89, 0.33, 0.27 }, unit = "vein", units = "veins",
         material = "ore", verb = "mined" },
     { key = "herbalism", label = "Herbalism", color = { 0.44, 0.75, 0.31 }, unit = "herb", units = "herbs",
         material = "herbs", verb = "gathered" },
     { key = "fishing", label = "Fishing", color = { 0.31, 0.64, 0.88 }, unit = "catch", units = "catches",
         material = "catch", verb = "fished" },
     { key = "cloth", label = "Cloth", color = { 0.65, 0.49, 0.86 }, unit = "drop", units = "drops",
-        material = "cloth", verb = "looted for cloth" },
+        material = "cloth", verb = "looted for cloth", anyone = true },
+    { key = "treasure", label = "Treasure", color = { 0.95, 0.83, 0.23 }, unit = "chest", units = "chests",
+        material = "loot", verb = "opened", anyone = true },
 }
 M.PROF = {}
 for _, p in ipairs(M.PROFS) do M.PROF[p.key] = p end
@@ -164,7 +169,7 @@ end
 
 local function ItemName(id)
     if id == RUINED then return "Ruined scraps" end
-    return (GetItemInfo(id)) or "..."
+    return (FN.ItemInfo(id)) or "..."
 end
 
 local function CreatureName(npc)
@@ -172,9 +177,9 @@ local function CreatureName(npc)
     return (c and c.name) or "Unknown creature"
 end
 
--- a record's source by name: the creature (skinning, cloth) or the node (mining, herbalism)
+-- a record's source by name: the creature (skinning, cloth) or the object (mining, herbalism, treasure)
 local function SourceName(prof, id)
-    if prof == "mining" or prof == "herbalism" then
+    if prof == "mining" or prof == "herbalism" or prof == "treasure" then
         local n = FN.View().nodes and FN.View().nodes[id]
         return (n and n.name) or "Unknown node"
     end
@@ -1017,7 +1022,7 @@ local function Draw()
 
     if #recs == 0 then
         local verb = model.p.verb
-        local learned = s.prof == "cloth" or not FN.ProfessionSkill or (FN.ProfessionSkill(s.prof) or 0) > 0
+        local learned = model.p.anyone or not FN.ProfessionSkill or (FN.ProfessionSkill(s.prof) or 0) > 0
         if not learned and s.show == "me" then
             model.message = "You haven't learned " .. model.p.label .. " yet."
         elseif #all > 0 then
@@ -1221,15 +1226,22 @@ function M.Refresh()
         -- an error while drawing is said once in chat, so it shows even with Lua errors hidden
         local ok, err = pcall(Draw)
         if not ok then
+            -- each different error once (the same one every redraw would flood the chat)
             M.lastError = tostring(err)
-            if not M.errorSaid then
-                M.errorSaid = true
+            M.errorsSaid = M.errorsSaid or {}
+            if not M.errorsSaid[M.lastError] then
+                M.errorsSaid[M.lastError] = true
                 FN.Print("The map overlay hit an error: " .. M.lastError)
             end
         end
     end)
 end
 FN.OnData(M.Refresh)
+
+-- learning a profession (or ranking one up) changes which tabs and rows show
+local skillWatch = CreateFrame("Frame")
+pcall(skillWatch.RegisterEvent, skillWatch, "SKILL_LINES_CHANGED")
+skillWatch:SetScript("OnEvent", function() M.Refresh() end)
 
 -- /fn debug: what the overlay is doing, for when it doesn't show
 function M.Debug()

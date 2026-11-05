@@ -11,6 +11,10 @@ local ADDON, FN = ...
 --   recorded, with its cloth or with nothing, so cloth can show a drop rate. A creature of
 --   another type counts once it has dropped cloth (Felcloth from demons). A corpse opened twice
 --   counts once. Pick Pocket's loot never counts.
+-- Treasure: a chest, trunk or strongbox in the world (a game object, not a lockbox in your bags).
+--   Its loot with no gathering cast before it, when the object's name says chest (from the
+--   Opening cast that came first) or the loot holds money (any language). Quest crates give
+--   neither and are left out. The source is the object; one opened twice counts once.
 
 local PROFS = {
     -- spell IDs by rank (Apprentice to Artisan), and a spell whose name is the skill line's
@@ -21,6 +25,10 @@ local PROFS = {
 }
 FN.GATHER_PROFS = PROFS
 local PICK_POCKET = 921
+-- the game's Opening casts (a chest's lid, a locked one picked or forced): their target's name
+local OPENING = { [3365] = true, [6247] = true, [6477] = true, [6478] = true, [21651] = true, [22810] = true }
+-- words in a treasure's name (English; elsewhere the money test still finds one)
+local CHEST_WORDS = { "chest", "trunk", "strongbox", "coffer", "footlocker", "cache", "treasure", "lockbox" }
 local CLOTH = { [2589] = true, [2592] = true, [4306] = true, [4338] = true, [14047] = true, [14256] = true }
 FN.CLOTH_ITEMS = CLOTH
 
@@ -29,7 +37,7 @@ local bySpell, spellName = {}, {}
 for prof, p in pairs(PROFS) do
     for _, id in ipairs(p.spells) do bySpell[id] = prof end
 end
-local pickName
+local pickName, openName
 
 local function SpellName(id)
     if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
@@ -44,6 +52,10 @@ local function ProfOfSpell(spellID)
     for prof, n in pairs(spellName) do
         if n == name then return prof end
     end
+end
+
+local function IsOpening(spellID)
+    return OPENING[spellID] or (openName and SpellName(spellID) == openName)
 end
 
 local function IsPickPocket(spellID)
@@ -78,18 +90,32 @@ end
 
 -- a profession's rank, and the most the current rank allows (75 for Apprentice, and so on)
 function FN.ProfessionSkill(prof)
-    if not GetNumSkillLines then return 0 end
+    -- the name is read at login; if the game had not loaded the spell yet, read it now
+    if not spellName[prof] and PROFS[prof] then spellName[prof] = SpellName(PROFS[prof].spells[1]) end
     local want = spellName[prof]
     local extra = PROFS[prof] and PROFS[prof].skillNames
     if not want and not extra then return 0 end
-    for i = 1, GetNumSkillLines() do
-        local name, isHeader, _, rank, _, _, maxRank = GetSkillLineInfo(i)
-        if not isHeader and name then
-            local match = name == want
-            if not match and extra then
-                for _, e in ipairs(extra) do match = match or name == e end
+    local function Matches(name)
+        local match = name == want
+        if not match and extra then
+            for _, e in ipairs(extra) do match = match or name == e end
+        end
+        return match
+    end
+    if GetNumSkillLines and GetSkillLineInfo then
+        for i = 1, GetNumSkillLines() do
+            local name, isHeader, _, rank, _, _, maxRank = GetSkillLineInfo(i)
+            if not isHeader and name and Matches(name) then return rank or 0, maxRank end
+        end
+    end
+    -- a client that lists professions apart from the legacy skills pane
+    if GetProfessions and GetProfessionInfo then
+        local slots = { GetProfessions() }
+        for i = 1, 6 do
+            if slots[i] then
+                local name, _, rank, maxRank = GetProfessionInfo(slots[i])
+                if name and Matches(name) then return rank or 0, maxRank end
             end
-            if match then return rank or 0, maxRank end
         end
     end
     return 0
@@ -232,6 +258,33 @@ local function RecordKill(guid)
     Record("cloth", npc, items, links, (info and info.name) or (c and c.name) or "")
 end
 
+-- a treasure: its loot, when the window comes from a chest (see the top). opening: the Opening
+-- cast that came before it, { name, cast, sent }
+local opening
+local function RecordTreasure(guid)
+    local id = IdFromGUID(guid, "GameObject")
+    if not id or looted[guid] then return end
+    local name = opening and GetTime() - opening.sent < 10 and opening.name or nil
+    opening = nil
+    local money = false
+    for slot = 1, GetNumLootItems() do
+        if not LootSlotHasItem(slot) then money = true end
+    end
+    local chest = money
+    local lower = name and name:lower()
+    if lower then
+        for _, w in ipairs(CHEST_WORDS) do
+            if lower:find(w, 1, true) then chest = true end
+        end
+    end
+    if not chest then return end
+    looted[guid] = true
+    lootedCount = lootedCount + 1
+    local items, links = ReadLoot()
+    FN.NoteNode(id, name)
+    Record("treasure", id, items, links, name or "Treasure")
+end
+
 local pending -- { prof, cast, name, guid, sent }
 local fishingAt -- GetTime() of the last Fishing cast, for clients without IsFishingLoot
 local pickAt = 0
@@ -273,6 +326,8 @@ local function OnLoot()
         RecordFishing()
     elseif kind == "creature" then
         RecordKill(guid)
+    elseif kind == "node" then
+        RecordTreasure(guid)
     end
 end
 
@@ -287,6 +342,10 @@ f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
         if a1 ~= "player" then return end
         if IsPickPocket(a4) then
             pickAt = GetTime()
+            return
+        end
+        if IsOpening(a4) then
+            opening = { name = a2 ~= "" and a2 or nil, cast = a3, sent = GetTime() }
             return
         end
         local prof = ProfOfSpell(a4)
@@ -309,6 +368,7 @@ f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
         -- unit, cast GUID, spell ID
         if a1 == "player" and pending and a2 == pending.cast then pending = nil end
+        if a1 == "player" and opening and a2 == opening.cast then opening = nil end
     elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
         OnLoot()
     elseif event == "LOOT_CLOSED" then
@@ -319,6 +379,7 @@ end)
 table.insert(FN.onLogin, function()
     for prof, p in pairs(PROFS) do spellName[prof] = SpellName(p.spells[1]) end
     pickName = SpellName(PICK_POCKET)
+    openName = SpellName(3365)
 end)
 
 -- the game's word for humanoid creatures (UnitCreatureType is in the client's language)
