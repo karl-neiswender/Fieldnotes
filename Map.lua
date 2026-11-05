@@ -622,6 +622,78 @@ local function Badge(i)
     return b
 end
 
+-- a badge keeps its size on screen however far the map is zoomed (it sits on the map, which scales)
+local function ApplyBadge(b, k)
+    b.k = k
+    b:SetScale(k)
+    b:ClearAllPoints()
+    b:SetPoint("CENTER", overlay, "TOPLEFT", b.px / k, b.py / k)
+end
+
+-- When the map changes, the badges of the map you left stay a moment as copies and fade out,
+-- while the new picture fades in: no hard cut. The copies hang off the canvas, not the overlay, so
+-- the overlay's own fade-in leaves them alone.
+local ghosts = {}
+local function GhostBadges()
+    local canvas = WorldMapFrame:GetCanvas()
+    local any = false
+    for i, b in ipairs(badges) do
+        if b:IsShown() and b.px then
+            local g = ghosts[i]
+            if not g then
+                g = CreateFrame("Frame", nil, canvas)
+                g:EnableMouse(false)
+                g.ring = g:CreateTexture(nil, "ARTWORK", nil, 1)
+                g.ring:SetAllPoints()
+                g.ring:SetTexture(CIRCLE)
+                g.ring:SetVertexColor(0.08, 0.055, 0.03, 0.95)
+                g.disc = g:CreateTexture(nil, "ARTWORK", nil, 2)
+                g.disc:SetPoint("TOPLEFT", 2, -2)
+                g.disc:SetPoint("BOTTOMRIGHT", -2, 2)
+                g.disc:SetTexture(CIRCLE)
+                g.label = St.Text(g, 11, C.TEXT)
+                g.label:SetPoint("CENTER", 0, 0)
+                g.label:SetShadowOffset(1, -1)
+                ghosts[i] = g
+            end
+            local k = b.k or 1
+            g:SetFrameStrata(b:GetFrameStrata())
+            g:SetFrameLevel(b:GetFrameLevel())
+            g:SetSize(b:GetSize())
+            g.k0, g.px, g.py = k, b.px, b.py
+            g:SetScale(k)
+            g:ClearAllPoints()
+            g:SetPoint("CENTER", overlay, "TOPLEFT", b.px / k, b.py / k)
+            g.disc:SetVertexColor(b.disc:GetVertexColor())
+            g.label:SetText(b.label:GetText())
+            g.label:SetTextColor(b.label:GetTextColor())
+            g:SetAlpha(1)
+            g:Show()
+            any = true
+        end
+    end
+    M.ghostRuns = (M.ghostRuns or 0) + 1
+    M.ghostAny = any
+    if not any then return end
+    M.ghostWith = (M.ghostWith or 0) + 1
+    St.Animate("fn-ghost", 1, 0, nil, function() end)
+    -- the copies swell as they fade, as if the map were still carrying them in: it reads as a
+    -- continuation of the zoom, and not as a badge that just turned off
+    St.Animate("fn-ghost", 0, 0.8, "soft", function(v)
+        for _, g in pairs(ghosts) do
+            if g:IsShown() and g.px then
+                local k = g.k0 * (1 + 0.45 * (1 - v))
+                g:SetScale(k)
+                g:ClearAllPoints()
+                g:SetPoint("CENTER", overlay, "TOPLEFT", g.px / k, g.py / k)
+                g:SetAlpha(v)
+            end
+        end
+    end, function()
+        for _, g in pairs(ghosts) do g:Hide() end
+    end)
+end
+
 local function Short(n)
     if n >= 10000 then return string.format("%dk", math.floor(n / 1000 + 0.5)) end
     if n >= 1000 then return string.format("%.1fk", n / 1000) end
@@ -677,8 +749,8 @@ local function DrawContinent(s, mapID, zoneType, model)
         b:SetSize(size, size)
         b:SetFrameStrata(M.strata or "HIGH")
         b:SetFrameLevel(100 + i)
-        b:ClearAllPoints()
-        b:SetPoint("CENTER", overlay, "TOPLEFT", row.zone.x * w, -row.zone.y * h)
+        b.px, b.py = row.zone.x * w, -row.zone.y * h
+        ApplyBadge(b, PinScale())
         local lr, lg, lb = Ramp(0.15 + 0.85 * v)
         b.disc:SetVertexColor(lr, lg, lb)
         b.label:SetText(Short(row.value))
@@ -764,6 +836,12 @@ local function Layer()
             end
         end
     end
+    -- OpenMap (stitched world map) draws its art on the canvas up to this level: go above it
+    local om = _G.OpenMapAPI
+    if om and om.ArtTopLevel then
+        local ok, l = pcall(om.ArtTopLevel)
+        if ok and type(l) == "number" and l > level then level = l end
+    end
     M.overlayLevel = level + 1
     overlay:SetFrameLevel(M.overlayLevel)
     for _, p in pairs(pins) do p:SetFrameLevel(M.overlayLevel + 10) end
@@ -812,7 +890,9 @@ local function DrawDashboard(s, mapID, model)
         recs = others
     end
     local step = math.max(1, math.ceil(#recs / MAX_DOTS))
-    local dot = #recs > 800 and 4 or 5.5
+    -- screen pixels times the map's zoom, so the dots stay small however far in the map is
+    local k = PinScale()
+    local dot = (#recs > 800 and 2.5 or (#recs > 150 and 3.2 or 4)) * k
     local n, g = 0, 0
     for i = 1, #recs, step do
         local r = recs[i]
@@ -832,7 +912,7 @@ local function DrawDashboard(s, mapID, model)
         local ring = Pooled(rings, n, "ARTWORK", 1, CIRCLE)
         ring:ClearAllPoints()
         ring:SetPoint("CENTER", overlay, "TOPLEFT", px, py)
-        ring:SetSize(size + 3, size + 3)
+        ring:SetSize(size + 2 * k, size + 2 * k)
         ring:SetVertexColor(0.08, 0.055, 0.03, dim and 0.15 or 0.9)
         local d = Pooled(dots, n, "ARTWORK", 2, CIRCLE)
         d:ClearAllPoints()
@@ -863,6 +943,10 @@ end
 local function Draw()
     local s = S()
     Layer()
+    do
+        local nowMap = WorldMapFrame:GetMapID()
+        if s.on and M.drawnMap ~= nil and nowMap ~= M.drawnMap then GhostBadges() end
+    end
     HidePool(blobs)
     HidePool(dots)
     HidePool(rings)
@@ -880,6 +964,16 @@ local function Draw()
         place = mapID and C_Map.GetMapInfo(mapID) and C_Map.GetMapInfo(mapID).name,
     }
     M.model = model
+
+    -- zooming between the continent's badges and a zone's heat: the new picture eases in instead of
+    -- snapping (same tween as the on/off fade, so the two never fight). Only when the map changed.
+    if s.on and mapID ~= M.drawnMap then
+        if M.drawnMap ~= nil then
+            St.Animate("fn-overlay", 0, 0, nil, M.SetOverlayAlpha)
+            St.Animate("fn-overlay", 1, 0.6, "soft", M.SetOverlayAlpha)
+        end
+    end
+    M.drawnMap = mapID
 
     if not s.on then
         mute:Hide()
@@ -1003,7 +1097,10 @@ local function Draw()
     local over = s.mode ~= "points"
     if not over or s.dots then
         local step = math.max(1, math.ceil(#recs / MAX_DOTS))
-        local dot = over and (#recs > 800 and 2.5 or 3.5) or (#recs > 800 and 5 or 7)
+        -- screen pixels (times the map's zoom, so they read the same at any zoom): small, so a
+        -- crowded zone stays a scatter of dots and not one orange mass
+        local k = PinScale()
+        local dot = (over and (#recs > 800 and 2.2 or 3) or (#recs > 800 and 3.5 or (#recs > 150 and 4.2 or 5.5))) * k
         local alpha = over and 0.75 or 1
         local n = 0
         for i = 1, #recs, step do
@@ -1014,7 +1111,7 @@ local function Draw()
                 local ring = Pooled(rings, n, "ARTWORK", 1, CIRCLE)
                 ring:ClearAllPoints()
                 ring:SetPoint("CENTER", overlay, "TOPLEFT", px, py)
-                ring:SetSize(dot + 3, dot + 3)
+                ring:SetSize(dot + 2 * k, dot + 2 * k)
                 ring:SetVertexColor(0.08, 0.055, 0.03, 0.95)
             end
             local d = Pooled(dots, n, "ARTWORK", 2, CIRCLE)
@@ -1146,6 +1243,10 @@ function M.Debug()
         .. ", map " .. tostring(WorldMapFrame and WorldMapFrame:GetMapID()))
     FN.Print("  scroll area " .. Size(WorldMapFrame.ScrollContainer) .. "; map art "
         .. Size(WorldMapFrame.GetCanvas and WorldMapFrame:GetCanvas()))
+    local shownG, a = 0, 0
+    for _, g in pairs(ghosts) do if g:IsShown() then shownG = shownG + 1; a = g.GetAlpha and g:GetAlpha() or 0 end end
+    FN.Print(string.format("  map changes: %d, with badges on screen: %d, copies showing now: %d (alpha %.2f), map %s",
+        M.ghostRuns or 0, M.ghostWith or 0, shownG, a, tostring(M.drawnMap)))
     FN.Print("  overlay " .. Size(overlay) .. "; control layer " .. tostring(M.strata))
     if FN.MapUI and FN.MapUI.Debug then FN.MapUI.Debug(Size) end
     local s = S()
@@ -1173,6 +1274,27 @@ local function Init()
     if WorldMapFrame.OnMapChanged then hooksecurefunc(WorldMapFrame, "OnMapChanged", M.Refresh) end
     WorldMapFrame:HookScript("OnShow", M.Refresh)
     overlay:SetScript("OnSizeChanged", M.Refresh)
+    -- zooming scales the map under us: badges follow every frame; the dots and pins are drawn
+    -- again once the zoom settles
+    local lastK, still = nil, 0
+    overlay:SetScript("OnUpdate", function(_, dt)
+        local k = PinScale()
+        if not lastK then lastK = k end
+        if math.abs(k - lastK) > 0.002 * lastK then
+            lastK = k
+            still = 0
+            for _, b in ipairs(badges) do
+                if b:IsShown() and b.px then ApplyBadge(b, k) end
+            end
+            M.scaleDirty = true
+        elseif M.scaleDirty then
+            still = still + dt
+            if still > 0.15 then
+                M.scaleDirty = false
+                M.Refresh()
+            end
+        end
+    end)
     -- maximizing or shrinking the map changes its layer and its layout: redraw
     for _, name in ipairs({ "Maximize", "Minimize", "SetFrameStrata" }) do
         if type(WorldMapFrame[name]) == "function" then pcall(hooksecurefunc, WorldMapFrame, name, M.Refresh) end

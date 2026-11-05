@@ -1584,6 +1584,8 @@ local function DashRow(parent, p, width)
         if p.key ~= "cloth" and FN.ProfessionSkill then rank, cap = FN.ProfessionSkill(p.key) end
         rank = rank or 0
         local learned = p.key == "cloth" or rank > 0
+        -- a profession you do not have and have never gathered folds into one line under the card
+        self.collapsed = (n == 0 and not learned)
         -- the count, with its unit
         self.count:SetText(n > 0 and (FormatCount(n) .. " " .. (n == 1 and p.unit or p.units)) or "")
         -- the line under the name: what is on this map, else where you gather most, else why not
@@ -1677,27 +1679,58 @@ Dashboard = function(parent)
     local cardH = CARD_PAD * 2 + #M.PROFS * (DASH_ROW + ROW_GAP) - ROW_GAP
     d.card:SetHeight(cardH)
     -- a line under the card: the whole, in one sentence
+    -- the folded professions, dimmed, in one line
+    d.folded = St.Text(d, 9, C.SUBTEXT)
+    d.folded:SetPoint("TOPLEFT", d.card, "BOTTOMLEFT", 2, -8)
+    d.folded:SetWidth(INNER - 4)
+    d.folded:SetJustifyH("LEFT")
+    d.folded:SetAlpha(0.6)
     d.total = St.Text(d, 10, C.SUBTEXT)
-    d.total:SetPoint("TOPLEFT", d.card, "BOTTOMLEFT", 2, -8)
     d.total:SetWidth(INNER - 4)
     d.total:SetJustifyH("LEFT")
 
-    d.bottom = -y + cardH + 8 + 12 + 12
     function holder:Update()
         local s = M.S()
         d.show:Update()
         d.when:Update()
         local sum = M.Summary(s.show, s.when)
         local total, pros = 0, 0
+        local shown, folded = 0, {}
         for _, r in ipairs(d.rows) do
             r:Update(sum[r.p.key])
             local n = sum[r.p.key] and sum[r.p.key].n or 0
             total = total + n
             if n > 0 then pros = pros + 1 end
+            if r.collapsed then
+                r:Hide()
+                folded[#folded + 1] = r.p.label
+            else
+                r:Show()
+                r:ClearAllPoints()
+                r:SetPoint("TOPLEFT", CARD_PAD, -CARD_PAD - shown * (DASH_ROW + ROW_GAP))
+                shown = shown + 1
+            end
         end
+        local h = CARD_PAD * 2 + shown * (DASH_ROW + ROW_GAP) - ROW_GAP
+        d.card:SetHeight(h)
+        local below = d.card
+        local gap = 8
+        if #folded > 0 then
+            d.folded:SetText("Not learned: " .. table.concat(folded, " · "))
+            d.folded:Show()
+            below = d.folded
+            gap = 8
+        else
+            d.folded:Hide()
+        end
+        d.total:ClearAllPoints()
+        d.total:SetPoint("TOPLEFT", below, "BOTTOMLEFT", below == d.card and 2 or 0, -gap - (below == d.folded and 6 or 0))
         d.total:SetText(total > 0
             and (FormatCount(total) .. " gathers across " .. pros .. (pros == 1 and " profession" or " professions"))
-            or "Nothing gathered yet. Your first gather starts a session.")
+            or (#folded >= #d.rows - 1
+                and "No gathering profession learned yet. Learn one and it shows up here, and its first gather starts a session."
+                or "Nothing gathered yet. Your first gather starts a session."))
+        d.bottom = -y + h + 8 + (#folded > 0 and 24 or 0) + 36 + 12
         self.area:SetHeight(d.bottom)
     end
     holder.rows = d.rows

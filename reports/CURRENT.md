@@ -343,3 +343,9 @@
   rule after "All"); items can be plain (no dot) or disabled. Community is in the Show menu, dimmed, with
   "Coming soon" beside it, and ignores clicks. The profession pages keep their button rows. Checks pass (41),
   copied to Era. Not yet seen in game.
+
+- 2026-11-04 (Forever + OpenMap): overlay now sits above OpenMap's art (OpenMapAPI.ArtTopLevel); badges
+  and dots keep their on-screen size at any zoom; dashboard folds unlearned professions into one line.
+  PARKED: smooth continent<->zone zoom transition. Map.lua has a fade-in on map change plus fading
+  badge copies (GhostBadges); `/fn debug` shows they fire, but Karl saw no difference in game. Next try:
+  tie the blend to OpenMap's zoom (OpenMapAPI.GetView) instead of the map-ID change. Not committed.
