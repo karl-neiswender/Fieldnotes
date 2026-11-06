@@ -297,7 +297,7 @@ local function Section(parent, title)
     return s
 end
 
--- a bar row: an icon (an item's, or a letter on a dark square), a name, a value, a thin bar
+-- a bar row: an item's icon (or none), a name, a value, a thin bar
 local function BarRows(card, n, w)
     local rows = {}
     for i = 1, n do
@@ -312,11 +312,8 @@ local function BarRows(card, n, w)
         r.icon = r:CreateTexture(nil, "ARTWORK")
         r.icon:SetSize(16, 16)
         r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
-        r.letter = St.Text(r, 9, C.INK2)
-        r.letter:SetPoint("CENTER", r.icon, "CENTER", 0, 0)
         r.name = St.Text(r, 10, C.TEXT)
-        r.name:SetPoint("TOPLEFT", r, "TOPLEFT", 22, -2)
-        r.name:SetWidth(w - 22 - 56)
+        r.w = w
         r.name:SetWordWrap(false)
         r.value = St.Text(r, 10, C.SUBTEXT)
         r.value:SetPoint("TOPRIGHT", r, "TOPRIGHT", 0, -2)
@@ -324,13 +321,10 @@ local function BarRows(card, n, w)
         r.track = r:CreateTexture(nil, "BORDER")
         r.track:SetTexture(SOLID)
         r.track:SetVertexColor(EMPTY[1], EMPTY[2], EMPTY[3])
-        r.track:SetPoint("BOTTOMLEFT", r, "BOTTOMLEFT", 22, 3)
-        r.track:SetSize(w - 22, 3)
+        r.track:SetHeight(3)
         r.fill = r:CreateTexture(nil, "ARTWORK")
         r.fill:SetTexture(SOLID)
-        r.fill:SetPoint("BOTTOMLEFT", r, "BOTTOMLEFT", 22, 3)
         r.fill:SetHeight(3)
-        r.barW = w - 22
         r:SetScript("OnEnter", function(self)
             self.hl:Show()
             if self.tip then self.tip(self) end
@@ -344,17 +338,21 @@ local function BarRows(card, n, w)
     return rows
 end
 
--- fill a row: icon (a texture), or letter (on a dark square); frac 0..1 of the bar
-local function SetRow(r, icon, letter, name, value, frac, color, tip)
-    if icon then
-        r.icon:SetTexture(icon)
-        r.icon:SetVertexColor(1, 1, 1)
-        r.letter:SetText("")
-    else
-        r.icon:SetTexture(SOLID)
-        r.icon:SetVertexColor(0.17, 0.15, 0.12)
-        r.letter:SetText(letter or "")
-    end
+-- fill a row: an icon texture, or nil for none (the name then starts at the left edge; a
+-- letter on a dark square said nothing, Karl 2026-11-06); frac 0..1 of the bar
+local function SetRow(r, icon, name, value, frac, color, tip)
+    local x = icon and 22 or 0
+    r.icon:SetShown(icon ~= nil)
+    if icon then r.icon:SetTexture(icon) end
+    r.name:ClearAllPoints()
+    r.name:SetPoint("TOPLEFT", r, "TOPLEFT", x, -2)
+    r.name:SetWidth(r.w - x - 56)
+    r.track:ClearAllPoints()
+    r.track:SetPoint("BOTTOMLEFT", r, "BOTTOMLEFT", x, 3)
+    r.track:SetWidth(r.w - x)
+    r.fill:ClearAllPoints()
+    r.fill:SetPoint("BOTTOMLEFT", r, "BOTTOMLEFT", x, 3)
+    r.barW = r.w - x
     r.name:SetText(name)
     r.value:SetText(value)
     r.fill:SetWidth(math.max(1, r.barW * math.max(0, math.min(1, frac))))
@@ -452,6 +450,7 @@ function SP.Build(parent, opts)
         local b = St.ChoiceButton(d, function()
             M.S().statsProf = key
             holder:Update()
+            if opts.OnPick then opts.OnPick() end
         end)
         b.key = key
         local w = p and unit or unit * 1.6
@@ -746,9 +745,12 @@ function SP.Build(parent, opts)
             end
             Finish(f)
             local function Light(i)
+                -- dim by mixing toward the empty track at full alpha: the slice's lines overlap a
+                -- little, and a lowered alpha stacked where they overlap (grey spokes)
                 for _, sg in ipairs(f.segs) do
-                    local on = not i or sg.slice == i
-                    sg.line:SetVertexColor(sg.c[1], sg.c[2], sg.c[3], on and 1 or 0.35)
+                    local c, k = sg.c, (not i or sg.slice == i) and 1 or 0.3
+                    sg.line:SetVertexColor(c[1] * k + EMPTY[1] * (1 - k), c[2] * k + EMPTY[2] * (1 - k),
+                        c[3] * k + EMPTY[3] * (1 - k), 1)
                 end
                 for j, row in ipairs(mix.rows) do row.hl:SetShown(i == j) end
             end
@@ -845,7 +847,7 @@ function SP.Build(parent, opts)
                     local p = M.PROF[data.itemProf[id]] or P or { color = C.ACCENT, label = "" }
                     local from = 0
                     for _, r in ipairs(data.recs) do if r.items[id] then from = from + 1 end end
-                    SetRow(row, FN.ItemIcon(id), nil, ItemName(id), Commas(data.items[id]), data.items[id] / first, p.color,
+                    SetRow(row, FN.ItemIcon(id) or nil, ItemName(id), Commas(data.items[id]), data.items[id] / first, p.color,
                         function(o)
                             Tip(o, ItemName(id), nil, { { "Looted", Commas(data.items[id]) },
                                 { "From", Commas(from) .. " " .. (p.units or "gathers") },
@@ -873,7 +875,7 @@ function SP.Build(parent, opts)
                 local mapID = ids[i]
                 if mapID then
                     local name = ZoneName(mapID)
-                    SetRow(row, nil, name:sub(1, 1), name, Commas(rate[mapID]) .. "/hr", rate[mapID] / first, accent,
+                    SetRow(row, nil, name, Commas(rate[mapID]) .. "/hr", rate[mapID] / first, accent,
                         function(o)
                             Tip(o, name, nil, { { "Per hour", Commas(rate[mapID]) }, { Cap(unitWord), Commas(data.zone[mapID]) },
                                 { "Time here", string.format("%.1f hr", (data.zoneSecs[mapID] or 0) / 3600) } })
@@ -1033,7 +1035,7 @@ function SP.Build(parent, opts)
             for i, row in ipairs(own.rows) do
                 local e = entries[i]
                 if e then
-                    SetRow(row, nil, e.name:sub(1, 1), e.name, e.text, e.v / (e.max or top), P.color, function(o)
+                    SetRow(row, nil, e.name, e.text, e.v / (e.max or top), P.color, function(o)
                         Tip(o, e.name, nil, { { e.max and "Rate" or "Count", e.text } }, e.tip)
                     end)
                 else

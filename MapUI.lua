@@ -75,6 +75,23 @@ local function LabelTint(c)
     return out
 end
 
+-- a title or number in a profession's color: its hue lifted to read as bright text on the dock
+-- (Mining red becomes a light coral), not the label's quiet grey step
+local function NameTint(c)
+    local function Lum(x) return 0.299 * x[1] + 0.587 * x[2] + 0.114 * x[3] end
+    local k = 0.64 / math.max(0.05, Lum(c))
+    local out = {}
+    for i = 1, 3 do
+        local v = math.min(1, c[i] * k)
+        out[i] = v + (1 - v) * 0.12
+    end
+    return out
+end
+local function Hex(c)
+    return string.format("%02x%02x%02x", math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5),
+        math.floor(c[3] * 255 + 0.5))
+end
+
 -- n skins, n catches: the profession's own word
 local function Units(p, n)
     p = p or { unit = "gather", units = "gathers" }
@@ -90,7 +107,7 @@ local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
 
 local model = {}
 local profTabs, shownTabs = {}, {}
-local PROF_TAB_H, PROF_TAB_GAP = 34, 4
+local PROF_TAB_H, PROF_TAB_GAP = 34, 2 -- (gap 4 read loose, Karl 2026-11-06)
 local dockClip -- the dock's clipping window (BuildDock)
 local ProfMark, GoTo, Dashboard, FormatCount, SetSheet, ApplyTab, Glide -- defined with the dock
 local homeTab, RefreshHome
@@ -496,7 +513,7 @@ end
 -- ------------------------------------------------------------
 -- withSpots: the card also lists the hot spots the map pins, one line each (the dock's key); a
 -- row and its pin light together (hover either), and a click on a row pings its pin
-local SPOT_ROW = 17
+local SPOT_ROW = 19 -- (17 felt tight, Karl 2026-11-06)
 -- Tooltips for the key's items go above the card, so they never cover its numbers
 local function CardTip(owner, card)
     GameTooltip:SetOwner(owner, "ANCHOR_NONE")
@@ -530,13 +547,16 @@ local function SpotRow(k, i, width)
     row.num:SetPoint("CENTER", row.badge, "CENTER", 0, 0)
     row.num:SetJustifyH("CENTER")
     row.num:SetText(i)
+    -- the count in a fixed column, right-aligned, so the names start in one line down the list
     row.count = St.Text(row, 11, C.TEXT)
-    row.count:SetPoint("LEFT", 25, 0)
-    row.coords = St.Text(row, 10, C.INK2)
+    row.count:SetPoint("LEFT", 23, 0)
+    row.count:SetWidth(30) -- room for "1,234"
+    row.count:SetJustifyH("RIGHT")
+    row.coords = St.Text(row, 9, C.SUBTEXT)
     row.coords:SetPoint("RIGHT", -5, 0)
     row.coords:SetJustifyH("RIGHT")
     row.who = St.Text(row, 10, C.SUBTEXT)
-    row.who:SetPoint("LEFT", row.count, "RIGHT", 6, 0)
+    row.who:SetPoint("LEFT", row.count, "RIGHT", 7, 0)
     row.who:SetPoint("RIGHT", row.coords, "LEFT", -6, 0)
     row.who:SetWordWrap(false)
     row.who:SetJustifyH("LEFT")
@@ -562,9 +582,16 @@ local function SpotRow(k, i, width)
         self.hover = true
         self:Paint()
         M.LightPin(self.rank, true)
-        if self.whoFull and self.who:IsTruncated() then
+        local long = self.whoFull and (self.who:IsTruncated() or self.who:GetText() ~= self.whoFull)
+        local way = self.spot and M.CanWaypoint(self.spot.map)
+        if long or way then
             CardTip(self, self:GetParent())
-            GameTooltip:SetText(self.whoFull, 1, 1, 1, 1, true)
+            if long then
+                GameTooltip:SetText(self.whoFull, 1, 1, 1, 1, true)
+            else
+                GameTooltip:SetText(self.spot.coords, C.TITLE[1], C.TITLE[2], C.TITLE[3])
+            end
+            if way then GameTooltip:AddLine("Click to set a waypoint here", C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3]) end
             GameTooltip:Show()
         end
     end)
@@ -574,7 +601,12 @@ local function SpotRow(k, i, width)
         M.LightPin(self.rank, false)
         GameTooltip:Hide()
     end)
-    row:SetScript("OnClick", function(self) M.PingPin(self.rank) end)
+    -- a click pings the pin and, where a waypoint can be set (TomTom, or the game's own), sets one
+    row:SetScript("OnClick", function(self)
+        M.PingPin(self.rank)
+        local by, title = M.Waypoint(self.spot)
+        if by then FN.Print("Waypoint set: " .. title .. (by == "TomTom" and " (TomTom)" or "")) end
+    end)
     row:Paint()
     return row
 end
@@ -617,6 +649,7 @@ local function KeyCard(parent, width, withSpots, glass)
     k.message:SetPoint("TOPLEFT", 11, -12)
     k.message:SetWidth(width - 22)
     k.message:SetJustifyV("TOP")
+    k.message:SetSpacing(11 * 0.2) -- line height 120% of the 11 text (Karl, 2026-11-06)
     k.rows = {}
     for i = 1, 2 do
         local l = St.Text(k, 10, C.SUBTEXT)
@@ -762,9 +795,17 @@ local function KeyCard(parent, width, withSpots, glass)
         self.scale:SetShown(not compact and (hasData and m.scale ~= nil and m.mode ~= "points" or (hasData and m.kind == "continent")))
         if not hasData then
             self.message:SetText(m.message)
-            y = -12 - self.message:GetStringHeight() - 10
+            -- the card hugs the message: 12 above, 12 below (SetHeight adds the last 8)
+            y = -12 - self.message:GetStringHeight() - 4
         else
-            self.big:SetText(Units(m.p, m.skins or 0))
+            -- the number in the profession's color (Karl chose the strong page color, 2026-11-06)
+            local n = m.skins or 0
+            local word = (m.p and (n == 1 and m.p.unit or m.p.units)) or (n == 1 and "gather" or "gathers")
+            if m.p and m.p.color then
+                self.big:SetText("|cff" .. Hex(NameTint(m.p.color)) .. n .. "|r " .. word)
+            else
+                self.big:SetText(n .. " " .. word)
+            end
             self.caption:SetText((m.p and m.p.units or "gathers") .. " in one spot")
             y = -34
             local rows
@@ -910,9 +951,17 @@ local function KeyCard(parent, width, withSpots, glass)
             for i = 1, nSpots do
                 local sp, row = spots[i], self.spotRows[i]
                 row.count:SetText(sp.count)
-                row.coords:SetText(sp.coords)
+                -- coordinates only where a click can turn them into a waypoint
+                row.coords:SetText(M.CanWaypoint(sp.map) and sp.coords or "")
                 row.whoFull = sp.who ~= "" and sp.who or sp.loot
-                row.who:SetText(row.whoFull)
+                row.spot = sp
+                -- the first spot's badge and halo in the page's color (gold pulled focus from the total)
+                if i == 1 then
+                    local bc = (m.p and m.p.color) or C.ACCENT
+                    row.badge:SetVertexColor(bc[1], bc[2], bc[3], 1)
+                    row.halo:SetVertexColor(bc[1], bc[2], bc[3], 1)
+                end
+                row.who:SetText(sp.who ~= "" and sp.whoShort or sp.lootShort or row.whoFull)
                 row:ClearAllPoints()
                 row:SetPoint("TOPLEFT", self, "TOPLEFT", 5, y)
                 y = y - SPOT_ROW
@@ -925,8 +974,11 @@ local function KeyCard(parent, width, withSpots, glass)
                 l.count:Hide()
             end
         end
-        self.demo:SetShown(m.inDemo and not compact)
-        if m.inDemo and not compact then
+        -- (the dock's key leaves the note to the dock's header, demoInHeader, so it never costs a
+        -- hot spot and every page drops the same lines in the same order)
+        local demo = m.inDemo and not compact and not rawget(self, "demoInHeader")
+        self.demo:SetShown(demo and true or false)
+        if demo then
             self.demo:ClearAllPoints()
             self.demo:SetPoint("TOPLEFT", self, "TOPLEFT", 11, y - 2)
             y = y - 16
@@ -1323,6 +1375,7 @@ end
 -- The dock (small map)
 -- ------------------------------------------------------------
 local dock, tab, sheet
+local StatsPlace -- (set beside RenderDock)
 
 -- the hot spot row for a pin the mouse is over (Map.lua calls this), and whether a row is lit
 function MapUI.LightSpot(rank, on)
@@ -1384,7 +1437,7 @@ local RECESS = 0.72 -- inactive tabs: a shade darker, as if they sat behind the 
 local LIGHT_PEAK = 0.24 -- at the outer edge; 0.14 and 0.2 did not show in game, 0.34 was a little strong (Karl, 2026-11-05)
 -- The open tab's gold edge (Karl, 2026-11-05): one gold for every tab, whatever its profession.
 -- Full along the outer edge, fading along the top and bottom toward the dock.
-local EDGE_GOLD = { 1.00, 0.82, 0.00 } -- (the chosen gold, STYLE.rowSel's edge, as on the Fieldnotes tab)
+local EDGE_GOLD = { 1.00, 0.82, 0.00 } -- (the chosen gold, STYLE.rowSel's edge)
 
 local function PageCopy(t)
     local clip = CreateFrame("Frame", nil, dock)
@@ -1644,13 +1697,24 @@ local ORANGE = { 0.95, 0.60, 0.22 }
 local function DashRow(parent, p, width)
     local r = CreateFrame("Button", nil, parent)
     r:SetSize(width, DASH_ROW)
+    -- the hover area reaches half the gap up and down, so neighbouring rows meet (no dead strip)
+    r:SetHitRectInsets(0, 0, -ROW_GAP / 2, -ROW_GAP / 2)
     r.p = p
-    -- hover: the profession's color washes in from the bar and fades across the row
+    -- hover (option C, Karl 2026-11-06): the row lifts a step, a short glow of the profession's
+    -- color leaves the bar and is gone a third of the way in, and the name takes the color.
+    -- (A wash across the whole row came out muddy on Mining's red and Treasure's yellow.)
+    r.lift = r:CreateTexture(nil, "BACKGROUND", nil, -1)
+    r.lift:SetAllPoints()
+    r.lift:SetColorTexture(1, 0.95, 0.85, 0.05)
+    r.lift:Hide()
     r.wash = r:CreateTexture(nil, "BACKGROUND")
-    r.wash:SetAllPoints()
+    r.wash:SetPoint("TOPLEFT", 0, 0)
+    r.wash:SetPoint("BOTTOMLEFT", 0, 0)
+    r.wash:SetWidth(math.floor(width * 0.35))
     r.wash:SetTexture(St.Media("fade"))
-    r.wash:SetVertexColor(p.color[1], p.color[2], p.color[3], 0.22)
+    r.wash:SetVertexColor(p.color[1], p.color[2], p.color[3], 0.18) -- (0.26 read a tad strong, Karl)
     r.wash:Hide()
+    r.nameLit = NameTint(p.color)
     -- the profession's color down the row's edge (the tabs carry its icon), brighter on hover
     r.bar = r:CreateTexture(nil, "ARTWORK")
     r.bar:SetColorTexture(p.color[1], p.color[2], p.color[3], 1)
@@ -1687,7 +1751,14 @@ local function DashRow(parent, p, width)
     r.chev:SetAlpha(0)
     local function Lit(on)
         r.wash:SetShown(on)
+        r.lift:SetShown(on)
         r.bar:SetAlpha(on and 1 or 0.7)
+        r.bar:SetWidth(on and 3 or 2)
+        local c = on and r.nameLit or C.TEXT
+        r.name:SetTextColor(c[1], c[2], c[3])
+        -- the chevron arrives in the profession's color too
+        local cc = on and r.nameLit or C.INK2
+        r.chev:SetVertexColor(cc[1], cc[2], cc[3])
         St.Animate("fn-chev-" .. p.key, on and 1 or 0, St.DUR.quick, "soft", function(v)
             r.chev:SetAlpha(v)
             r.chev:ClearAllPoints()
@@ -1942,7 +2013,9 @@ local function BuildDock()
     dock.dots:SetScript("OnEnter", function(self)
         local s = M.S()
         if s.mode ~= "points" then self.toggle:SetOn(s.dots, true) end
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        -- the switch sits at the dock's right end, often the screen's edge: open the tip inward
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        GameTooltip:SetPoint("TOPRIGHT", self, "BOTTOMRIGHT", 0, -4)
         GameTooltip:SetText("Every skin", C.TITLE[1], C.TITLE[2], C.TITLE[3])
         GameTooltip:AddLine(s.mode == "points" and "Points already shows every skin."
             or "Lay one dot per skin over the heat.", 1, 1, 1, true)
@@ -1985,12 +2058,15 @@ local function BuildDock()
     dock.leather:SetPoint("TOPLEFT", PAD, y - LABEL_GAP)
     y = y - LABEL_GAP - 24 - GROUP_GAP
     dock.key = KeyCard(body, INNER, true)
+    dock.key.demoInHeader = true
     dock.key:SetPoint("TOPLEFT", PAD, y)
     body = shared
     dock.dash = Dashboard(body)
     -- the Stats page (StatsPage.lua): opened by the Stats tab, in place of the old stats window
     dock.statsPage = FN.StatsPage.Build(body, { inner = INNER, pad = PAD, top = FIRST_Y + SCROLL_TOP, ctrlH = CTRL_H,
-        Dropdown = Dropdown, ShowProvider = ShowProvider, WhenProvider = WhenProvider, DockScroll = DockScroll })
+        Dropdown = Dropdown, ShowProvider = ShowProvider, WhenProvider = WhenProvider, DockScroll = DockScroll,
+        -- a chip changes the profession: the header's subtitle follows (it went stale before)
+        OnPick = function() if StatsPlace then StatsPlace() end end })
     dock.session = SessionCard(body, INNER)
 
     -- the settings page: no panel of its own, it rises inside the dock (which clips it)
@@ -2044,7 +2120,8 @@ local function BuildDock()
 
     -- The tab that folds the dock away and back: the game's own side tab, the one down the character
     -- window's edge (LargeSideTabButtonTemplate), with the add-on's icon, so it matches every other
-    -- side tab on the map (Spoken Places hangs one there too). Chosen while the dock is open.
+    -- side tab on the map (Spoken Places hangs one there too). Never shown as chosen: it opens and
+    -- folds the dock and is not a page, so gold here read as a selected tab (Karl, 2026-11-06).
     local ok, native = pcall(CreateFrame, "Frame", "FieldnotesMapTab", dockClip, "LargeSideTabButtonTemplate")
     if ok and native and type(native.Icon) == "table" and native.Icon.SetTexture and native.SetCustomOnMouseUpHandler then
         tab = native
@@ -2059,12 +2136,12 @@ local function BuildDock()
         end)
         RefreshHome = function()
             -- (SetChecked also fits the icon to the tab's inside)
-            if tab.SetChecked then tab:SetChecked(DockOpen()) end
+            if tab.SetChecked then tab:SetChecked(false) end
         end
         RefreshHome()
     else
-        -- A client without the template (Classic Era): a square etched tab, edged in gold like the
-        -- character window's. Gold and bright while the dock is open, softer when folded.
+        -- A client without the template (Classic Era): a square etched tab with the rail's quiet
+        -- edge, open or folded; it warms only on hover (gold is for the page you are on).
         tab = St.Frame("Button", dockClip)
         St.Etch(tab, STYLE.dock, 12)
         St.Grime(tab, 0.25, 12, 0.53, 150, 220)
@@ -2073,11 +2150,9 @@ local function BuildDock()
         tab.icon:SetTexture(St.Media("icon"))
         tab.icon:SetSize(HOME_H - 8, HOME_H - 8)
         tab.icon:SetPoint("CENTER")
-        local HOME_REST = { top = STYLE.dock.top, bottom = STYLE.dock.bottom, edge = { 0.62, 0.49, 0.13, 1 } }
         RefreshHome = function()
-            local open = DockOpen()
-            tab:SetEtch(tab.hover and STYLE.btnHover or (open and STYLE.rowSel or HOME_REST))
-            tab.icon:SetAlpha((open or tab.hover) and 1 or 0.88)
+            tab:SetEtch(tab.hover and STYLE.btnHover or STYLE.dock)
+            tab.icon:SetAlpha(tab.hover and 1 or 0.92)
         end
         tab:SetScript("OnClick", TabClick)
         tab:SetScript("OnEnter", function(self)
@@ -2473,17 +2548,25 @@ local function LayoutDock()
     RefreshHome()
 end
 
+-- the Stats subtitle: the chosen profession (or all), and every zone, since stats count them all
+-- (the map you are on would mislead here)
+StatsPlace = function()
+    local P = M.PROF[M.S().statsProf]
+    dock.place:SetText((P and P.label or "All professions") .. "  ·  All zones")
+end
+
 local function RenderDock(m)
     local s = M.S()
     dock.switch:Sync()
     dock.statsPage:SetShown(dock.statsOpen == true)
     if dock.statsOpen then
-        local P = M.PROF[s.statsProf]
         dock.icon:Set(nil)
         dock.prof:ClearAllPoints()
         dock.prof:SetPoint("TOPLEFT", PAD, -PAD - 2)
         dock.prof:SetText("Stats")
-        dock.place:SetText((P and P.label or "All professions") .. (m.place and ("  ·  " .. m.place) or ""))
+        dock.prof:SetTextColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
+        dock.place:SetTextColor(C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
+        StatsPlace()
         dock.page:Hide()
         dock.dash:Hide()
         dock:SetGlow(nil)
@@ -2501,7 +2584,16 @@ local function RenderDock(m)
     dock.prof:ClearAllPoints()
     dock.prof:SetPoint("TOPLEFT", PAD + (p and 22 or 0), -PAD - 2)
     dock.prof:SetText(dash and "Fieldnotes" or p.label)
-    dock.place:SetText(dash and ("All professions" .. (m.place and ("  ·  " .. m.place) or "")) or (m.place or ""))
+    -- a profession's page wears its color: title, place, the chosen View and the key's total
+    local tc = dash and C.TITLE or NameTint(p.color)
+    dock.prof:SetTextColor(tc[1], tc[2], tc[3])
+    local pc = dash and C.SUBTEXT or LabelTint(p.color)
+    dock.place:SetTextColor(pc[1], pc[2], pc[3])
+    local place = dash and ("All professions" .. (m.place and ("  ·  " .. m.place) or "")) or (m.place or "")
+    -- sample data is said once, up here, on every page (it was the key's last line, dropped first
+    -- when short, so some pages said it and some did not)
+    if m.inDemo then place = place .. "  ·  |cff999999Sample data|r" end -- C.SUBTEXT (gold read as a third accent)
+    dock.place:SetText(place)
     dock.page:SetShown(not dash)
     dock.dash:SetShown(dash)
     dock:SetGlow((not dash and not dock.sheetOpen) and p or nil)
@@ -2516,15 +2608,24 @@ local function RenderDock(m)
         return
     end
     dock.matLabel:SetText(string.upper(p.material))
-    -- the section labels take the profession's hue at the grey's own lightness, so they sit exactly
-    -- where the grey did in the hierarchy, just warmer or cooler with the page
-    local lc = LabelTint(p.color)
-    for _, l in ipairs({ dock.viewLabel, dock.showLabel, dock.matLabel }) do l:SetTextColor(lc[1], lc[2], lc[3]) end
+    -- section labels stay grey: with the title, chosen buttons and total in the profession's color,
+    -- tinted labels flattened the hierarchy (Karl, 2026-11-06)
+    for _, l in ipairs({ dock.viewLabel, dock.showLabel, dock.matLabel }) do
+        l:SetTextColor(C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
+    end
     dock.dotsLabel:SetText("Every " .. p.unit)
-    for _, b in ipairs(dock.modes) do b:SetChosen(b.key == s.mode) end
-    for _, b in ipairs(dock.shows) do b:SetChosen(b.key == s.show) end
+    local look = St.AccentLook(p.color)
+    for _, b in ipairs(dock.modes) do
+        b.look = look
+        b:SetChosen(b.key == s.mode)
+    end
+    for _, b in ipairs(dock.shows) do
+        b.look = look -- one chosen color per page
+        b:SetChosen(b.key == s.show)
+    end
     dock.leather:Update()
     local points = s.mode == "points"
+    dock.dots.toggle.onLook = St.ToggleLook(p.color) -- gold stays for the add-on's own switch
     dock.dots.toggle:SetOn(s.dots and not points)
     -- the session row first, so the key can measure the room above it
     dock.session:ClearAllPoints()
@@ -2747,6 +2848,8 @@ local function LayoutToolbar(m)
         Divider(2)
         for _, b in ipairs(bar.modes) do
             Place(b, math.ceil(b.text:GetStringWidth()) + 18)
+            local bp = M.PROF[s.prof]
+            b.look = bp and St.AccentLook(bp.color) or nil
             b:SetChosen(b.key == s.mode)
         end
         Divider(3)
@@ -2754,6 +2857,8 @@ local function LayoutToolbar(m)
     if dash then Divider(3) end -- (Home: pages, then Show, with one divider between)
     for _, b in ipairs(bar.shows) do
         Place(b, math.ceil(b.text:GetStringWidth()) + 18)
+        local bp = M.PROF[s.prof]
+        b.look = bp and St.AccentLook(bp.color) or nil
         b:SetChosen(b.key == s.show)
     end
     local leatherX

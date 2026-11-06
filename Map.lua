@@ -71,16 +71,16 @@ local PALETTE = {
     { 0.890, 0.604, 0.231 }, { 0.953, 0.875, 0.659 }, { 0.247, 0.561, 0.541 }, { 0.541, 0.208, 0.149 },
 }
 -- the other professions' materials keep to their profession's hue (Karl, 2026-11-04): mining
--- reds, herbs greens, fish blues, cloth purples, treasure golds (mining's old yellows; mining took
--- red, 2026-11-05). Strongest first, then pale, deep, and a
+-- reds, herbs greens, fish blues, cloth purples, treasure teals (it was gold, which melted into the
+-- add-on's own gold; teal since 2026-11-06; mining took red, 2026-11-05). Strongest first, then pale, deep, and a
 -- neighbouring hue, so each still reads apart from the others.
 local PALETTES = {
     skinning = PALETTE,
     mining = { { 0.88, 0.27, 0.22 }, { 0.98, 0.68, 0.60 }, { 0.58, 0.13, 0.11 }, { 0.80, 0.30, 0.46 } },
     herbalism = { { 0.40, 0.76, 0.27 }, { 0.74, 0.90, 0.54 }, { 0.18, 0.48, 0.20 }, { 0.62, 0.70, 0.24 } },
-    fishing = { { 0.27, 0.62, 0.92 }, { 0.64, 0.85, 0.98 }, { 0.14, 0.36, 0.70 }, { 0.30, 0.70, 0.74 } },
+    fishing = { { 0.27, 0.62, 0.92 }, { 0.64, 0.85, 0.98 }, { 0.14, 0.36, 0.70 }, { 0.42, 0.48, 0.90 } }, -- (4th was teal: Treasure's now)
     cloth = { { 0.66, 0.45, 0.90 }, { 0.86, 0.75, 0.98 }, { 0.42, 0.25, 0.66 }, { 0.82, 0.46, 0.78 } },
-    treasure = { { 0.95, 0.80, 0.15 }, { 0.99, 0.93, 0.60 }, { 0.70, 0.52, 0.08 }, { 0.84, 0.66, 0.30 } },
+    treasure = { { 0.22, 0.76, 0.66 }, { 0.64, 0.93, 0.86 }, { 0.10, 0.48, 0.42 }, { 0.44, 0.64, 0.60 } },
 }
 M.PALETTES = PALETTES
 local RUINED_COLOR = { 0.56, 0.54, 0.50 }
@@ -103,7 +103,7 @@ M.PROFS = {
         material = "catch", verb = "fished" },
     { key = "cloth", label = "Cloth", color = { 0.65, 0.49, 0.86 }, unit = "drop", units = "drops",
         material = "cloth", verb = "looted for cloth", anyone = true },
-    { key = "treasure", label = "Treasure", color = { 0.95, 0.83, 0.23 }, unit = "chest", units = "chests",
+    { key = "treasure", label = "Treasure", color = { 0.25, 0.78, 0.68 }, unit = "chest", units = "chests",
         material = "loot", verb = "opened", anyone = true },
 }
 M.PROF = {}
@@ -433,7 +433,7 @@ local function PinTooltip(self)
     GameTooltip:AddLine(p.count .. " " .. (p.count == 1 and u.unit or u.units) .. " here", 1, 1, 1)
     if p.who ~= "" then GameTooltip:AddLine(p.who, SOFT[1], SOFT[2], SOFT[3], true) end
     if p.loot ~= "" then GameTooltip:AddLine(p.loot, SOFT[1], SOFT[2], SOFT[3], true) end
-    GameTooltip:AddLine(p.coords, DIM[1], DIM[2], DIM[3])
+    if M.CanWaypoint(p.map) then GameTooltip:AddLine(p.coords, DIM[1], DIM[2], DIM[3]) end
     GameTooltip:Show()
 end
 
@@ -598,6 +598,38 @@ function M.LightPin(rank, on, fromPin)
 end
 
 -- a click on a hot spot row: two rings ripple out from its pin, so the eye finds it
+-- A waypoint to a hot spot: TomTom's when it is loaded, else the game's own map pin where the
+-- client has one (guarded: not every client does). Returns who set it, or nil.
+-- Strict about the game's pin: every piece must exist and say yes for this map, plus the tracking
+-- arrow (C_SuperTrack). Era has no map pins (Karl, 2026-11-06), so there it is TomTom or nothing,
+-- and with nothing the coordinates are not shown at all (bare numbers read as noise).
+function M.CanWaypoint(mapID)
+    if TomTom and TomTom.AddWaypoint then return true end
+    if not (mapID and C_Map and C_Map.SetUserWaypoint and C_Map.CanSetUserWaypointOnMap and UiMapPoint
+        and UiMapPoint.CreateFromCoordinates and C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint) then
+        return false
+    end
+    local ok, yes = pcall(C_Map.CanSetUserWaypointOnMap, mapID)
+    return ok and yes and true or false
+end
+
+function M.Waypoint(sp)
+    if not (sp and sp.map and sp.x and sp.y) then return nil end
+    local title = (sp.place and (sp.place .. " ") or "") .. sp.coords
+    if TomTom and TomTom.AddWaypoint then
+        local ok = pcall(TomTom.AddWaypoint, TomTom, sp.map, sp.x, sp.y, { title = "Fieldnotes: " .. title, from = "Fieldnotes" })
+        if ok then return "TomTom", title end
+    end
+    if M.CanWaypoint(sp.map) and not (TomTom and TomTom.AddWaypoint) then
+        local ok = pcall(function()
+            C_Map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(sp.map, sp.x, sp.y))
+            C_SuperTrack.SetSuperTrackedUserWaypoint(true)
+        end)
+        if ok then return "the map", title end
+    end
+    return nil
+end
+
 function M.PingPin(rank)
     local p = rank and byRank[rank]
     if not (p and p:IsShown()) then return end
@@ -676,70 +708,6 @@ local function ApplyBadge(b, k)
     b:SetScale(k)
     b:ClearAllPoints()
     b:SetPoint("CENTER", overlay, "TOPLEFT", b.px / k, b.py / k)
-end
-
--- When the map changes, the badges of the map you left stay a moment as copies and fade out,
--- while the new picture fades in: no hard cut. The copies hang off the canvas, not the overlay, so
--- the overlay's own fade-in leaves them alone.
-local ghosts = {}
-local function GhostBadges()
-    local canvas = WorldMapFrame:GetCanvas()
-    local any = false
-    for i, b in ipairs(badges) do
-        if b:IsShown() and b.px then
-            local g = ghosts[i]
-            if not g then
-                g = CreateFrame("Frame", nil, canvas)
-                g:EnableMouse(false)
-                g.ring = g:CreateTexture(nil, "ARTWORK", nil, 1)
-                g.ring:SetAllPoints()
-                g.ring:SetTexture(CIRCLE)
-                g.ring:SetVertexColor(0.08, 0.055, 0.03, 0.95)
-                g.disc = g:CreateTexture(nil, "ARTWORK", nil, 2)
-                g.disc:SetPoint("TOPLEFT", 2, -2)
-                g.disc:SetPoint("BOTTOMRIGHT", -2, 2)
-                g.disc:SetTexture(CIRCLE)
-                g.label = St.Text(g, 11, C.TEXT)
-                g.label:SetPoint("CENTER", 0, 0)
-                g.label:SetShadowOffset(1, -1)
-                ghosts[i] = g
-            end
-            local k = b.k or 1
-            g:SetFrameStrata(b:GetFrameStrata())
-            g:SetFrameLevel(b:GetFrameLevel())
-            g:SetSize(b:GetSize())
-            g.k0, g.px, g.py = k, b.px, b.py
-            g:SetScale(k)
-            g:ClearAllPoints()
-            g:SetPoint("CENTER", overlay, "TOPLEFT", b.px / k, b.py / k)
-            g.disc:SetVertexColor(b.disc:GetVertexColor())
-            g.label:SetText(b.label:GetText())
-            g.label:SetTextColor(b.label:GetTextColor())
-            g:SetAlpha(1)
-            g:Show()
-            any = true
-        end
-    end
-    M.ghostRuns = (M.ghostRuns or 0) + 1
-    M.ghostAny = any
-    if not any then return end
-    M.ghostWith = (M.ghostWith or 0) + 1
-    St.Animate("fn-ghost", 1, 0, nil, function() end)
-    -- the copies swell as they fade, as if the map were still carrying them in: it reads as a
-    -- continuation of the zoom, and not as a badge that just turned off
-    St.Animate("fn-ghost", 0, 0.8, "soft", function(v)
-        for _, g in pairs(ghosts) do
-            if g:IsShown() and g.px then
-                local k = g.k0 * (1 + 0.45 * (1 - v))
-                g:SetScale(k)
-                g:ClearAllPoints()
-                g:SetPoint("CENTER", overlay, "TOPLEFT", g.px / k, g.py / k)
-                g:SetAlpha(v)
-            end
-        end
-    end, function()
-        for _, g in pairs(ghosts) do g:Hide() end
-    end)
 end
 
 local function Short(n)
@@ -988,13 +956,19 @@ function M.SetLit(prof)
     if S().prof == "all" then M.Refresh() end
 end
 
+-- how an empty page fills, one line per profession
+local HOW = {
+    skinning = "Skin a creature here and its spot shows on this map.",
+    mining = "Mine a vein here and its spot shows on this map.",
+    herbalism = "Pick an herb here and its spot shows on this map.",
+    fishing = "Fish here and every catch shows on this map.",
+    cloth = "Loot humanoids here: each one that drops cloth shows on this map.",
+    treasure = "Open a chest here and it shows on this map, with its loot.",
+}
+
 local function Draw()
     local s = S()
     Layer()
-    do
-        local nowMap = WorldMapFrame:GetMapID()
-        if s.on and M.drawnMap ~= nil and nowMap ~= M.drawnMap then GhostBadges() end
-    end
     HidePool(blobs)
     HidePool(dots)
     HidePool(rings)
@@ -1013,12 +987,13 @@ local function Draw()
     }
     M.model = model
 
-    -- zooming between the continent's badges and a zone's heat: the new picture eases in instead of
-    -- snapping (same tween as the on/off fade, so the two never fight). Only when the map changed.
+    -- a new map's picture eases in instead of snapping (same tween as the on/off fade, so the two
+    -- never fight). Only the new picture: the old map's badges are gone at once, since nothing on
+    -- Era's map zooms for them to follow (fading copies read as a pop over the new art).
     if s.on and mapID ~= M.drawnMap then
         if M.drawnMap ~= nil then
             St.Animate("fn-overlay", 0, 0, nil, M.SetOverlayAlpha)
-            St.Animate("fn-overlay", 1, 0.6, "soft", M.SetOverlayAlpha)
+            St.Animate("fn-overlay", 1, St.DUR.base, "soft", M.SetOverlayAlpha)
         end
     end
     M.drawnMap = mapID
@@ -1065,6 +1040,9 @@ local function Draw()
 
     if #recs == 0 then
         local verb = model.p.verb
+        -- an empty page says how it fills (Treasure's one line on a tall card read as broken)
+        local how = HOW[s.prof]
+        how = how and (" " .. how) or ""
         local learned = model.p.anyone or not FN.ProfessionSkill or (FN.ProfessionSkill(s.prof) or 0) > 0
         if not learned and s.show == "me" then
             model.message = "You haven't learned " .. model.p.label .. " yet."
@@ -1075,9 +1053,9 @@ local function Draw()
         elseif s.show == "community" then
             model.message = "Nothing shared for this zone yet."
         elseif s.show == "me" then
-            model.message = "This character hasn't " .. verb .. " here yet."
+            model.message = "This character hasn't " .. verb .. " here yet." .. how
         else
-            model.message = "Nothing " .. verb .. " here yet."
+            model.message = "Nothing " .. verb .. " here yet." .. how
         end
         if FN.MapUI then FN.MapUI.Render(model) end
         return
@@ -1220,7 +1198,11 @@ local function Draw()
             PinRest(p)
             p.info = {
                 rank = rankN, count = near, who = table.concat(names, ", "), loot = table.concat(items, "  ·  "),
+                -- the key's one-line form: the top name and how many more ("Raw Brilliant Smallfish +1")
+                whoShort = names[1] and (names[1] .. (#names > 1 and ("  +" .. (#names - 1)) or "")) or "",
+                lootShort = items[1] and (items[1] .. (#items > 1 and ("  +" .. (#items - 1)) or "")) or "",
                 coords = string.format("%d, %d", math.floor(hx * 100 + 0.5), math.floor(hy * 100 + 0.5)),
+                map = mapID, x = hx, y = hy, place = model.place,
             }
             model.spots[rankN] = p.info
             byRank[rankN] = p
@@ -1306,10 +1288,7 @@ function M.Debug()
         .. ", map " .. tostring(WorldMapFrame and WorldMapFrame:GetMapID()))
     FN.Print("  scroll area " .. Size(WorldMapFrame.ScrollContainer) .. "; map art "
         .. Size(WorldMapFrame.GetCanvas and WorldMapFrame:GetCanvas()))
-    local shownG, a = 0, 0
-    for _, g in pairs(ghosts) do if g:IsShown() then shownG = shownG + 1; a = g.GetAlpha and g:GetAlpha() or 0 end end
-    FN.Print(string.format("  map changes: %d, with badges on screen: %d, copies showing now: %d (alpha %.2f), map %s",
-        M.ghostRuns or 0, M.ghostWith or 0, shownG, a, tostring(M.drawnMap)))
+    FN.Print("  map " .. tostring(M.drawnMap))
     FN.Print("  overlay " .. Size(overlay) .. "; control layer " .. tostring(M.strata))
     if FN.MapUI and FN.MapUI.Debug then FN.MapUI.Debug(Size) end
     local s = S()

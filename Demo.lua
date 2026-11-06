@@ -153,6 +153,16 @@ local function NextSkin(now)
     return clock, sessionChar
 end
 
+-- Sample skill climbs with time, as a real character's does: from 1 two months ago to the
+-- profession's top today (a skill drawn from the creature's level zigzagged the Skill climb chart).
+local SKILL_TOP = { skinning = 300, mining = 245, herbalism = 210, fishing = 175 }
+local function SkillAt(prof, now, t)
+    local top = SKILL_TOP[prof]
+    if not top then return 0 end
+    local frac = math.max(0, math.min(1, 1 - (now - t) / (DAYS * 86400)))
+    return 1 + math.floor((top - 1) * frac ^ 0.75)
+end
+
 local function Roll(c)
     local items = {}
     for _, l in ipairs(c[8]) do
@@ -187,7 +197,7 @@ function FN.DemoLoad()
                     FN.Add("skinning", mapID, {
                         x = Clamp(spot[1] + Gauss() * spot[3]), y = Clamp(spot[2] + Gauss() * spot[3]),
                         time = t, npc = c[1], char = char,
-                        skill = c[6] + math.floor(Rand() * 15), items = Roll(c),
+                        skill = SkillAt("skinning", now, t), items = Roll(c),
                     }, store)
                     total = total + 1
                 end
@@ -242,7 +252,7 @@ function FN.DemoLoad()
                         FN.Add(prof, mapID, {
                             x = Clamp(spot[1] + Gauss() * spot[3]), y = Clamp(spot[2] + Gauss() * spot[3]),
                             time = t, npc = g[1], char = char,
-                            skill = (prof == "cloth" or prof == "treasure") and 0 or g[3] + math.floor(Rand() * 20), items = items,
+                            skill = SkillAt(prof, now, t), items = items,
                         }, store)
                         gathered = gathered + 1
                     end

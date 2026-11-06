@@ -370,3 +370,50 @@
   (Treasure, Stats page, hidden hot spots, Home dashboard, full-screen toolbar, profession colors,
   Forever side tabs, OpenMap, fixes). Includes the rail tab frame fix, unseen in game (Karl chose to
   ship it). Tag v0.8.0 pushed to trigger the CurseForge workflow.
+- 2026-11-06 (Karl): v0.8.0 went through on CurseForge. In-game sessions on Forever work as intended,
+  rail tab frames included. Still open: visual polish passes on both Forever and Era (nothing broken).
+- Era walkthrough review (2026-11-06): Karl's narrated recording, 16 findings in
+  reports/Review-Era-video-2026-11-06.md. The 5 bugs are fixed: ghost badge copies removed (a new map's
+  picture still fades in, now St.DUR.base); donut slices dim by mixing toward the empty track at full
+  alpha (lowered alpha stacked into grey spokes); dashboard rows' hover areas reach half the gap
+  (no dead strip); the Every skin tooltip opens inward from the switch; demo skill climbs with time
+  (SkillAt in Demo.lua; /fn demo off then /fn demo to rebuild). Checks pass (43), copied to Era.
+  Not yet seen in game. Clarity and visual items (6-16) wait for Karl's pick.
+- Clarity items 6-11 built (2026-11-06): the Stats subtitle reads "All zones" (stats count every zone);
+  the Fieldnotes tab is never shown chosen (Forever: SetChecked(false); Era: STYLE.dock edge, warm only
+  on hover); Stats rows lose their letter badges (SetRow takes an icon or nil, the name then starts at
+  the left); a click on a hot spot row also sets a waypoint (M.Waypoint in Map.lua: TomTom if loaded,
+  else C_Map.SetUserWaypoint where the client has it, all guarded; tooltip "Click to set a waypoint
+  here" only then; a chat line confirms); the dock's "Sample data" moved from the key's last line to the
+  dock header (demoInHeader), so it never costs a hot spot; empty profession pages add how they fill (HOW
+  in Map.lua). Home's empty space is left for a mockup. Checks pass (43), copied to Era and Forever. Not
+  yet seen in game; unknown whether Era has C_Map.SetUserWaypoint (without TomTom the hint simply
+  does not show).
+- Karl's check of 6-11 (2026-11-06): 7, 8, 10 OK. Fixed after: (6) the Stats subtitle went stale when a
+  chip changed the profession (it only refreshed on a full render): StatsPlace in MapUI.lua, called by
+  the chips through opts.OnPick. (9) Era has no map pins, so without TomTom the coordinates hid: M.CanWaypoint
+  is strict (every C_Map/UiMapPoint/C_SuperTrack piece, and CanSetUserWaypointOnMap says yes), and the
+  hot spot rows and pin tooltips show coordinates only when it is true. (11) the key's message: line
+  height 120% (SetSpacing 2.2 at 11), 12 padding above and below. Checks pass (43), copied to Era and
+  Forever. Not yet seen in game.
+- Visual items 14-16 built (2026-11-06): hot spot rows 19 tall (was 17), the count in a 30-wide
+  right-aligned column, coordinates 9 in SUBTEXT; rows show the top name or item plus "+N" (whoShort /
+  lootShort in Map.lua), with the full list in the tooltip; rail tab gap 2 (was 4). Checks pass (43),
+  copied to Era and Forever. Not yet seen in game. Items 12 (row hover) and 13 (profession color on its
+  page) were shown as inline mockups (hover A today / B lifted row / C short glow; color 1 subtle /
+  2 strong) and wait for Karl's pick.
+- Karl picked hover C (plus a colored name) and color 2 (2026-11-06). Built: dashboard rows on hover lift
+  a step (5% warm white), a glow of the profession's color leaves the bar and fades out by 35% of the
+  row (fade.tga, 0.26), the bar goes 2 to 3 px, and the name takes NameTint (the hue lifted to bright
+  text). Profession pages: title in NameTint, place in LabelTint, the chosen View button in the
+  profession's own chosen look (St.AccentLook in Style.lua: ChoiceButton's b.look; dock and full-screen
+  toolbar), and the key's total number in NameTint. Show (Me / Account) stays gold, as in the mockup.
+  Stats and Home keep gold titles. Checks pass (43), copied to Era and Forever. Not yet seen in game.
+- After Karl's screenshots of every page (2026-11-06): Home row glow softened (0.26 to 0.18); its chevron
+  arrives in NameTint. Then one accent per page, gold for the add-on itself (Karl: "all of it"): Show
+  buttons take the page's AccentLook too (dock and toolbar); the "Every ..." switch's on state is the
+  profession's (St.ToggleLook in Style.lua, toggle.onLook; the master switch and Session Start stay
+  gold); section labels back to grey; "Sample data" in grey; the first hot spot's badge and halo in the
+  profession's color (map pins keep their gold ring). Treasure is teal now ({0.25, 0.78, 0.68}, palette
+  of teals; it melted into the UI gold), and Fishing's fourth material moved from teal to indigo. Checks
+  pass (43), copied to Era and Forever. Not yet seen in game.

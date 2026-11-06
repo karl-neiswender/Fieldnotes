@@ -165,15 +165,18 @@ function St.ChoiceButton(parent, onClick)
     b.text = St.Text(b, 10, C.INK2)
     b.text:SetPoint("CENTER")
     b:SetHeight(22)
+    -- b.look (St.AccentLook) swaps the gold chosen state for a color's own; nil keeps gold
     function b:SetChosen(on)
         self.chosen = on
-        self:SetEtch(on and STYLE.rowSel or STYLE.button)
-        local c = on and C.TITLE or C.INK2
+        local look = rawget(self, "look")
+        self:SetEtch(on and (look and look.sel or STYLE.rowSel) or STYLE.button)
+        local c = on and (look and look.text or C.TITLE) or C.INK2
         self.text:SetTextColor(c[1], c[2], c[3])
     end
     b:SetScript("OnClick", onClick)
     b:SetScript("OnEnter", function(self)
-        self:SetEtch(self.chosen and STYLE.goldHover or STYLE.btnHover)
+        local look = rawget(self, "look")
+        self:SetEtch(self.chosen and (look and look.hover or STYLE.goldHover) or STYLE.btnHover)
         if self.tip then
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
             GameTooltip:SetText(self.tip, 1, 1, 1)
@@ -186,6 +189,24 @@ function St.ChoiceButton(parent, onClick)
     end)
     b:SetChosen(false)
     return b
+end
+
+-- A chosen state in a color of its own (a profession's page, Karl 2026-11-06): the same etched
+-- tile as the gold one, its fill a dark step of the color, its edge the color itself, its text a
+-- light step. Cached per color.
+local looks = {}
+function St.AccentLook(c)
+    local key = string.format("%.3f,%.3f,%.3f", c[1], c[2], c[3])
+    if looks[key] then return looks[key] end
+    local function Step(k) return { c[1] * k, c[2] * k, c[3] * k } end
+    local function Lift(k) return { c[1] + (1 - c[1]) * k, c[2] + (1 - c[2]) * k, c[3] + (1 - c[3]) * k } end
+    local look = {
+        sel = { top = Step(0.40), bottom = Step(0.12), edge = { c[1], c[2], c[3], 1 } },
+        hover = { top = Step(0.50), bottom = Step(0.16), edge = { Lift(0.3)[1], Lift(0.3)[2], Lift(0.3)[3], 1 } },
+        text = Lift(0.75),
+    }
+    looks[key] = look
+    return look
 end
 
 -- On/off switch: a pill track with a 1px rim and a gradient (gold on, dark off) and a round
@@ -213,8 +234,9 @@ function St.Toggle(parent)
     t.knob = t:CreateTexture(nil, "ARTWORK", nil, 2)
     t.knob:SetTexture(St.Media("knob"))
     t.knob:SetSize(14, 14)
+    -- t.onLook (St.ToggleLook) colors the on state; nil keeps gold
     function t:SetOn(on, hover)
-        local L = on and TOGGLE_LOOK.on or TOGGLE_LOOK.off
+        local L = on and (rawget(self, "onLook") or TOGGLE_LOOK.on) or TOGGLE_LOOK.off
         local lift = hover and 0.12 or 0
         self.rim:SetVertexColor(math.min(1, L.rim[1] + lift), math.min(1, L.rim[2] + lift), math.min(1, L.rim[3] + lift))
         St.VGradient(self.fill, L.top, L.bottom)
@@ -226,6 +248,22 @@ function St.Toggle(parent)
         self.shadow:SetPoint("LEFT", self, "LEFT", x, -1)
     end
     return t
+end
+
+-- a switch's on state in a color (a profession's page): rim the color, fill a dark-to-mid step of
+-- it, the knob kept light so it still reads as the handle
+local toggleLooks = {}
+function St.ToggleLook(c)
+    local key = string.format("%.3f,%.3f,%.3f", c[1], c[2], c[3])
+    if toggleLooks[key] then return toggleLooks[key] end
+    local look = {
+        rim = { c[1] * 0.92, c[2] * 0.92, c[3] * 0.92 },
+        top = { c[1] * 0.58, c[2] * 0.58, c[3] * 0.58 }, bottom = { c[1] * 0.22, c[2] * 0.22, c[3] * 0.22 },
+        knobTop = { 1.00, 0.97, 0.90 },
+        knobBottom = { c[1] + (1 - c[1]) * 0.35, c[2] + (1 - c[2]) * 0.35, c[3] + (1 - c[3]) * 0.35 },
+    }
+    toggleLooks[key] = look
+    return look
 end
 
 -- A recessed track with a lit gold fill (Forever Goal Tracker's progress bar, square-cornered):
