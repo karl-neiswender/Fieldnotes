@@ -417,3 +417,6 @@
   profession's color (map pins keep their gold ring). Treasure is teal now ({0.25, 0.78, 0.68}, palette
   of teals; it melted into the UI gold), and Fishing's fourth material moved from teal to indigo. Checks
   pass (43), copied to Era and Forever. Not yet seen in game.
+- v0.8.1 release (2026-11-06, Karl's go): TOC 0.8.1, CHANGELOG 0.8.1 (waypoints, page colors, teal
+  Treasure, hot spot rows, fixes from the Era walkthrough). Tag v0.8.1 pushed to trigger the CurseForge
+  workflow.

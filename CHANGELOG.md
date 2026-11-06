@@ -1,5 +1,26 @@
 # Fieldnotes changelog
 
+## 0.8.1
+
+- **Waypoints to hot spots.** Click a hot spot in the key to set a waypoint there, with TomTom or the
+  game's own map pin where your client has one. Without either, the key leaves out coordinates
+  instead of showing numbers you can't use.
+- **Each profession page wears its color:** its title, the chosen View and Show buttons, the
+  "Every ..." switch, the total and the top hot spot. Gold is kept for Fieldnotes' own switch and
+  the session.
+- **Treasure is teal** now, so it no longer blends into the gold controls.
+- Hot spot rows have more room, and long names show the top one with a count ("Raw Brilliant
+  Smallfish +1"). The full list is in the tooltip.
+- The Home rows' hover is cleaner: a short glow from the color bar, and the name and arrow in the
+  profession's color.
+- Stats rows lose the letter boxes, and the Stats header says "All zones", since stats count
+  every zone.
+- "Sample data" sits in the header on every page, and empty pages say how they fill.
+- The Fieldnotes tab no longer looks selected all the time.
+- Fixed: the old map's numbers flashing over a new zone when you click into it, grey streaks on the
+  Stats donut, flicker between Home rows, a tooltip running off the screen, and a zigzag skill
+  chart in sample data.
+
 ## 0.8.0
 
 - **Treasure.** A new tab for every character: world chests you open, what they held and where.
