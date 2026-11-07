@@ -456,3 +456,40 @@
   with no redraw; Reset and the gear's changed tint include it. Not shown in Spotlight (that view has
   its own shade). Checks pass (44, one new), copied to Era and Forever. Not yet seen in game; not
   committed.
+- Map button replaces the slide-out (2026-11-07, Karl; design/map-button-2026-11-07): a 24px etched
+  Fieldnotes button inside the map art's top-right corner opens and closes the dock; tooltip on hover
+  only. The dock no longer slides: it appears beside the map with a short fade, and has a close X at
+  its top right (the master switch moved left of it). The side tab (LargeSideTabButtonTemplate on
+  Forever, the etched tab on Era) is gone; the rail now hangs from the dock's own top edge. The old
+  Neighbours scan (side tabs on the window's edge) became CornerSpot: small shown frames over the
+  map's top-right corner push our button left along the top, then down if the top row is full;
+  checked on map open, 0.3 s and 2 s later. /fn debug prints what was in the way and where the
+  button went. Open state stays account-wide (settings.dockOpen), as before. Full-screen map
+  unchanged. Checks pass (44), copied to Era and Forever. Not yet seen in game; not committed.
+- Dock title bar (2026-11-07, Karl picked option A): the dock stands 4 px off the map (DOCK_GAP); a
+  26 px title bar (TITLE_H) with "Fieldnotes" and the game's UIPanelCloseButton (fallback: the share
+  window's X) replaces the small X beside the switch. Body and settings sheet start under it; the
+  dashboard's page title is now "Home"; the rail starts under the bar (RAIL_TOP). Checks pass (44),
+  copied to Era and Forever. Not yet seen in game: check the bar's height against the map's title
+  bar and the X's size (30, nudged 4 right). The dock loses 26 px, so a short dock may drop a hot spot.
+- Dock wears the game's window frame (2026-11-07, Karl, both clients): NineSlicePanelTemplate with the
+  ButtonFrameTemplateNoPortrait layout (OpenMap's recipe; Forever draws it in bronze), at dock level
+  +25 over the content and under the title bar (+30). Its top piece is the title bar: TITLE_H 21,
+  "Fieldnotes" centred in GameFontNormal, the game's close button in the frame's top-right corner.
+  The etched edge is hidden; the brown fill and grime stay. Without the layout: the etched edge and
+  the dark strip as before. /fn debug says which frame each client used. Checks pass (44; the check
+  harness has no NineSliceUtil, so only the fallback runs there), copied to Era and Forever. Not yet
+  seen in game. Watch: the active rail tab no longer merges into the page (the metal edge is drawn
+  over the seam), and the fill under the frame's thicker edges.
+- Game frame fixes after Karl's Era screenshot (2026-11-07): the brown fill, grime and page glow now
+  sit on their own frame inside the frame's inner edge (FILL_IN 6/21/2/3, OpenMap's numbers), so
+  nothing pokes past the cut corners or the bottom edge; "Fieldnotes" is left-aligned at PAD and
+  centred in the title bar's height; the close button takes the position and size the game's own
+  ButtonFrameTemplate gives its close button (GameCloseSpot, read once from a hidden copy; fallback
+  TOPRIGHT 4, 5); Era rail tabs' edge is the frame's grey metal (TAB_METAL) instead of brown, still
+  turning gold when chosen. /fn debug prints the close button's spot and where it came from. Checks
+  pass (44), copied to Era and Forever. Not yet seen in game.
+- Title bar fill (2026-11-07, Karl's Era screenshot): the game frame draws only its metal, so the world
+  showed through the title bar. A dark strip (tb.bg, on the fill's frame under the metal) fills it;
+  the title moved 2 down to sit in the bar's opening. The close button now sits in the corner's seat
+  (GameCloseSpot confirmed). Checks pass (44), copied to Era and Forever. Not yet seen in game.

@@ -4,7 +4,8 @@ local ADDON, FN = ...
 --
 --   Small map: a dock outside the map's edge (right, or left when there is no room or a quest
 --   panel sits on the right), the full height of the map, so nothing of Fieldnotes covers the
---   map but the heat itself. A "Fieldnotes" tab folds it away and back.
+--   map but the heat itself. A small Fieldnotes button in the map's top-right corner opens and
+--   closes it (no slide since 2026-11-07); the dock has its own close X.
 --   Full-screen map: one toolbar centred at the top and a small key in a bottom corner.
 --
 -- Both hold the same things: the profession, the on/off switch, View, Show, the material list
@@ -111,11 +112,27 @@ local PROF_TAB_H, PROF_TAB_GAP = 34, 2 -- (gap 4 read loose, Karl 2026-11-06)
 local dockClip -- the dock's clipping window (BuildDock)
 local ProfMark, GoTo, Dashboard, FormatCount, SetSheet, ApplyTab, Glide -- defined with the dock
 local homeTab, RefreshHome
-local homeX = 0 -- how far the whole dock and its tabs stand out from the map, to clear a window beside it
-local homeDrop = 0 -- how far the Fieldnotes tab sits lower to clear other add-ons' tabs (Neighbours)
+local DOCK_GAP = 4 -- the dock stands this far off the map window's edge (Karl, 2026-11-07)
+local MAP_BTN = 24 -- the map button, in the map's top-right corner
+local MAP_BTN_INSET = 8 -- from the map art's corner
+local MAP_BTN_GAP = 4 -- from another add-on's button
+local btnX, btnY = -MAP_BTN_INSET, -MAP_BTN_INSET -- where CornerSpot put it, from the corner
 local utilTabs = {} -- Stats and Settings, under the profession tabs after a little gap
 local UTIL_GAP = 12
-local TAB_DROP = 14 -- the Fieldnotes tab's top, below the dock's
+local TAB_DROP = 14 -- the rail's bottom margin, above the dock's bottom edge
+-- The dock wears the game's own window frame (Karl, 2026-11-07): the map window's metal border, the
+-- nine-slice layout without a portrait (WoW Forever draws it in bronze), as OpenMap does. Its top
+-- piece is the title bar. A client without that layout keeps the etched edge and a dark strip.
+local NINE_LAYOUT = NineSliceUtil and NineSliceUtil.GetLayout and NineSliceUtil.GetLayout("ButtonFrameTemplateNoPortrait")
+    and "ButtonFrameTemplateNoPortrait" or nil
+local TITLE_H = NINE_LAYOUT and 21 or 26 -- the dock's title bar (Karl, 2026-11-07: option A)
+-- the frame's inner edge, left, top, right, bottom: where the fill goes (OpenMap's numbers for the
+-- same layout; its top piece, the title bar, is the frame's own)
+local FILL_IN = { 6, 21, 2, 3 }
+-- the rail tabs' edge beside the game's frame: its grey metal, not the brown etch (Era; Forever's
+-- tabs wear the game's side tab art)
+local TAB_METAL = { 0.46, 0.45, 0.43, 1 }
+local RAIL_TOP = TITLE_H + 8 -- the rail's first tab, under the title bar
 
 local function Refresh() M.Refresh() end
 
@@ -1565,6 +1582,7 @@ local function FitArt(t, art, level)
 end
 
 local function TabEdge(t, a)
+    local metal = dock and rawget(dock, "nine") and TAB_METAL
     local art = TabArt(t)
     if art then
         local gold = t.artOn
@@ -1584,7 +1602,7 @@ local function TabEdge(t, a)
     -- No template (Classic Era): the tab's own border, the game's rounded tooltip edge, turns gold
     -- as it opens, as the Fieldnotes tab's does there (the flat gold lines had square corners)
     if t.SetBackdropBorderColor then
-        local r0 = STYLE.dock.edge
+        local r0 = metal or STYLE.dock.edge
         local g = EDGE_GOLD
         t:SetBackdropBorderColor(r0[1] + (g[1] - r0[1]) * a, r0[2] + (g[2] - r0[2]) * a, r0[3] + (g[3] - r0[3]) * a, 1)
     end
@@ -1712,11 +1730,11 @@ SetSheet = function(open)
         local x = -DOCK_W * (1 - v)
         sheet:SetAlpha(0.3 + 0.7 * v)
         sheet:ClearAllPoints()
-        sheet:SetPoint("TOPLEFT", dock, "TOPLEFT", x, 0)
+        sheet:SetPoint("TOPLEFT", dock, "TOPLEFT", x, -TITLE_H)
         sheet:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", x, 0)
         dock.body:SetAlpha(1 - v)
         dock.body:ClearAllPoints()
-        dock.body:SetPoint("TOPLEFT", dock, "TOPLEFT", 48 * v, 0)
+        dock.body:SetPoint("TOPLEFT", dock, "TOPLEFT", 48 * v, -TITLE_H)
         dock.body:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 48 * v, 0)
     end, function()
         if open then dock.body:Hide() else sheet:Hide() end
@@ -1970,6 +1988,25 @@ Dashboard = function(parent)
     return holder
 end
 
+-- where the game's own window (ButtonFrameTemplate) keeps its close button: read once from a
+-- throwaway copy, hidden. Falls back to the corner offset the game's portrait windows use.
+local function GameCloseSpot()
+    local spot = { p = "TOPRIGHT", rp = "TOPRIGHT", x = 4, y = 5, from = "fallback" }
+    local ok, f = pcall(CreateFrame, "Frame", nil, UIParent, "ButtonFrameTemplate")
+    if not (ok and type(f) == "table") then return spot end
+    f:Hide()
+    local cb = rawget(f, "CloseButton")
+    if cb and cb.GetPoint then
+        local p, rel, rp, x, y = cb:GetPoint(1)
+        -- (only when it hangs on the window itself; on a title piece the offsets would not carry)
+        if type(p) == "string" and (rel == f or rel == nil) and type(x) == "number" then
+            spot = { p = p, rp = type(rp) == "string" and rp or p, x = x, y = type(y) == "number" and y or 0,
+                w = cb:GetWidth(), h = cb:GetHeight(), from = "the game's window" }
+        end
+    end
+    return spot
+end
+
 local function BuildDock()
     -- The dock, its tab and the rail live inside a clipping window that starts at the dock's resting
     -- edge and runs outward. Sliding toward the map, they are cut off there, as if they came out
@@ -1980,22 +2017,50 @@ local function BuildDock()
     dockClip:EnableMouse(false)
     dockClip:SetSize(DOCK_W + TAB_W + 80, 1000)
     dock = St.Frame("Frame", dockClip)
-    St.Etch(dock, STYLE.dock, 12)
-    St.Grime(dock, 0.25, 12, 0, 150, 220) -- as on Forever Goal Tracker's window: strongest at the top
+    if NINE_LAYOUT then
+        local ok, nine = pcall(CreateFrame, "Frame", nil, dock, "NineSlicePanelTemplate")
+        if ok and nine and pcall(NineSliceUtil.ApplyLayoutByName, nine, NINE_LAYOUT) then
+            nine:SetAllPoints()
+            -- over the page's contents (the settings page slides in under it, clipped) and under
+            -- the title and close button
+            nine:SetFrameLevel(dock:GetFrameLevel() + 25)
+            dock.nine = nine
+        end
+    end
+    -- the fill: the brown window fill and its grime, inside the frame's inner edge (the dock's
+    -- whole rectangle poked out past the game frame's cut corners, Karl 2026-11-07). On its own
+    -- frame at the dock's level, so the pages (one level up) draw over it.
+    local fi = dock.nine and FILL_IN or { 3, 3, 3, 3 }
+    dock.fillIn = fi
+    local fill = dock
+    if dock.nine then
+        fill = CreateFrame("Frame", nil, dock)
+        fill:SetPoint("TOPLEFT", fi[1], -fi[2])
+        fill:SetPoint("BOTTOMRIGHT", -fi[3], fi[4])
+        fill:SetFrameLevel(dock:GetFrameLevel())
+        St.Etch(fill, STYLE.dock, 0) -- (no edge: the game's frame is the edge)
+        fill.etchHi:Hide()
+        St.Grime(fill, 0.25, 0, 0, 150, 220)
+    else
+        St.Etch(dock, STYLE.dock, 12)
+        St.Grime(dock, 0.25, 12, 0, 150, 220) -- as on Forever Goal Tracker's window: strongest at the top
+    end
+    dock.fill = fill
     -- a profession page's glow: a large, soft radial light of its color, centred on the title's icon
     -- and reaching about halfway down, over the fill and grime and under everything else. Cut to
-    -- the dock by its texture coordinates (it is the dock's own texture, so it cannot spill out).
-    dock.glow = dock:CreateTexture(nil, "BACKGROUND", nil, -4)
+    -- the fill by its texture coordinates (it is the fill's own texture, so it cannot spill out).
+    dock.glow = fill:CreateTexture(nil, "BACKGROUND", nil, -4)
     dock.glow:SetTexture(St.Media("radial"))
-    dock.glow:SetPoint("TOPLEFT", 3, -3)
-    dock.glow:SetPoint("BOTTOMRIGHT", -3, 3)
+    dock.glow:SetPoint("TOPLEFT", dock, "TOPLEFT", fi[1], -fi[2])
+    dock.glow:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", -fi[3], fi[4])
     dock.glow:SetAlpha(0)
     function dock:SetGlow(p)
         local w, h = self:GetWidth() or 0, self:GetHeight() or 0
         if p and w > 0 and h > 0 then
             local R = h * 0.5 -- radius: about halfway down the dock
-            local cx, cy = PAD + 8 - 3, PAD + 10 - 3 -- the icon, from the glow's top-left
-            local iw, ih = w - 6, h - 6
+            local fi = self.fillIn
+            local cx, cy = PAD + 8 - fi[1], TITLE_H + PAD + 10 - fi[2] -- the icon, from the glow's top-left
+            local iw, ih = w - fi[1] - fi[3], h - fi[2] - fi[4]
             self.glow:SetTexCoord(0.5 - cx / (2 * R), 0.5 + (iw - cx) / (2 * R),
                 0.5 - cy / (2 * R), 0.5 + (ih - cy) / (2 * R))
             self.glow:SetVertexColor(p.color[1], p.color[2], p.color[3])
@@ -2011,7 +2076,8 @@ local function BuildDock()
     dock:EnableMouse(true)
     dock:Hide()
     dock.body = CreateFrame("Frame", nil, dock)
-    dock.body:SetAllPoints()
+    dock.body:SetPoint("TOPLEFT", 0, -TITLE_H) -- (everything under the title bar)
+    dock.body:SetPoint("BOTTOMRIGHT")
     local body = dock.body
 
     -- the title (the profession, or Fieldnotes on the dashboard) and the switch; the place under it
@@ -2112,7 +2178,8 @@ local function BuildDock()
     dock:SetClipsChildren(true)
     sheet = CreateFrame("Frame", nil, dock)
     sheet:SetFrameLevel(dock:GetFrameLevel() + 20)
-    sheet:SetAllPoints(dock)
+    sheet:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -TITLE_H)
+    sheet:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT")
     sheet:EnableMouse(true)
     sheet:Hide()
     local title = St.Title(sheet, 15)
@@ -2157,58 +2224,117 @@ local function BuildDock()
         MapUI.Render(model)
     end
 
-    -- The tab that folds the dock away and back: the game's own side tab, the one down the character
-    -- window's edge (LargeSideTabButtonTemplate), with the add-on's icon, so it matches every other
-    -- side tab on the map (Spoken Places hangs one there too). Never shown as chosen: it opens and
-    -- folds the dock and is not a page, so gold here read as a selected tab (Karl, 2026-11-06).
-    local ok, native = pcall(CreateFrame, "Frame", "FieldnotesMapTab", dockClip, "LargeSideTabButtonTemplate")
-    if ok and native and type(native.Icon) == "table" and native.Icon.SetTexture and native.SetCustomOnMouseUpHandler then
-        tab = native
-        tab.native = true
-        tab.icon = tab.Icon
-        tab.icon:SetTexture(St.Media("icon"))
-        tab.tooltipText = "Fieldnotes"
-        tab:SetCustomOnMouseUpHandler(TabClick)
-        tab:EnableMouse(true)
-        tab:SetScript("OnHide", function(self)
-            if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
-        end)
-        RefreshHome = function()
-            -- (SetChecked also fits the icon to the tab's inside)
-            if tab.SetChecked then tab:SetChecked(false) end
-        end
-        RefreshHome()
-    else
-        -- A client without the template (Classic Era): a square etched tab with the rail's quiet
-        -- edge, open or folded; it warms only on hover (gold is for the page you are on).
-        tab = St.Frame("Button", dockClip)
-        St.Etch(tab, STYLE.dock, 12)
-        St.Grime(tab, 0.25, 12, 0.53, 150, 220)
-        tab:SetSize(HOME_W, HOME_H)
-        tab.icon = tab:CreateTexture(nil, "ARTWORK")
-        tab.icon:SetTexture(St.Media("icon"))
-        tab.icon:SetSize(HOME_H - 8, HOME_H - 8)
-        tab.icon:SetPoint("CENTER")
-        RefreshHome = function()
-            tab:SetEtch(tab.hover and STYLE.btnHover or STYLE.dock)
-            tab.icon:SetAlpha(tab.hover and 1 or 0.92)
-        end
-        tab:SetScript("OnClick", TabClick)
-        tab:SetScript("OnEnter", function(self)
-            self.hover = true
-            RefreshHome()
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText("Fieldnotes", C.TITLE[1], C.TITLE[2], C.TITLE[3])
-            GameTooltip:AddLine(DockOpen() and "Click to fold away" or "Click to open", 1, 1, 1)
-            GameTooltip:Show()
-        end)
-        tab:SetScript("OnLeave", function(self)
-            self.hover = false
-            RefreshHome()
-            GameTooltip:Hide()
-        end)
+    -- The map button (Karl, 2026-11-07, replacing the side tab that slid the dock out): a small
+    -- etched square with the add-on's icon, inside the map's top-right corner. A click opens the
+    -- dock beside the map, or closes it. Its name shows only as a tooltip on hover. It warms on
+    -- hover only, never gold (gold is for the page you are on). Placed by LayoutDock, clear of other
+    -- add-ons' buttons (CornerSpot).
+    tab = St.Frame("Button", WorldMapFrame)
+    St.Etch(tab, STYLE.dock, 12)
+    tab:SetSize(MAP_BTN, MAP_BTN)
+    tab.icon = tab:CreateTexture(nil, "ARTWORK")
+    tab.icon:SetTexture(St.Media("icon"))
+    tab.icon:SetSize(MAP_BTN - 7, MAP_BTN - 7)
+    tab.icon:SetPoint("CENTER")
+    RefreshHome = function()
+        tab:SetEtch(tab.hover and STYLE.btnHover or STYLE.dock)
+        tab.icon:SetAlpha(tab.hover and 1 or 0.9)
     end
+    tab:SetScript("OnClick", TabClick)
+    tab:SetScript("OnEnter", function(self)
+        self.hover = true
+        RefreshHome()
+        -- the button sits at the map's right edge: open the tip inward, under it
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        GameTooltip:SetPoint("TOPRIGHT", self, "BOTTOMRIGHT", 0, -4)
+        GameTooltip:SetText("Fieldnotes", C.TITLE[1], C.TITLE[2], C.TITLE[3])
+        GameTooltip:AddLine(DockOpen() and "Click to close" or "Click to open", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    tab:SetScript("OnLeave", function(self)
+        self.hover = false
+        RefreshHome()
+        GameTooltip:Hide()
+    end)
+    tab:SetScript("OnHide", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+    RefreshHome()
     tab:Hide()
+
+    -- The title bar (Karl, 2026-11-07, option A): a dark strip as tall as the map window's own,
+    -- "Fieldnotes" at its left and the game's red close button at its right, the same X the map
+    -- has a few pixels away. Above the settings page too, so it closes from any page.
+    local tb = CreateFrame("Frame", nil, dock)
+    tb:SetPoint("TOPLEFT", 3, -3)
+    tb:SetPoint("TOPRIGHT", -3, -3)
+    tb:SetHeight(TITLE_H - 3)
+    tb:SetFrameLevel(dock:GetFrameLevel() + 30)
+    tb:EnableMouse(true)
+    if not dock.nine then
+        tb.bg = tb:CreateTexture(nil, "BACKGROUND")
+        tb.bg:SetAllPoints()
+        tb.bg:SetTexture(St.SOLID)
+        St.VGradient(tb.bg, { 0.030, 0.028, 0.025 }, { 0.010, 0.010, 0.010 })
+        tb.rule = tb:CreateTexture(nil, "BORDER")
+        tb.rule:SetTexture(St.SOLID)
+        tb.rule:SetHeight(1)
+        tb.rule:SetPoint("BOTTOMLEFT")
+        tb.rule:SetPoint("BOTTOMRIGHT")
+        local edge = STYLE.window.edge
+        tb.rule:SetVertexColor(edge[1], edge[2], edge[3], 0.55)
+    end
+    if dock.nine then
+        -- in the frame's metal title bar, centred, in the game's title font, as the map's own title
+        tb:ClearAllPoints()
+        tb:SetPoint("TOPLEFT", 0, 0)
+        tb:SetPoint("TOPRIGHT", 0, 0)
+        tb:SetHeight(TITLE_H)
+        -- the bar's own dark fill: the frame draws only its metal, so the world showed through
+        -- (seen in game on Era, 2026-11-07). On the fill's frame, under the frame's metal.
+        tb.bg = dock.fill:CreateTexture(nil, "BACKGROUND", nil, -3)
+        tb.bg:SetTexture(St.SOLID)
+        tb.bg:SetPoint("TOPLEFT", dock, "TOPLEFT", FILL_IN[1], -3)
+        tb.bg:SetPoint("BOTTOMRIGHT", dock, "TOPRIGHT", -FILL_IN[3], -TITLE_H)
+        St.VGradient(tb.bg, { 0.060, 0.056, 0.050 }, { 0.020, 0.019, 0.017 })
+        -- left, in line with the page's own title, and centred in the bar's opening (under its
+        -- top edge, above its bottom rule: a little below the strip's middle)
+        tb.title = tb:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        tb.title:SetPoint("LEFT", tb, "LEFT", PAD, -2)
+        tb.title:SetJustifyH("LEFT")
+    else
+        tb.title = St.Title(tb, 13)
+        tb.title:SetPoint("LEFT", PAD - 3, 0)
+    end
+    tb.title:SetText("Fieldnotes")
+    dock.titleBar = tb
+    local function CloseDock()
+        if list then list:Hide() end
+        if dock.sheetOpen then SetSheet(false) end
+        FN.db.settings.dockOpen = false
+        MapUI.Render(model)
+    end
+    local okClose, x = pcall(CreateFrame, "Button", nil, tb, "UIPanelCloseButton")
+    if okClose and x then
+        dock.close = x
+        if dock.nine then
+            -- where the game's windows keep theirs, in the frame's corner: read from the game's own
+            -- window template, so it sits in the corner's round seat on either client
+            local spot = GameCloseSpot()
+            dock.closeSpot = spot
+            if spot.w and spot.w > 0 then x:SetSize(spot.w, spot.h) end
+            x:SetPoint(spot.p, dock, spot.rp, spot.x, spot.y)
+        else
+            x:SetSize(30, 30)
+            x:SetPoint("RIGHT", tb, "RIGHT", 4, 0)
+        end
+        x:SetFrameLevel(tb:GetFrameLevel() + 2)
+        x:SetScript("OnClick", CloseDock)
+    else
+        -- (no template: the share window's X)
+        dock.close = St.IconButton(tb, "close-white", 14, CloseDock)
+        dock.close:SetPoint("RIGHT", tb, "RIGHT", -6, 0)
+    end
 
     -- The rail's tabs (Home, a tab per profession, Stats, Settings) share one look: every icon
     -- the same quiet silver at rest, on the plain tab; hovered, it brightens and the tab glides out
@@ -2324,11 +2450,12 @@ local function DockSide()
     return "LEFT", left - (container:GetLeft() or left) + EDGE_TUCK
 end
 
--- Neighbours: other add-ons hang their own tabs on the map window's edge (Questie, Attune and the
--- like). Ours should never sit under one, so we look at what is beside the window and, if a tab-like
--- frame is in our column, start lower, below it. Only small shown frames out past the window's edge
--- count; the map's own parts and our own are skipped. Checked when the map opens and again a moment
--- later (other add-ons build their tabs late), never per frame.
+-- CornerSpot: other add-ons put their own buttons on the map too (Questie, HandyNotes and the
+-- like). Ours should never sit on one, so we look at what is in the map's top-right corner and, if
+-- something is where our button goes, step left of it along the top; if the top row is full, step
+-- down below it instead. Only small shown frames over the map art count; the map's own big parts
+-- and our own are skipped. Checked when the map opens and again a moment later (other add-ons
+-- build their buttons late), never per frame.
 local function ScreenRect(f)
     if not (f and f.GetRect) then return end
     local l, b, w, h = f:GetRect()
@@ -2340,53 +2467,43 @@ end
 local function IsOurs(f)
     for _ = 1, 8 do
         if not f then return false end
-        if f == dockClip or f == list then return true end
+        if f == dockClip or f == list or f == tab then return true end
         f = f.GetParent and f:GetParent() or nil
     end
     return false
 end
 
+local CORNER = 260 -- how far from the corner, each way, a frame can be in our way
 local obstacles = {}
 local nbInfo = {} -- what the last look saw, for /fn debug
-local function Neighbours(side, gap, dy, needH)
+local function CornerSpot()
     local container = WorldMapFrame.ScrollContainer or WorldMapFrame
     local cl, cb, cr, ct = ScreenRect(container)
-    if not cl then return 0 end
+    if not cl then return -MAP_BTN_INSET, -MAP_BTN_INSET end
     local k = (container:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
-    local winRight, winLeft = MapEdge()
-    winRight, winLeft = (winRight or 0) * k, (winLeft or 0) * k
-    -- the strip where our tab hangs folded: on the map window's edge, as wide as the tab. Only side
-    -- tabs there matter: open, the dock (a layer up) covers that edge, and its own tab rides on the
-    -- dock's far side. (The open dock's whole width once counted too, so a tooltip over the dock
-    -- pushed the rail down, 2026-11-05.)
-    local tw = math.max(HOME_W, tab and tab:GetWidth() or HOME_W)
-    local xlo, xhi
-    if side == "RIGHT" then
-        xlo = cr - gap * k
-        xhi = xlo + tw * k
-    else
-        xhi = cl + gap * k
-        xlo = xhi - tw * k
-    end
+    local zl, zb = math.max(cl, cr - CORNER * k), math.max(cb, ct - CORNER * k)
     wipe(obstacles)
     wipe(nbInfo)
-    nbInfo.col = string.format("column x %.0f to %.0f, window edge %.0f/%.0f, side %s", xlo, xhi, winLeft, winRight, side)
+    nbInfo.col = string.format("corner x %.0f to %.0f, y %.0f to %.0f", zl, cr, zb, ct)
+    local seen = {}
     local function Consider(f)
-        if f == WorldMapFrame or (f.IsForbidden and f:IsForbidden()) then return end -- (the game's own protected frames refuse a tainted caller)
+        if seen[f] then return end
+        seen[f] = true
+        if f == WorldMapFrame or f == container or (f.IsForbidden and f:IsForbidden()) then return end -- (the game's own protected frames refuse a tainted caller)
         if not (f.IsVisible and f:IsVisible()) or IsOurs(f) then return end
-        -- a tooltip is not a tab
+        -- a tooltip or a menu is not a button
         if (f.GetObjectType and f:GetObjectType() == "GameTooltip") or (f.GetFrameStrata and f:GetFrameStrata() == "TOOLTIP") then return end
         local w, h = f:GetWidth(), f:GetHeight()
-        if not (w and h) or w < 10 or h < 10 or w > 110 or h > 260 then return end
+        if not (w and h) or w < 8 or h < 8 or w > 200 or h > 200 then return end
         local l, b, r, t = ScreenRect(f)
-        if not l or r <= xlo or l >= xhi then return end
-        -- hung on the window's edge on our side (as Spoken Places finds side tabs): it starts at
-        -- the edge, its middle out past it; a widget inside the map is not a tab
-        local mid = (l + r) / 2
-        if side == "RIGHT" and (mid < winRight - 4 or l < winRight - 12) then return end
-        if side == "LEFT" and (mid > winLeft + 4 or r > winLeft + 12) then return end
-        obstacles[#obstacles + 1] = b
-        obstacles[#obstacles + 1] = t
+        if not l or r <= zl or l >= cr or t <= zb or b >= ct then return end
+        -- its middle over the map art: a side tab hung outside the window is not in our corner
+        local mx, my = (l + r) / 2, (b + t) / 2
+        if mx > cr or my > ct then return end
+        obstacles[#obstacles + 1] = { l, b, r, t }
+        if #nbInfo < 8 then
+            nbInfo[#nbInfo + 1] = string.format("%s %.0fx%.0f at %.0f,%.0f", tostring(f.GetName and f:GetName() or "?"), w, h, l, b)
+        end
     end
     local safe = Consider
     Consider = function(f) pcall(safe, f) end
@@ -2398,24 +2515,38 @@ local function Neighbours(side, gap, dy, needH)
         end
     end
     Scan(WorldMapFrame)
+    Scan(container)
     Scan(WorldMapFrame.BorderFrame)
     Scan(UIParent)
-    local drop = 0
-    for _ = 1, 10 do
-        local top = ct + (dy - TAB_DROP) * k - drop * k
-        local bottom = top - needH * k
-        local moved = false
-        for i = 1, #obstacles, 2 do
-            local b, t = obstacles[i], obstacles[i + 1]
-            if t > bottom and b < top then
-                drop = drop + (top - b) / k + 3
-                moved = true
-                break
-            end
-        end
-        if not moved then break end
+    if type(WorldMapFrame.overlayFrames) == "table" then
+        for _, f in ipairs(WorldMapFrame.overlayFrames) do Consider(f) end
     end
-    return math.min(drop, 240), 0
+    -- the first obstacle our button at (x, y) from the corner would touch
+    local function Hit(x, y)
+        local r, t = cr + x * k, ct + y * k
+        local l, b = r - MAP_BTN * k, t - MAP_BTN * k
+        local pad = 2 * k
+        for _, o in ipairs(obstacles) do
+            if r > o[1] - pad and l < o[3] + pad and t > o[2] - pad and b < o[4] + pad then return o end
+        end
+    end
+    -- along the top first, stepping left of each one in the way
+    local x, y = -MAP_BTN_INSET, -MAP_BTN_INSET
+    for _ = 1, 12 do
+        local o = Hit(x, y)
+        if not o then return x, y end
+        x = math.min(x - 1, (o[1] - cr) / k - MAP_BTN_GAP)
+        if -x + MAP_BTN > CORNER then break end
+    end
+    -- the top row is full: down the right edge, stepping below each one in the way
+    x, y = -MAP_BTN_INSET, -MAP_BTN_INSET
+    for _ = 1, 12 do
+        local o = Hit(x, y)
+        if not o then return x, y end
+        y = math.min(y - 1, (o[2] - ct) / k - MAP_BTN_GAP)
+        if -y + MAP_BTN > CORNER then break end
+    end
+    return -MAP_BTN_INSET, -MAP_BTN_INSET
 end
 
 local lastScan, wantScan = 0, false
@@ -2450,19 +2581,32 @@ local function LayoutDock()
     local edge = side == "RIGHT" and "TOPLEFT" or "TOPRIGHT"
     local mapEdge = side == "RIGHT" and "TOPRIGHT" or "TOPLEFT"
     local dir = side == "RIGHT" and 1 or -1
-    -- the clipping window: from where the dock rests, outward and well past the screen's edge,
-    -- taller than the dock so nothing is cut top or bottom
+    -- the window the dock and its rail live in: from the map window's edge outward
     dockClip:SetHeight(container:GetHeight() + 400)
-    dockClip:SetWidth(DOCK_W + HOME_W + 80 + homeX)
+    dockClip:SetWidth(DOCK_W + HOME_W + 80)
     dockClip:ClearAllPoints()
     if side == "RIGHT" then
         dockClip:SetPoint("LEFT", container, "RIGHT", -gap - 1, 0)
     else
         dockClip:SetPoint("RIGHT", container, "LEFT", gap + 1, 0)
     end
+    dock:ClearAllPoints()
+    dock:SetPoint(edge, container, mapEdge, dir * (-gap + DOCK_GAP), dy)
 
-    -- the rail: Fieldnotes, then the profession tabs, a gap, Stats and Settings. Only the
-    -- Fieldnotes tab shows while the dock is folded; the rest arrive and leave with the dock.
+    -- the map button: in the map's top-right corner, clear of other add-ons' buttons (CornerSpot)
+    if wantScan or GetTime() - lastScan > 1.5 then
+        wantScan = false
+        lastScan = GetTime()
+        local ok, x, y = pcall(CornerSpot)
+        btnX, btnY = ok and x or -MAP_BTN_INSET, ok and y or -MAP_BTN_INSET
+        nbInfo.err = (not ok) and tostring(x) or nil
+    end
+    tab:ClearAllPoints()
+    tab:SetPoint("TOPRIGHT", container, "TOPRIGHT", btnX, btnY)
+    tab:Show()
+
+    -- the rail: Home, then the profession tabs, a gap, Stats and Settings, down the dock's outer
+    -- edge, tucked a little under it so the two read as one
     local s = M.S()
     local shown = {}
     for _, p in ipairs(TabProfs()) do shown[p.key] = true end
@@ -2470,80 +2614,42 @@ local function LayoutDock()
     for _, t in ipairs(profTabs) do
         if shown[t.p.key] then shownTabs[#shownTabs + 1] = t else t:Hide() end
     end
-    -- clear other add-ons' tabs (see Neighbours)
-    if wantScan or GetTime() - lastScan > 1.5 then
-        wantScan = false
-        lastScan = GetTime()
-        local needH = tab:GetHeight() or HOME_H
-        local ok, drop, shift = pcall(Neighbours, side, gap, dy, needH)
-        homeDrop, homeX = ok and drop or 0, ok and shift or 0
-        nbInfo.err = (not ok) and tostring(drop) or nil
-    end
     local rail = { homeTab }
     MapUI.rail = rail
     for _, t in ipairs(shownTabs) do rail[#rail + 1] = t end
     for _, t in ipairs(utilTabs) do rail[#rail + 1] = t end
+    -- (less one unit: the dock's border art stops a little short of its frame, seen in game)
+    local shift = dir * (TAB_TUCK / 2 - 1)
+    -- Stats and Settings sit at the dock's bottom, but never over the profession tabs on a short dock
+    local nUtil = #utilTabs
+    local profBottom = -(#rail - nUtil) * (PROF_TAB_H + PROF_TAB_GAP)
+    local utilTop = -(dock:GetHeight() - TAB_DROP - RAIL_TOP) + nUtil * PROF_TAB_H + (nUtil - 1) * PROF_TAB_GAP
+    utilTop = math.min(utilTop, profBottom - UTIL_GAP)
+    local below = 0
+    for i, t in ipairs(rail) do
+        if t == utilTabs[1] then below = utilTop elseif i > 1 then below = below - PROF_TAB_GAP end
+        t.tuck = TAB_TUCK
+        t:ClearAllPoints()
+        if side == "RIGHT" then
+            t:SetPoint("TOPLEFT", dock, "TOPRIGHT", -TAB_TUCK, -RAIL_TOP + below)
+        else
+            t:SetPoint("TOPRIGHT", dock, "TOPLEFT", TAB_TUCK, -RAIL_TOP + below)
+        end
+        below = below - PROF_TAB_H
+        t.mark:ClearAllPoints()
+        t.mark:SetPoint("CENTER", t, "CENTER", shift, 0)
+    end
 
-    -- slide in and out sideways from the map's edge, the rail with it
-    -- (only a fold or unfold animates; any other redraw just places it)
+    -- open and close: no slide (Karl, 2026-11-07), the dock and its rail simply appear beside the
+    -- map with a short fade, and leave the same way. Only a change of state fades; any other
+    -- redraw just places it.
     local moving = dock.wasOpen ~= nil and dock.wasOpen ~= open
     dock.wasOpen = open
-    -- up as it opens; down only once it has folded away (below), so nothing pops over it mid-slide
+    -- up as it opens; down only once it is gone (below)
     if open or not moving then DockLayer(open) end
-    -- The dock, its tab and the rail are one piece: they slide together, the whole width, so the
-    -- tab never sweeps across the dock's words. The content fades faster than it moves (v cubed),
-    -- so it is mostly gone before it reaches the map's edge, and arrives already solid.
-    St.Animate("fn-dock", open and 1 or 0, moving and (open and St.DUR.slow or St.DUR.base) or 0, open and "soft" or "leave", function(v)
-        local fade = v * v * v -- cubed: the panel is fully clear before the slide ends (no ghost)
-        dock:SetAlpha(fade)
-        dock:ClearAllPoints()
-        dock:SetPoint(edge, container, mapEdge, dir * (-gap + homeX + (DOCK_W - TAB_TUCK) * (v - 1)), dy)
-        -- open, the tab grows by what hides under the dock, and its icon stays centred
-        -- on the part that shows
-        local tuck = TAB_TUCK * v
-        -- (less one unit: the dock's border art stops a little short of its frame, seen in game)
-        local shift = (side == "RIGHT" and 1 or -1) * (tuck / 2 - v)
-        if not tab.native then -- (the game's tab keeps its own size and art)
-            tab:SetWidth(HOME_W + tuck)
-            tab.icon:ClearAllPoints()
-            tab.icon:SetPoint("CENTER", tab, "CENTER", shift, 0)
-        end
-        tab:ClearAllPoints()
-        -- the game's tab hangs on the window's edge as the game's own do (folded: against the gold
-        -- edge, not under it; open: against the dock's outer edge); ours tucks under both
-        local reach = tab.native and (EDGE_TUCK * (1 - v) + DOCK_W * v) or (DOCK_W - TAB_TUCK) * v
-        if side == "RIGHT" then
-            tab:SetPoint("TOPLEFT", container, "TOPRIGHT", -gap + homeX + reach, dy - TAB_DROP - homeDrop)
-        else
-            tab:SetPoint("TOPRIGHT", container, "TOPLEFT", gap - homeX - reach, dy - TAB_DROP - homeDrop)
-        end
-        -- the rail tabs tuck under the dock either way: under the game's tab, step back by the tuck
-        local railX = tab.native and (side == "RIGHT" and -tuck or tuck) or 0
-        -- the profession tabs hang under it; Stats and Settings sit at the dock's bottom (but never
-        -- over the profession tabs on a short dock). All as wide, fading with the dock.
-        local below = 0
-        local nUtil = #utilTabs
-        -- (offsets from the Fieldnotes tab's bottom edge, which sits TAB_DROP under the dock's top)
-        local profBottom = -(#shownTabs + 1) * (PROF_TAB_H + PROF_TAB_GAP)
-        local utilTop = -(dock:GetHeight() - TAB_DROP * 2 - homeDrop) + (tab:GetHeight() or 0)
-            + nUtil * PROF_TAB_H + (nUtil - 1) * PROF_TAB_GAP
-        utilTop = math.min(utilTop, profBottom - UTIL_GAP)
-        for i, t in ipairs(rail) do
-            if t == utilTabs[1] then below = utilTop + PROF_TAB_GAP end
-            below = below - PROF_TAB_GAP
-            t.tuck = tuck
-            ApplyTab(t)
-            t:SetAlpha(fade)
-            t:ClearAllPoints()
-            if side == "RIGHT" then
-                t:SetPoint("TOPLEFT", tab, "BOTTOMLEFT", railX, below)
-            else
-                t:SetPoint("TOPRIGHT", tab, "BOTTOMRIGHT", railX, below)
-            end
-            below = below - PROF_TAB_H
-            t.mark:ClearAllPoints()
-            t.mark:SetPoint("CENTER", t, "CENTER", shift, 0)
-        end
+    St.Animate("fn-dock", open and 1 or 0, moving and St.DUR.quick or 0, "out", function(v)
+        dock:SetAlpha(v)
+        for _, t in ipairs(rail) do t:SetAlpha(v) end
     end, function()
         if not DockOpen() then
             dock:Hide()
@@ -2557,17 +2663,13 @@ local function LayoutDock()
         end
     end)
     if open then dock:Show() end
-    -- the tab sits just under the dock, so its inner edge hides beneath the dock's border
-    tab:SetFrameLevel(math.max(1, (dock:GetFrameLevel() or 2) - 1))
-    tab:Show()
     for _, t in ipairs(rail) do
         if open or moving then t:Show() end
-        t:SetFrameLevel(tab:GetFrameLevel())
+        -- just under the dock, so its inner edge hides beneath the dock's border
+        t:SetFrameLevel(math.max(1, (dock:GetFrameLevel() or 2) - 1))
         -- the wash is strongest at the dock and fades outward
-        if t.side ~= side then
-            t.side = side
-            ApplyTab(t)
-        end
+        t.side = side
+        ApplyTab(t)
         local active
         if t.p then
             active = not dock.sheetOpen and not dock.statsOpen and s.prof == t.p.key
@@ -2622,7 +2724,7 @@ local function RenderDock(m)
     dock.icon:Set(p)
     dock.prof:ClearAllPoints()
     dock.prof:SetPoint("TOPLEFT", PAD + (p and 22 or 0), -PAD - 2)
-    dock.prof:SetText(dash and "Fieldnotes" or p.label)
+    dock.prof:SetText(dash and "Home" or p.label) -- ("Fieldnotes" is the title bar's)
     -- a profession's page wears its color: title, place, the chosen View and the key's total
     local tc = dash and C.TITLE or NameTint(p.color)
     dock.prof:SetTextColor(tc[1], tc[2], tc[3])
@@ -2670,7 +2772,7 @@ local function RenderDock(m)
     dock.session:ClearAllPoints()
     dock.session:SetPoint("BOTTOMLEFT", dock.body, "BOTTOMLEFT", PAD, FOOTER_H + 8)
     -- the key holds the hot spots; when the dock is short it drops its caption, then spots
-    local room = dock:GetHeight() - DOCK_TOP_H - 6 - 34 - (FOOTER_H + 8)
+    local room = dock:GetHeight() - TITLE_H - DOCK_TOP_H - 6 - 34 - (FOOTER_H + 8)
     local keyTop, sessionTop = dock.key:GetTop(), dock.session:GetTop()
     if type(keyTop) == "number" and type(sessionTop) == "number" and keyTop > sessionTop then
         room = keyTop - sessionTop - 5
@@ -3022,14 +3124,12 @@ local function UseDock()
     return screen - right >= DOCK_W + HOME_W + 4 or left >= DOCK_W + HOME_W + 4
 end
 
--- look at the neighbours again now (the map opened, or another add-on added a tab) and redraw if
--- our tab has to move
+-- look at the map's corner again now (the map opened, or another add-on added a button) and
+-- move the map button if it has to
 function MapUI.Rescan()
     if not (dock and WorldMapFrame:IsShown()) then return end
-    local before, beforeX = homeDrop, homeX
     wantScan = true
     MapUI.Render(model)
-    if homeDrop ~= before or homeX ~= beforeX then MapUI.Render(model) end
 end
 
 function MapUI.Render(m)
@@ -3061,15 +3161,22 @@ function MapUI.Layer(strata)
     if not hud then return end
     hud:SetFrameStrata(strata)
     hud:SetFrameLevel(1000)
+    -- the map button rides with the toolbar's layer, above the map art and its pins
+    tab:SetFrameStrata(strata)
+    tab:SetFrameLevel(1000)
     pop:SetFrameLevel(bar:GetFrameLevel() + 10)
 end
 
 function MapUI.Debug(Size)
-    FN.Print("  layout " .. tostring(ui.layout) .. "; dock " .. Size(dock) .. "; tab " .. Size(tab))
-    if nbInfo.err then FN.Print("  neighbours ERROR: " .. nbInfo.err) end
-    if nbInfo.col then FN.Print("  neighbours " .. nbInfo.col) end
-    for _, line in ipairs(nbInfo) do FN.Print("   near: " .. line) end
-    FN.Print(string.format("  neighbours: tab dropped %d, dock stood out %d (tab %s level %d)", homeDrop, homeX,
+    FN.Print("  layout " .. tostring(ui.layout) .. "; dock " .. Size(dock) .. "; map button " .. Size(tab))
+    local cs = dock and rawget(dock, "closeSpot")
+    if cs then FN.Print(string.format("  close button: %s %.1f, %.1f (%s)", cs.p, cs.x, cs.y, cs.from)) end
+    FN.Print("  dock frame: " .. (NINE_LAYOUT and dock and rawget(dock, "nine") and ("the game's (" .. NINE_LAYOUT .. ")")
+        or ("etched" .. (NINE_LAYOUT and ", the game's failed" or ", this client has no game layout"))))
+    if nbInfo.err then FN.Print("  corner ERROR: " .. nbInfo.err) end
+    if nbInfo.col then FN.Print("  corner " .. nbInfo.col) end
+    for _, line in ipairs(nbInfo) do FN.Print("   in the way: " .. line) end
+    FN.Print(string.format("  map button at %d, %d from the corner (%s level %d)", btnX, btnY,
         tab and tab:GetFrameStrata() or "?", tab and tab:GetFrameLevel() or 0))
     FN.Print("  toolbar " .. Size(bar) .. "; key " .. Size(hudKey))
     local k = dock and dock.key
