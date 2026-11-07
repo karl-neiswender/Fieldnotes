@@ -420,3 +420,39 @@
 - v0.8.1 release (2026-11-06, Karl's go): TOC 0.8.1, CHANGELOG 0.8.1 (waypoints, page colors, teal
   Treasure, hot spot rows, fixes from the Era walkthrough). Tag v0.8.1 pushed to trigger the CurseForge
   workflow.
+- Hot spots: one footprint for glow and number (2026-11-06). Karl asked why #1 had 16 veins and #2
+  had 21: spots ranked by peak heat (a tight core) but counted a box 2.5 areas either side. Ranking by
+  count was tried and made #1 a cooler glow than #2, so now spots rank by heat again (Peaks, unchanged)
+  and the count is only the gathers in the glow's core: a box 1.5 x sqrt(passes x 0.5) cells either
+  side (the heat's own smoothing spread). Counts come out smaller. The pin tooltip says "N veins in
+  this area". No setting (Karl agreed). Checks pass (43), copied to Era and Forever. Not yet seen in
+  game; not committed. Hot spots still could disagree by a gather now and then (the heat weights the
+  centre, the count does not).
+- Seen on Forever right after: #1 said 14 veins, #2 said 15. Now the hottest PINS spots are still the
+  ones shown, but ordered by their core count (ties to the hotter glow), so the numbers always run
+  downward; with matching footprints the order differs from the glow's only between near-equal spots.
+  Checks pass (43), copied to Era and Forever. Not yet seen in game; not committed.
+- Hot spots ranked by heat alone, no count (2026-11-06, Karl: the reddest spot must be #1, and the
+  numbers confused). Peaks' order is the rank (the count ordering above is gone). Each spot carries
+  its heat (peak / max) and color (Ramp). Key rows show a short pill in that color where the count was
+  (Heat only; other views show none) under a "Hottest first" / "Busiest first" line with the rule
+  running on from it. Pin and row tooltips: "Hot spot N", "Hottest on this map" / "2nd hottest on
+  this map" (M.SpotRankText), what is there, and coordinates with "click to set a waypoint" when one
+  can be set. who and loot still come from the glow's core box. Checks pass (43), copied to Era and
+  Forever. Not yet seen in game; not committed. The caption costs about 10 px in the key, so a short
+  dock may drop its third spot sooner.
+- Plasma, a fourth heat color scheme (2026-11-07, Karl, from a jet stream wind map): a plasma-style
+  sequential colormap, navy, royal blue, electric violet, magenta, hot pink, coral, gold, near-white
+  core. Mockup design/plasma-2026-11-07/Ramp.html. SCHEMES.plasma and SCHEME_ORDER in Map.lua, label in
+  MapUI.lua, check.py draws it. Checks pass (43), copied to Era and Forever. Not yet seen in game; not
+  committed. Idea from the mockup, not built: a light dim under the heat when Plasma is chosen (it
+  glows most on a dark map).
+- Solar redrawn from the sun (2026-11-07, Karl): solar-telescope ramp, oxblood, red, red-orange,
+  orange, gold, white-hot (take A of design/solar-v2-2026-11-07; Karl wanted Plasma's dark-to-light
+  contrast, which A has and B, ending at gold, does not). Replaces the 2026-11-03 OKLCH indigo-to-butter
+  ramp, which looked too much like Plasma in game. Saved "solar" settings keep working.
+- Darken map slider in Settings (2026-11-07, Karl): under Spread, 0 to 85%, default 18% (the old fixed
+  dimming layer between the zone art and the heat, `mute` in Map.lua). Setting `dim`; it moves live
+  with no redraw; Reset and the gear's changed tint include it. Not shown in Spotlight (that view has
+  its own shade). Checks pass (44, one new), copied to Era and Forever. Not yet seen in game; not
+  committed.

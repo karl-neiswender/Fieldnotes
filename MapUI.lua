@@ -102,7 +102,7 @@ local SHOWS = {
     { key = "account", label = "Account", tip = "Every character on this account" },
     { key = "community", label = "Community", tip = "Everyone who has shared, merged", soon = true },
 }
-local SCHEME_NAMES = { thermal = "Thermal", solar = "Solar", snowfall = "Snowfall" }
+local SCHEME_NAMES = { thermal = "Thermal", solar = "Solar", snowfall = "Snowfall", plasma = "Plasma" }
 local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
 
 local model = {}
@@ -547,16 +547,25 @@ local function SpotRow(k, i, width)
     row.num:SetPoint("CENTER", row.badge, "CENTER", 0, 0)
     row.num:SetJustifyH("CENTER")
     row.num:SetText(i)
-    -- the count in a fixed column, right-aligned, so the names start in one line down the list
-    row.count = St.Text(row, 11, C.TEXT)
-    row.count:SetPoint("LEFT", 23, 0)
-    row.count:SetWidth(30) -- room for "1,234"
-    row.count:SetJustifyH("RIGHT")
+    -- the spot's own heat color, a short pill where a count used to be: the order of the rows is
+    -- the order of these colors (red first), so the ranking explains itself (Karl, 2026-11-06).
+    -- Shown on Heat only, where the map wears the same colors.
+    row.swatchBox = CreateFrame("Frame", nil, row)
+    row.swatchBox:SetSize(22, 8)
+    row.swatchBox:SetPoint("LEFT", 25, 0)
+    row.swatch = St.Pill(row.swatchBox, 8, "ARTWORK")
+    row.swatch:Anchor(row.swatchBox, 0, 0, 0)
+    function row:SetSwatch(c)
+        local on = c ~= nil
+        self.swatchBox:SetWidth(on and 22 or 1)
+        self.swatchBox:SetShown(on)
+        if on then self.swatch:SetColor(c[1], c[2], c[3], 1) end
+    end
     row.coords = St.Text(row, 9, C.SUBTEXT)
     row.coords:SetPoint("RIGHT", -5, 0)
     row.coords:SetJustifyH("RIGHT")
     row.who = St.Text(row, 10, C.SUBTEXT)
-    row.who:SetPoint("LEFT", row.count, "RIGHT", 7, 0)
+    row.who:SetPoint("LEFT", row.swatchBox, "RIGHT", 7, 0)
     row.who:SetPoint("RIGHT", row.coords, "LEFT", -6, 0)
     row.who:SetWordWrap(false)
     row.who:SetJustifyH("LEFT")
@@ -582,16 +591,18 @@ local function SpotRow(k, i, width)
         self.hover = true
         self:Paint()
         M.LightPin(self.rank, true)
-        local long = self.whoFull and (self.who:IsTruncated() or self.who:GetText() ~= self.whoFull)
-        local way = self.spot and M.CanWaypoint(self.spot.map)
-        if long or way then
+        -- the same story as the pin's tooltip: which spot, why it ranks there, what is there
+        if self.spot then
+            local way = M.CanWaypoint(self.spot.map)
             CardTip(self, self:GetParent())
-            if long then
-                GameTooltip:SetText(self.whoFull, 1, 1, 1, 1, true)
-            else
-                GameTooltip:SetText(self.spot.coords, C.TITLE[1], C.TITLE[2], C.TITLE[3])
+            GameTooltip:SetText("Hot spot " .. self.rank, C.TITLE[1], C.TITLE[2], C.TITLE[3])
+            GameTooltip:AddLine(M.SpotRankText(self.rank), 1, 1, 1)
+            if self.whoFull and self.whoFull ~= "" then
+                GameTooltip:AddLine(self.whoFull, C.INK2[1], C.INK2[2], C.INK2[3], true)
             end
-            if way then GameTooltip:AddLine("Click to set a waypoint here", C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3]) end
+            if way then
+                GameTooltip:AddLine(self.spot.coords .. "  ·  click to set a waypoint", C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
+            end
             GameTooltip:Show()
         end
     end)
@@ -640,6 +651,8 @@ local function KeyCard(parent, width, withSpots, glass)
         k.spotRule = k:CreateTexture(nil, "ARTWORK")
         k.spotRule:SetColorTexture(0.33, 0.29, 0.20, 0.8)
         k.spotRule:SetHeight(1)
+        -- one line over the rows that says how they are ordered, the rule running on from it
+        k.spotHead = St.Text(k, 9, C.SUBTEXT)
         k.spotRows = {}
         for i = 1, 3 do k.spotRows[i] = SpotRow(k, i, width) end
     end
@@ -770,6 +783,7 @@ local function KeyCard(parent, width, withSpots, glass)
         local nSpots = spots and math.min(#spots, spotCap or 3) or 0
         if self.withSpots then
             self.spotRule:SetShown(nSpots > 0)
+            self.spotHead:SetShown(nSpots > 0)
             for i, row in ipairs(self.spotRows) do row:SetShown(i <= nSpots) end
         end
         self.big:SetShown(hasData)
@@ -944,13 +958,16 @@ local function KeyCard(parent, width, withSpots, glass)
         end
         if nSpots > 0 then
             y = y - 1
+            self.spotHead:SetText(m.mode == "heat" and "Hottest first" or "Busiest first")
+            self.spotHead:ClearAllPoints()
+            self.spotHead:SetPoint("TOPLEFT", self, "TOPLEFT", 11, y)
             self.spotRule:ClearAllPoints()
-            self.spotRule:SetPoint("TOPLEFT", self, "TOPLEFT", 11, y)
-            self.spotRule:SetPoint("TOPRIGHT", self, "TOPRIGHT", -11, y)
-            y = y - 3
+            self.spotRule:SetPoint("LEFT", self.spotHead, "RIGHT", 6, 0)
+            self.spotRule:SetPoint("RIGHT", self, "RIGHT", -11, 0)
+            y = y - 13
             for i = 1, nSpots do
                 local sp, row = spots[i], self.spotRows[i]
-                row.count:SetText(sp.count)
+                row:SetSwatch(m.mode == "heat" and sp.color or nil)
                 -- coordinates only where a click can turn them into a waypoint
                 row.coords:SetText(M.CanWaypoint(sp.map) and sp.coords or "")
                 row.whoFull = sp.who ~= "" and sp.who or sp.loot
@@ -1186,9 +1203,19 @@ local function SettingsBody(parent, width, noWhen)
         b.spreadValue:SetText(math.floor(v * 100 + 0.5) .. "%")
         SliderRefresh()
     end)
+    -- Darken map: the dimming layer between the zone art and the heat; only its alpha changes,
+    -- so it follows the thumb live with no redraw
+    b.dimLabel = Label(parent, "DARKEN MAP")
+    b.dimValue = St.Text(parent, 10, C.INK2)
+    b.dimValue:SetJustifyH("RIGHT")
+    b.dimSlider = St.Slider(parent, width, 0, M.DIM_MAX, 0.01, function(v)
+        M.S().dim = v
+        b.dimValue:SetText(math.floor(v * 100 + 0.5) .. "%")
+        M.SetDim(v)
+    end)
     b.note = St.Text(parent, 10, C.SUBTEXT)
     b.note:SetWidth(width)
-    b.note:SetText("Strength is how bold the heat is; spread, how wide each glow reaches.")
+    b.note:SetText("Strength is how bold the heat is; spread, how wide each glow reaches; darken, how far the map dims beneath it.")
     -- hot spots: hidden until hovered (default), or every marker always showing
     b.spotsLabel = Label(parent, "HOT SPOTS")
     b.spotsText = St.Text(parent, 10, C.INK2)
@@ -1238,8 +1265,8 @@ local function SettingsBody(parent, width, noWhen)
     b.share.icon:SetPoint("RIGHT", b.share.text, "LEFT", -6, 0)
     b.reset = Choice(parent, "Reset map settings", function()
         local s = M.S()
-        s.colors, s.when, s.strength, s.spread, s.leather = M.DEFAULTS.colors, M.DEFAULTS.when,
-            M.DEFAULTS.strength, M.DEFAULTS.spread, 0
+        s.colors, s.when, s.strength, s.spread, s.dim, s.leather = M.DEFAULTS.colors, M.DEFAULTS.when,
+            M.DEFAULTS.strength, M.DEFAULTS.spread, M.DEFAULTS.dim, 0
         Refresh()
     end)
 
@@ -1295,6 +1322,17 @@ local function SettingsBody(parent, width, noWhen)
         self.spreadSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         self.spreadSlider:Set(sp)
         y = y - 34
+        self.dimLabel:ClearAllPoints()
+        self.dimLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        self.dimValue:ClearAllPoints()
+        self.dimValue:SetPoint("TOPRIGHT", parent, "TOPLEFT", x + width, y)
+        local dm = M.S().dim
+        self.dimValue:SetText(math.floor(dm * 100 + 0.5) .. "%")
+        y = y - 18
+        self.dimSlider:ClearAllPoints()
+        self.dimSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        self.dimSlider:Set(dm)
+        y = y - 34
         self.note:ClearAllPoints()
         self.note:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         y = y - self.note:GetStringHeight() - 16
@@ -1348,6 +1386,7 @@ local function GearButton(parent, onClick)
         local s = M.S()
         local changed = s.colors ~= M.DEFAULTS.colors or s.when ~= M.DEFAULTS.when
             or math.abs(s.strength - M.DEFAULTS.strength) > 0.01 or math.abs(s.spread - M.DEFAULTS.spread) > 0.01
+            or math.abs(s.dim - M.DEFAULTS.dim) > 0.01
         local c = self.open and C.TITLE or (changed and C.GOLD2 or C.INK2)
         self.icon:SetVertexColor(c[1], c[2], c[3])
     end
@@ -2251,7 +2290,7 @@ local function BuildDock()
     function dock.gear:Tint()
         local s = M.S()
         local changed = s.colors ~= M.DEFAULTS.colors or math.abs(s.strength - M.DEFAULTS.strength) > 0.01
-            or math.abs(s.spread - M.DEFAULTS.spread) > 0.01
+            or math.abs(s.spread - M.DEFAULTS.spread) > 0.01 or math.abs(s.dim - M.DEFAULTS.dim) > 0.01
         self.rest = changed and C.GOLD2 or false
         ApplyTab(self)
     end

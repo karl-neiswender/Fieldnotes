@@ -45,24 +45,30 @@ local SOFT = C.INK2
 local DIM = C.SUBTEXT
 
 -- Heat color schemes, fewest to most. Thermal (the default) is the familiar cool-to-warm heat
--- scale; Solar (Karl's OKLCH gradient, 2026-11-03, replacing Ember) rises from deep indigo
--- through violet, magenta, rose, orange and gold to pale butter yellow, its lightness climbing
--- steadily, so it also reads in grayscale (11 of its 32 stops, converted to sRGB);
+-- scale; Solar follows the sun as solar telescopes show it (Karl, 2026-11-07, replacing his
+-- 2026-11-03 OKLCH indigo-to-butter ramp, which sat too close to Plasma): oxblood, red,
+-- red-orange, orange, gold, white-hot, warm colors only, dark to near white like Plasma
+-- (mockup design/solar-v2-2026-11-07, take A);
 -- Snowfall follows a weather service's snowfall map (Karl, 2026-11-03): grey and pale blue, deep
 -- blue, violet, magenta, hot pink, then teal and lavender at the very top (a saturated lavender:
--- a pale top read as a gap in the heat on parchment, seen in game).
+-- a pale top read as a gap in the heat on parchment, seen in game);
+-- Plasma (Karl, 2026-11-07, from a jet stream wind map) is a plasma-style sequential colormap:
+-- navy, royal blue, electric violet, magenta, hot pink, then coral and gold to a near-white core.
+-- Mockup: design/plasma-2026-11-07.
 local SCHEMES = {
     thermal = { { 0, 0.16, 0.30, 0.85 }, { 0.3, 0.15, 0.70, 0.85 }, { 0.55, 0.45, 0.85, 0.30 },
         { 0.78, 1.00, 0.85, 0.15 }, { 1, 0.90, 0.18, 0.10 } },
-    solar = { { 0, 0.143, 0.120, 0.399 }, { 0.097, 0.219, 0.185, 0.481 }, { 0.194, 0.336, 0.257, 0.574 },
-        { 0.29, 0.461, 0.286, 0.598 }, { 0.387, 0.586, 0.301, 0.573 }, { 0.484, 0.694, 0.314, 0.535 },
-        { 0.581, 0.806, 0.342, 0.463 }, { 0.677, 0.942, 0.489, 0.310 }, { 0.774, 0.972, 0.732, 0.246 },
-        { 0.871, 0.967, 0.873, 0.445 }, { 1, 1.000, 0.952, 0.674 } },
+    solar = { { 0, 0.32, 0.04, 0.05 }, { 0.18, 0.56, 0.07, 0.05 }, { 0.35, 0.80, 0.18, 0.05 },
+        { 0.52, 0.95, 0.38, 0.07 }, { 0.68, 1.00, 0.58, 0.14 }, { 0.82, 1.00, 0.79, 0.34 },
+        { 0.93, 1.00, 0.93, 0.66 }, { 1, 1.00, 1.00, 0.92 } },
     snowfall = { { 0, 0.60, 0.62, 0.68 }, { 0.12, 0.52, 0.74, 0.96 }, { 0.24, 0.22, 0.42, 0.94 },
         { 0.38, 0.40, 0.18, 0.78 }, { 0.52, 0.84, 0.18, 0.74 }, { 0.66, 1.00, 0.36, 0.62 },
         { 0.78, 0.24, 0.80, 0.76 }, { 0.90, 0.56, 0.46, 0.92 }, { 1, 0.62, 0.36, 1.00 } },
+    plasma = { { 0, 0.10, 0.12, 0.55 }, { 0.15, 0.16, 0.28, 0.96 }, { 0.32, 0.44, 0.24, 0.98 },
+        { 0.48, 0.76, 0.20, 0.92 }, { 0.62, 1.00, 0.26, 0.70 }, { 0.75, 1.00, 0.46, 0.48 },
+        { 0.86, 1.00, 0.72, 0.32 }, { 0.95, 1.00, 0.92, 0.50 }, { 1, 1.00, 0.98, 0.86 } },
 }
-M.SCHEME_ORDER = { "thermal", "solar", "snowfall" }
+M.SCHEME_ORDER = { "thermal", "solar", "snowfall", "plasma" }
 local RAMP = SCHEMES.thermal -- the scheme in use, set by Draw
 
 -- Points colors, given to the map's leading leathers in order; each also differs in lightness.
@@ -111,7 +117,8 @@ for _, p in ipairs(M.PROFS) do M.PROF[p.key] = p end
 
 -- prof: a profession's key, or "all" for the dashboard
 local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "thermal", when = 0, strength = 1,
-    spread = 1, dots = false, prof = "skinning", spotsShown = false }
+    spread = 1, dim = 0.18, dots = false, prof = "skinning", spotsShown = false }
+local DIM_MAX = 0.85 -- Darken map: the dimming layer's most, so the zone art never goes fully black
 M.DEFAULTS = DEFAULTS
 
 -- the map's settings. leather: 0 (all), an item ID, "hides" or "ruined"
@@ -131,6 +138,9 @@ function M.S()
     -- spread: a multiplier on the size the data suggests (an old "balanced" word reads as 1)
     if type(s.spread) ~= "number" then s.spread = DEFAULTS.spread end
     s.spread = math.max(0.5, math.min(2.5, s.spread))
+    -- dim: how dark the layer between the zone art and the heat is (the old fixed 0.18 by default)
+    if type(s.dim) ~= "number" then s.dim = DEFAULTS.dim end
+    s.dim = math.max(0, math.min(DIM_MAX, s.dim))
     if s.prof ~= "all" and not M.PROF[s.prof] then s.prof = DEFAULTS.prof end
     return s
 end
@@ -420,6 +430,13 @@ local function HidePool(pool, from)
     for i = from or 1, #pool do pool[i]:Hide() end
 end
 
+-- "Hottest on this map", "2nd hottest on this map" (the key's rows say the same)
+local ORDINAL = { "", "2nd", "3rd", "4th", "5th" }
+function M.SpotRankText(rank)
+    if not rank or rank <= 1 then return "Hottest on this map" end
+    return (ORDINAL[rank] or (rank .. "th")) .. " hottest on this map"
+end
+
 local function PinTooltip(self)
     local p = self.info
     if not p then return end
@@ -428,9 +445,8 @@ local function PinTooltip(self)
     GameTooltip:ClearAllPoints()
     GameTooltip:SetPoint("BOTTOMLEFT", self.mark, "TOPRIGHT", 6, 6)
     GameTooltip:SetText("Hot spot " .. (p.rank or ""), ACCENT[1], ACCENT[2], ACCENT[3])
-    -- the profession's own word: "45 veins here", not "45 skins here" (seen on Mining, 2026-11-05)
-    local u = M.PROF[M.S().prof] or { unit = "gather", units = "gathers" }
-    GameTooltip:AddLine(p.count .. " " .. (p.count == 1 and u.unit or u.units) .. " here", 1, 1, 1)
+    -- what the rank means, in words (no count: see the hot spot pins in Draw)
+    GameTooltip:AddLine(M.SpotRankText(p.rank), 1, 1, 1)
     if p.who ~= "" then GameTooltip:AddLine(p.who, SOFT[1], SOFT[2], SOFT[3], true) end
     if p.loot ~= "" then GameTooltip:AddLine(p.loot, SOFT[1], SOFT[2], SOFT[3], true) end
     if M.CanWaypoint(p.map) then GameTooltip:AddLine(p.coords, DIM[1], DIM[2], DIM[3]) end
@@ -863,6 +879,12 @@ local function Layer()
     for _, p in pairs(pins) do p:SetFrameLevel(M.overlayLevel + 10) end
 end
 
+-- Darken map: the dimming layer under the heat (also set live while its slider is dragged)
+M.DIM_MAX = DIM_MAX
+function M.SetDim(a)
+    if mute then mute:SetAlpha(a) end
+end
+
 -- the overlay fades as a whole when Fieldnotes is switched off or on (MapUI.lua animates it)
 function M.SetOverlayAlpha(a)
     if overlay then overlay:SetAlpha(a) end
@@ -1004,6 +1026,7 @@ local function Draw()
         return
     end
     mute:SetShown(s.mode ~= "spotlight")
+    M.SetDim(s.dim)
 
     local info = mapID and C_Map.GetMapInfo(mapID)
     local zoneType = (Enum and Enum.UIMapType and Enum.UIMapType.Zone) or 3
@@ -1153,14 +1176,21 @@ local function Draw()
         end
     end
 
-    -- hot spot pins: what lives in each, shown on hover, ranked; the dock lists them too
+    -- hot spot pins: what lives in each, shown on hover, ranked; the dock lists them too.
+    -- Ranked by heat alone: hot spot 1 is the reddest peak, where the most gathers are packed close
+    -- together (Karl, 2026-11-06). No count is shown beside the rank: a count of an area never quite
+    -- agrees with a smoothed peak (a 14 sat above a 15), so the key shows each spot's own heat color
+    -- instead and the order explains itself. who and loot come from the glow's core, a box sized
+    -- to the heat's smoothing (each pass spreads a gather about 0.7 of a cell; 1.5 of that).
     model.spots = {}
     wipe(byRank)
-    for i, peak in ipairs(Peaks(g, max, cols)) do
+    local core = 1.5 * math.sqrt(passes * 0.5) -- in cells, either side of the centre
+    local found = {}
+    for _, peak in ipairs(Peaks(g, max, cols)) do -- hottest first
         local hx, hy = (peak.c + 0.5) / cols, (peak.r + 0.5) / rows
         local near, who, loot = 0, {}, {}
         for _, r in ipairs(recs) do
-            if math.abs(r.x / 1000 - hx) < 2.5 * GRID_SCALE / cols and math.abs(r.y / 1000 - hy) < 2.5 * GRID_SCALE / rows then
+            if math.abs(r.x / 1000 - hx) < core / cols and math.abs(r.y / 1000 - hy) < core / rows then
                 near = near + 1
                 if r.npc > 0 then who[r.npc] = (who[r.npc] or 0) + 1 end
                 local m = MainItem(r, rank)
@@ -1168,6 +1198,14 @@ local function Draw()
             end
         end
         if near > 0 then
+            found[#found + 1] = { hx = hx, hy = hy, near = near, who = who, loot = loot,
+                heat = (g[peak.r * cols + peak.c + 1] or 0) / math.max(max, 1e-9) }
+        end
+    end
+    for i = 1, #found do
+        local f = found[i]
+        local hx, hy, near, who, loot = f.hx, f.hy, f.near, f.who, f.loot
+        do
             local names, items = {}, {}
             for _, npc in ipairs(Top(who, 2)) do names[#names + 1] = SourceName(s.prof, npc) end
             for _, id in ipairs(Top(loot, 2)) do items[#items + 1] = ItemName(id) end
@@ -1198,6 +1236,7 @@ local function Draw()
             PinRest(p)
             p.info = {
                 rank = rankN, count = near, who = table.concat(names, ", "), loot = table.concat(items, "  ·  "),
+                heat = f.heat, color = { Ramp(f.heat) }, -- the spot's own place on the heat ramp
                 -- the key's one-line form: the top name and how many more ("Raw Brilliant Smallfish +1")
                 whoShort = names[1] and (names[1] .. (#names > 1 and ("  +" .. (#names - 1)) or "")) or "",
                 lootShort = items[1] and (items[1] .. (#items > 1 and ("  +" .. (#items - 1)) or "")) or "",
@@ -1308,7 +1347,8 @@ local function Init()
     overlay:EnableMouse(false)
     mute = overlay:CreateTexture(nil, "BACKGROUND")
     mute:SetAllPoints()
-    mute:SetColorTexture(0.08, 0.06, 0.04, 0.18)
+    mute:SetColorTexture(0.08, 0.06, 0.04, 1)
+    mute:SetAlpha(DEFAULTS.dim)
 
     if FN.MapUI then FN.MapUI.Init() end
     Layer()

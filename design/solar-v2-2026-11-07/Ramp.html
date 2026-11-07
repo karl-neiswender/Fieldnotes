@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar, from the sun</title>
+<style>
+:root { --gold: #ffd75e; --text: #e8e8e8; --sub: #8a8a8a; --edge: #54492f; }
+body { margin: 0; padding: 24px 16px 40px; background: radial-gradient(ellipse at 40% 30%, #2a3138 0%, #11161b 70%);
+  color: var(--text); font: 14px/1.45 "Friz Quadrata TT", Georgia, serif; }
+h1 { margin: 0 0 4px; font-weight: 400; font-size: 24px; color: var(--gold); }
+h2 { margin: 30px 0 10px; font-weight: 400; font-size: 18px; color: var(--gold); }
+p.lede { margin: 0 0 22px; color: #bdbdbd; max-width: 780px; }
+.grid { display: grid; grid-template-columns: 150px repeat(2, minmax(0, 1fr)); gap: 12px 14px; align-items: center; max-width: 1100px; }
+.col { color: var(--sub); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.name { color: var(--gold); font-size: 16px; }
+.name small { display: block; color: var(--sub); font-size: 11px; margin-top: 2px; }
+.tag { display: inline-block; margin-left: 6px; font-size: 10px; color: #111; background: var(--gold); padding: 1px 5px; border-radius: 3px; vertical-align: 2px; }
+.tag.now { background: #8a8a8a; }
+canvas { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 0 0 1px var(--edge), 0 6px 18px rgba(0,0,0,.5); }
+.bar { height: 14px; border-radius: 7px; margin-top: 6px; box-shadow: 0 0 0 1px var(--edge); }
+.notes { margin-top: 28px; max-width: 780px; color: #bdbdbd; }
+.notes b { color: var(--gold); font-weight: 400; }
+@media (max-width: 700px) { .grid { grid-template-columns: 1fr; } .col.blank { display: none; } }
+</style>
+</head>
+<body>
+<h1>Solar, redrawn from the sun</h1>
+<p class="lede">Solar moves to the sun as solar telescopes show it (NASA's 304 &Aring; view and the warm "solar" colormaps
+built to match): deep red, red-orange, orange, gold, white-hot. Warm colors only, so it no longer shares
+Plasma's violet and pink. Two takes below, next to today's Solar and the other three schemes. The parchment
+tone is sampled from the Eastern Kingdoms screenshot; the heat uses Map.lua's fade (alpha 0.02 + 0.6 &times; v, quiet edge).</p>
+
+<div class="grid" id="grid">
+  <div class="col blank"></div><div class="col">Game parchment</div><div class="col">Pale zone (snow, sand)</div>
+</div>
+
+<h2>All four side by side</h2>
+<div class="grid" id="lineup" style="grid-template-columns: repeat(4, minmax(0,1fr));"></div>
+
+<div class="notes">
+  <p><b>A: Sun.</b> The full telescope ramp: oxblood edge, red, orange, gold, a white-hot center. The closest to
+  the real thing. Risk: the white top can read as a hole in the heat on parchment, as Snowfall's pale top once did.</p>
+  <p><b>B: Sun, deep.</b> The same path held a step darker: more red at the edge, ending at bright gold instead of
+  white. Less literal, but it keeps the center solid and stands out more against the gold-brown map.</p>
+  <p><b>What to look for.</b> Parchment is itself orange-brown, so a warm-only ramp has less contrast than the
+  others. Check that the middle of each glow does not melt into the map.</p>
+</div>
+
+<script>
+// Stops are [v, r, g, b] exactly as Map.lua's SCHEMES tables store them.
+const SCHEMES = {
+  sunA: { label: "A: Sun", sub: "telescope ramp to white", tag: "new", stops: [[0,.32,.04,.05],[.18,.56,.07,.05],[.35,.80,.18,.05],[.52,.95,.38,.07],[.68,1,.58,.14],[.82,1,.79,.34],[.93,1,.93,.66],[1,1,1,.92]] },
+  sunB: { label: "B: Sun, deep", sub: "held darker, gold top", tag: "new", stops: [[0,.36,.02,.06],[.2,.60,.04,.06],[.4,.84,.14,.04],[.58,.96,.32,.04],[.74,1,.52,.08],[.88,1,.72,.18],[1,1,.86,.36]] },
+  solar: { label: "Solar today", sub: "OKLCH, indigo to butter", tag: "now", stops: [[0,.143,.120,.399],[.097,.219,.185,.481],[.194,.336,.257,.574],[.29,.461,.286,.598],[.387,.586,.301,.573],[.484,.694,.314,.535],[.581,.806,.342,.463],[.677,.942,.489,.310],[.774,.972,.732,.246],[.871,.967,.873,.445],[1,1,.952,.674]] },
+  thermal: { label: "Thermal", sub: "thermal camera", stops: [[0,.16,.30,.85],[.3,.15,.70,.85],[.55,.45,.85,.30],[.78,1,.85,.15],[1,.90,.18,.10]] },
+  snowfall: { label: "Snowfall", sub: "snowfall map", stops: [[0,.60,.62,.68],[.12,.52,.74,.96],[.24,.22,.42,.94],[.38,.40,.18,.78],[.52,.84,.18,.74],[.66,1,.36,.62],[.78,.24,.80,.76],[.90,.56,.46,.92],[1,.62,.36,1]] },
+  plasma: { label: "Plasma", sub: "as in game now", stops: [[0,.10,.12,.55],[.15,.16,.28,.96],[.32,.44,.24,.98],[.48,.76,.20,.92],[.62,1,.26,.70],[.75,1,.46,.48],[.86,1,.72,.32],[.95,1,.92,.50],[1,1,.98,.86]] },
+};
+
+function ramp(stops, v) {
+  for (let i = 1; i < stops.length; i++) {
+    const b = stops[i];
+    if (v <= b[0]) { const a = stops[i-1]; const t = (v - a[0]) / (b[0] - a[0]);
+      return [a[1] + (b[1]-a[1])*t, a[2] + (b[2]-a[2])*t, a[3] + (b[3]-a[3])*t]; }
+  }
+  const l = stops[stops.length-1]; return [l[1], l[2], l[3]];
+}
+
+// Three glows like the Eastern Kingdoms screenshot: one hot, two cooler, one scattered.
+const W = 480, H = 270;
+const field = new Float32Array(W*H);
+(function build() {
+  const blobs = [[250,120,34,1.0],[225,112,26,.45],[120,175,26,.7],[175,205,30,.35],[340,200,28,.55]];
+  let seed = 7; const rnd = () => (seed = (seed*16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 40; i++) blobs.push([150 + rnd()*60, 185 + rnd()*40, 9, .06]);
+  let max = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let s = 0; for (const [bx,by,r,w] of blobs) { const d = ((x-bx)**2 + (y-by)**2) / (r*r); if (d < 9) s += w*Math.exp(-d); }
+    field[y*W+x] = s; if (s > max) max = s;
+  }
+  for (let i = 0; i < field.length; i++) field[i] /= max;
+})();
+
+function ground(ctx, pale) {
+  const img = ctx.createImageData(W, H), d = img.data;
+  let seed = 3; const rnd = () => (seed = (seed*16807) % 2147483647) / 2147483647;
+  const base = pale ? [214, 206, 188] : [184, 138, 62];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const n = Math.sin(x*.05)*Math.cos(y*.07) + Math.sin((x+y)*.021)*.7 + (rnd()-.5)*.25;
+    const contour = Math.abs(Math.sin(n*4)) < .05 ? -26 : 0;
+    const i = (y*W+x)*4;
+    d[i] = base[0] + n*12 + contour; d[i+1] = base[1] + n*10 + contour; d[i+2] = base[2] + n*6 + contour; d[i+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function heat(ctx, stops) {
+  const img = ctx.getImageData(0, 0, W, H), d = img.data;
+  for (let i = 0; i < field.length; i++) {
+    const v = field[i];
+    const quiet = Math.min(1, Math.max(0, (v - .04) / .16));
+    const a = Math.min(.95, (.02 + .6*v) * 2.1) * quiet; // strength 210%, as in the screenshot
+    if (a <= 0) continue;
+    const [r,g,b] = ramp(stops, v), j = i*4;
+    d[j] = d[j]*(1-a) + r*255*a; d[j+1] = d[j+1]*(1-a) + g*255*a; d[j+2] = d[j+2]*(1-a) + b*255*a;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function nameCell(s) {
+  const el = document.createElement("div");
+  el.className = "name";
+  const bar = s.stops.map(([v,r,g,b]) => `rgb(${r*255|0},${g*255|0},${b*255|0}) ${v*100}%`).join(",");
+  const tag = s.tag ? `<span class="tag ${s.tag}">${s.tag.toUpperCase()}</span>` : "";
+  el.innerHTML = `${s.label}${tag}<small>${s.sub}</small><div class="bar" style="background:linear-gradient(90deg,${bar})"></div>`;
+  return el;
+}
+function canvasFor(stops, pale) {
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const ctx = c.getContext("2d"); ground(ctx, pale); heat(ctx, stops); return c;
+}
+
+const grid = document.getElementById("grid");
+for (const key of ["sunA", "sunB", "solar"]) {
+  grid.appendChild(nameCell(SCHEMES[key]));
+  grid.appendChild(canvasFor(SCHEMES[key].stops, false));
+  grid.appendChild(canvasFor(SCHEMES[key].stops, true));
+}
+const lineup = document.getElementById("lineup");
+for (const key of ["thermal", "sunA", "snowfall", "plasma"]) {
+  const cell = document.createElement("div");
+  cell.appendChild(canvasFor(SCHEMES[key].stops, false));
+  const n = nameCell(key === "sunA" ? { ...SCHEMES.sunA, label: "Solar (A)", tag: null } : SCHEMES[key]);
+  n.style.marginTop = "8px"; cell.appendChild(n); lineup.appendChild(cell);
+}
+</script>
+</body>
+</html>
