@@ -1,5 +1,19 @@
 # Fieldnotes changelog
 
+## 0.9.0
+
+- **A new way to open Fieldnotes.** On Classic Era, a small Fieldnotes button sits in the map's
+  top-right corner and steps aside for other add-ons' buttons. On WoW Forever, the Fieldnotes side
+  tab is back on the map's edge.
+- **The panel opens beside the map** instead of sliding out, in the game's own window frame (the
+  map's metal frame on Era, the Map and Quest Log panel on Forever), with a title bar and the
+  game's close button. It runs the map window's full height on Forever and has more room inside.
+- **Two new heat colors:** Plasma, from a jet stream wind map, and a new Solar, from a solar
+  telescope: oxblood to white-hot.
+- **Darken map slider** in Settings, to set how much the map dims under the heat.
+- Hot spots are ranked by heat alone, so the reddest spot is always #1, with a colored pill in
+  place of a count.
+
 ## 0.8.1
 
 - **Waypoints to hot spots.** Click a hot spot in the key to set a waypoint there, with TomTom or the

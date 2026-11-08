@@ -512,3 +512,4 @@
   DOCK_W width, so no inner layout changed. Applies on Era too. Note: BuildDock sits at Lua 5.1's
   60-upvalue limit (check.py's compile caught it); add new BuildDock locals to a table. Checks pass
   (44), copied to Era and Forever. Not yet seen in game.
+- v0.9.0 release (2026-11-07, Karl's go): TOC 0.9.0, CHANGELOG 0.9.0 (map button / Forever side tab, panel in the game's frame, Plasma, new Solar, Darken map, hot spots by heat). Tag v0.9.0 pushed to trigger the CurseForge workflow. The panel and frame work was not yet seen in game on Forever's final pass.
