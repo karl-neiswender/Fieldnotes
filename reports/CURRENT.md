@@ -513,3 +513,10 @@
   60-upvalue limit (check.py's compile caught it); add new BuildDock locals to a table. Checks pass
   (44), copied to Era and Forever. Not yet seen in game.
 - v0.9.0 release (2026-11-07, Karl's go): TOC 0.9.0, CHANGELOG 0.9.0 (map button / Forever side tab, panel in the game's frame, Plasma, new Solar, Darken map, hot spots by heat). Tag v0.9.0 pushed to trigger the CurseForge workflow. The panel and frame work was not yet seen in game on Forever's final pass.
+- Darken map covers the visible map (2026-11-08, Karl's OpenMap screenshot: the dimming cut off hard at the
+  zone's rectangle): `mute` moved from the overlay (sized to the canvas, the current map only) to its own
+  frame `veil` on WorldMapFrame.ScrollContainer, one level above the art, with the heat one level above
+  that. The on/off fade still takes it; the fade on a map change is now heat only (M.SetHeatAlpha), because
+  OpenMap changes the map underneath as you pan. /fn debug prints its size and level. Neighboring zones dim
+  too. Checks pass (44), copied to Era and Forever. Not yet seen in game; not committed. Watch: Spotlight's
+  own shade still ends just past the zone's edge under OpenMap.

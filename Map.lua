@@ -410,7 +410,7 @@ end
 -- ------------------------------------------------------------
 -- What is drawn on the map (made once, the first time the map opens)
 -- ------------------------------------------------------------
-local overlay, mute
+local overlay, veil, mute
 local blobs, dots, rings, pins, shades, badges = {}, {}, {}, {}, {}, {}
 local ui = {}
 M.ui = ui -- shared with MapUI.lua; read by tools/check.py
@@ -874,7 +874,10 @@ local function Layer()
         local ok, l = pcall(om.ArtTopLevel)
         if ok and type(l) == "number" and l > level then level = l end
     end
-    M.overlayLevel = level + 1
+    -- the darkening sits right on the art, the heat just above it
+    veil:SetFrameStrata(canvas:GetFrameStrata())
+    veil:SetFrameLevel(level + 1)
+    M.overlayLevel = level + 2
     overlay:SetFrameLevel(M.overlayLevel)
     for _, p in pairs(pins) do p:SetFrameLevel(M.overlayLevel + 10) end
 end
@@ -888,6 +891,14 @@ end
 -- the overlay fades as a whole when Fieldnotes is switched off or on (MapUI.lua animates it)
 function M.SetOverlayAlpha(a)
     if overlay then overlay:SetAlpha(a) end
+    if veil then veil:SetAlpha(a) end
+end
+
+-- a new map's heat eases in, but the darkening covers the whole view and stays steady: OpenMap
+-- changes the map underneath as you pan, so fading it too would make the view blink
+function M.SetHeatAlpha(a)
+    if overlay then overlay:SetAlpha(a) end
+    if veil then veil:SetAlpha(1) end
 end
 
 -- The dashboard's map: every gather as a dot in its profession's color, no heat (adding the
@@ -1014,8 +1025,8 @@ local function Draw()
     -- Era's map zooms for them to follow (fading copies read as a pop over the new art).
     if s.on and mapID ~= M.drawnMap then
         if M.drawnMap ~= nil then
-            St.Animate("fn-overlay", 0, 0, nil, M.SetOverlayAlpha)
-            St.Animate("fn-overlay", 1, St.DUR.base, "soft", M.SetOverlayAlpha)
+            St.Animate("fn-overlay", 0, 0, nil, M.SetHeatAlpha)
+            St.Animate("fn-overlay", 1, St.DUR.base, "soft", M.SetHeatAlpha)
         end
     end
     M.drawnMap = mapID
@@ -1328,7 +1339,7 @@ function M.Debug()
     FN.Print("  scroll area " .. Size(WorldMapFrame.ScrollContainer) .. "; map art "
         .. Size(WorldMapFrame.GetCanvas and WorldMapFrame:GetCanvas()))
     FN.Print("  map " .. tostring(M.drawnMap))
-    FN.Print("  overlay " .. Size(overlay) .. "; control layer " .. tostring(M.strata))
+    FN.Print("  overlay " .. Size(overlay) .. "; darken " .. Size(veil) .. "; control layer " .. tostring(M.strata))
     if FN.MapUI and FN.MapUI.Debug then FN.MapUI.Debug(Size) end
     local s = S()
     FN.Print(string.format("  settings: on %s, %s, %s; last error: %s", tostring(s.on), s.mode, s.show,
@@ -1345,7 +1356,13 @@ local function Init()
     overlay:SetAllPoints(canvas)
     overlay:SetFrameLevel(canvas:GetFrameLevel() + 5)
     overlay:EnableMouse(false)
-    mute = overlay:CreateTexture(nil, "BACKGROUND")
+    -- Darken map covers the map's visible window, not the canvas: the canvas is only the current
+    -- map's rectangle, and OpenMap draws the neighboring zones past it, which cut the dimming off
+    local view = WorldMapFrame.ScrollContainer or canvas
+    veil = CreateFrame("Frame", nil, view)
+    veil:SetAllPoints(view)
+    veil:EnableMouse(false)
+    mute = veil:CreateTexture(nil, "BACKGROUND")
     mute:SetAllPoints()
     mute:SetColorTexture(0.08, 0.06, 0.04, 1)
     mute:SetAlpha(DEFAULTS.dim)
