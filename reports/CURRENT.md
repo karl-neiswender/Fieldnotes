@@ -493,3 +493,22 @@
   showed through the title bar. A dark strip (tb.bg, on the fill's frame under the metal) fills it;
   the title moved 2 down to sit in the bar's opening. The close button now sits in the corner's seat
   (GameCloseSpot confirmed). Checks pass (44), copied to Era and Forever. Not yet seen in game.
+- Forever panel after Spoken Places' Place Story panel (2026-11-07, Karl; Era unchanged): where the
+  client has LargeSideTabButtonTemplate (Forever), the Fieldnotes side tab is back on the map window's
+  right edge (under any other add-on's side tab, else 30 below the window's top; Spoken's SideTabs way
+  of finding them), shown while the panel is closed; the panel's close button closes it. The panel is
+  the map window's full height (border frame top to bottom), FOREVER_GAP 10 off the window plus the
+  reach of any side tabs there. Its frame is the game's DefaultPanelFlatTemplate (the Map & Quest Log
+  family, as Place Story): its own title bar and centred title, close button by
+  UIPanelCloseButtonDefaultAnchors, its Bg hidden under our fill (FLAT_FILL 7/25/5/6), NineSlice at
+  +25, TitleContainer at +30. Without the template it falls back to the metal frame. Optional fields
+  are read with rawget (the check harness's frames answer any field). /fn debug prints the frame and
+  the side tab's place. Checks pass (44; the harness has neither template, so the fallbacks ran),
+  copied to Era and Forever. Not yet seen in game. Known: Spoken Places' own panel also opens on the
+  map's right, so with both open they overlap.
+- Room inside the game frames (2026-11-07, Karl's Forever screenshot: pages crowded the frame's
+  edges): in a game frame (Era metal, Forever flat) the panel is 16 wider (DockW: DOCK_W + 2 x
+  SIDE_IN, SIDE_IN 8) and the pages and settings stand 8 further in from each side, keeping their
+  DOCK_W width, so no inner layout changed. Applies on Era too. Note: BuildDock sits at Lua 5.1's
+  60-upvalue limit (check.py's compile caught it); add new BuildDock locals to a table. Checks pass
+  (44), copied to Era and Forever. Not yet seen in game.
