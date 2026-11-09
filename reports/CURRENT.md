@@ -549,3 +549,6 @@
   Background opacity fades the fill and edge only, 0 to 100% (settings.trackerAlpha, default 100%, live;
   frame:SetEtchFade in Style.lua; text, icons and buttons stay solid), and Hide when idle. "Start with my
   first gather" stays in the map Settings, since the window is not on screen before a session.
+- v0.9.1 release (2026-11-09, Karl's go): TOC 0.9.1, CHANGELOG 0.9.1 (session window, Viridis, Frost, Darken
+  map fix). Tag v0.9.1 pushed to trigger the CurseForge workflow. Karl's screenshots showed the session window
+  folded and open working; dragging to resize, the opacity slider and reopening were not shown in them.

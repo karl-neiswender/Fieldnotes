@@ -1,5 +1,20 @@
 # Fieldnotes changelog
 
+## 0.9.1
+
+- **Resize the session window.** Drag the three dots in its bottom right corner. A taller window
+  lists more of what you've gathered.
+- **The session window stays put.** It no longer disappears after two quiet minutes. If you liked
+  that, turn on Hide when idle in its settings.
+- **Sessions run until you end them** or log out, instead of starting over after five quiet minutes.
+- **Close the session window** with its new X. The session keeps counting, and a click on the
+  running session in the map panel brings the window back.
+- **Settings on the session window.** A gear in its header opens Background opacity, which fades
+  the background and keeps the text solid, and Hide when idle.
+- **A new heat color, Viridis**, from purple through teal and green to yellow.
+- **Snowfall is now Frost**, redrawn as a cold ramp from midnight navy to near white.
+- Darken map now covers the whole visible map, including neighboring zones under OpenMap.
+
 ## 0.9.0
 
 - **A new way to open Fieldnotes.** On Classic Era, a small Fieldnotes button sits in the map's
