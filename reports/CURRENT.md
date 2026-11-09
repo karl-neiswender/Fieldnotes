@@ -520,3 +520,19 @@
   OpenMap changes the map underneath as you pan. /fn debug prints its size and level. Neighboring zones dim
   too. Checks pass (44), copied to Era and Forever. Not yet seen in game; not committed. Watch: Spotlight's
   own shade still ends just past the zone's edge under OpenMap.
+- Viridis, a fifth heat color scheme (2026-11-08, Karl): the published colormap, purple, blue, teal,
+  green, yellow. Mockup design/themes-2026-11-08/Ramp.html (Cool, Greys and a custom Ink were tried and
+  passed over). SCHEMES.viridis and SCHEME_ORDER in Map.lua, label in MapUI.lua, check.py draws it. Five
+  swatches now share the Settings row, so each slot is narrower. Checks pass (44), copied to Era and
+  Forever. Not yet seen in game; not committed.
+- Viridis gets a near-white center (2026-11-08, Karl): the published colors now fill the first 88% of
+  the ramp, then pale yellow and near-white on top, like Solar and Plasma. Checks pass (44), copied to
+  Era and Forever. Not yet seen in game; not committed.
+- Snowfall redrawn as a cold ramp (2026-11-08, Karl): midnight navy, cobalt, glacier blue, azure, ice
+  blue, frost, near white, dark to light like Solar, Plasma and Viridis. Replaces the 2026-11-03 weather
+  service colors (magenta, pink, teal, lavender). Checks pass (44), copied to Era and Forever. Not yet
+  seen in game; not committed. The old note that a pale top read as a gap on parchment applies here
+  if anywhere: check the center.
+- Snowfall renamed Frost (2026-11-08, Karl): key `frost`, label "Frost". A saved "snowfall" choice
+  becomes "frost" in M.S(), the same way "ember" became "solar". Older entries above keep the old name.
+  Checks pass (45, one new), copied to Era and Forever. Not yet seen in game; not committed.

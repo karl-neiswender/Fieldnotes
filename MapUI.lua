@@ -103,7 +103,7 @@ local SHOWS = {
     { key = "account", label = "Account", tip = "Every character on this account" },
     { key = "community", label = "Community", tip = "Everyone who has shared, merged", soon = true },
 }
-local SCHEME_NAMES = { thermal = "Thermal", solar = "Solar", snowfall = "Snowfall", plasma = "Plasma" }
+local SCHEME_NAMES = { thermal = "Thermal", solar = "Solar", frost = "Frost", plasma = "Plasma", viridis = "Viridis" }
 local WHENS = { { 0, "All time" }, { 30, "30 days" }, { 7, "7 days" } }
 
 local model = {}

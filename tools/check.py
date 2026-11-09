@@ -313,7 +313,7 @@ local spot = Open("spotlight", "account")
 FieldnotesDB.settings.map.leather = "hides" -- hides are an entry in the leather list now
 local hides = Open("heat", "account")
 FieldnotesDB.settings.map.leather = 0
-for _, c in ipairs({ "solar", "snowfall", "plasma", "thermal" }) do
+for _, c in ipairs({ "solar", "frost", "plasma", "viridis", "thermal" }) do
   FieldnotesDB.settings.map.colors = c
   Open("heat", "account")
 end
@@ -324,6 +324,9 @@ local settingsOpen = ns.Map.ui.reset.shown and 1 or 0
 -- Darken map: a saved value past the most is held to it, and the map still draws
 FieldnotesDB.settings.map.dim = 5
 dimHeld = ns.Map.S().dim == ns.Map.DIM_MAX
+FieldnotesDB.settings.map.colors = "snowfall" -- the old name of Frost, in a saved setting
+frostKept = ns.Map.S().colors == "frost"
+FieldnotesDB.settings.map.colors = "thermal"
 FieldnotesDB.settings.map.dim = 0.6
 Open("heat", "account")
 FieldnotesDB.settings.map.dim = ns.Map.DEFAULTS.dim
@@ -558,6 +561,7 @@ def play(flavor, stubs, verbose):
         ("map: the Hides leather filter draws fewer areas than all skins", 0 < hides < heat),
         ("map: the settings panel opens", settings_open == 1),
         ("map: Darken map holds a saved value to its most", rt.globals().dimHeld == True),
+        ("map: a saved Snowfall choice carries over to Frost", rt.globals().frostKept == True),
         ("map: Last 7 days draws less than All time", recent < heat),
         ("map: drew without an error", rt.globals().mapError is None),
         ("every /fn command runs, in demo mode and with real records", len(list(rt.globals().commandErrors.values())) == 0),

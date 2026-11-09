@@ -49,26 +49,34 @@ local DIM = C.SUBTEXT
 -- 2026-11-03 OKLCH indigo-to-butter ramp, which sat too close to Plasma): oxblood, red,
 -- red-orange, orange, gold, white-hot, warm colors only, dark to near white like Plasma
 -- (mockup design/solar-v2-2026-11-07, take A);
--- Snowfall follows a weather service's snowfall map (Karl, 2026-11-03): grey and pale blue, deep
--- blue, violet, magenta, hot pink, then teal and lavender at the very top (a saturated lavender:
--- a pale top read as a gap in the heat on parchment, seen in game);
+-- Frost (named Snowfall until 2026-11-08) is cold colors only, the opposite of Solar (Karl, 2026-11-08, replacing the 2026-11-03
+-- weather service colors): midnight navy, cobalt, glacier blue, azure, ice blue, frost, near white,
+-- dark to light like Solar, Plasma and Viridis;
 -- Plasma (Karl, 2026-11-07, from a jet stream wind map) is a plasma-style sequential colormap:
 -- navy, royal blue, electric violet, magenta, hot pink, then coral and gold to a near-white core.
 -- Mockup: design/plasma-2026-11-07.
+-- Viridis (Karl, 2026-11-08) is the published colormap (purple, blue, teal, green, yellow) fitted
+-- into the first 88% of the ramp, then a near-white top added to match Solar's and Plasma's
+-- centers. Mockup of the published colors: design/themes-2026-11-08.
 local SCHEMES = {
     thermal = { { 0, 0.16, 0.30, 0.85 }, { 0.3, 0.15, 0.70, 0.85 }, { 0.55, 0.45, 0.85, 0.30 },
         { 0.78, 1.00, 0.85, 0.15 }, { 1, 0.90, 0.18, 0.10 } },
     solar = { { 0, 0.32, 0.04, 0.05 }, { 0.18, 0.56, 0.07, 0.05 }, { 0.35, 0.80, 0.18, 0.05 },
         { 0.52, 0.95, 0.38, 0.07 }, { 0.68, 1.00, 0.58, 0.14 }, { 0.82, 1.00, 0.79, 0.34 },
         { 0.93, 1.00, 0.93, 0.66 }, { 1, 1.00, 1.00, 0.92 } },
-    snowfall = { { 0, 0.60, 0.62, 0.68 }, { 0.12, 0.52, 0.74, 0.96 }, { 0.24, 0.22, 0.42, 0.94 },
-        { 0.38, 0.40, 0.18, 0.78 }, { 0.52, 0.84, 0.18, 0.74 }, { 0.66, 1.00, 0.36, 0.62 },
-        { 0.78, 0.24, 0.80, 0.76 }, { 0.90, 0.56, 0.46, 0.92 }, { 1, 0.62, 0.36, 1.00 } },
+    frost = { { 0, 0.05, 0.08, 0.32 }, { 0.15, 0.08, 0.17, 0.55 }, { 0.32, 0.10, 0.33, 0.80 },
+        { 0.48, 0.13, 0.52, 0.93 }, { 0.62, 0.25, 0.71, 0.97 }, { 0.75, 0.47, 0.85, 0.99 },
+        { 0.87, 0.72, 0.94, 1.00 }, { 0.95, 0.89, 0.98, 1.00 }, { 1, 0.97, 1.00, 1.00 } },
     plasma = { { 0, 0.10, 0.12, 0.55 }, { 0.15, 0.16, 0.28, 0.96 }, { 0.32, 0.44, 0.24, 0.98 },
         { 0.48, 0.76, 0.20, 0.92 }, { 0.62, 1.00, 0.26, 0.70 }, { 0.75, 1.00, 0.46, 0.48 },
         { 0.86, 1.00, 0.72, 0.32 }, { 0.95, 1.00, 0.92, 0.50 }, { 1, 1.00, 0.98, 0.86 } },
+    viridis = { { 0, 0.267, 0.004, 0.329 }, { 0.088, 0.282, 0.141, 0.459 }, { 0.176, 0.255, 0.267, 0.529 },
+        { 0.264, 0.208, 0.373, 0.553 }, { 0.352, 0.165, 0.471, 0.557 }, { 0.44, 0.129, 0.569, 0.549 },
+        { 0.528, 0.133, 0.659, 0.518 }, { 0.616, 0.267, 0.749, 0.439 }, { 0.704, 0.478, 0.820, 0.318 },
+        { 0.792, 0.741, 0.875, 0.149 }, { 0.88, 0.992, 0.906, 0.145 }, { 0.95, 1.00, 0.96, 0.55 },
+        { 1, 1.00, 1.00, 0.90 } },
 }
-M.SCHEME_ORDER = { "thermal", "solar", "snowfall", "plasma" }
+M.SCHEME_ORDER = { "thermal", "solar", "frost", "plasma", "viridis" }
 local RAMP = SCHEMES.thermal -- the scheme in use, set by Draw
 
 -- Points colors, given to the map's leading leathers in order; each also differs in lightness.
@@ -132,6 +140,7 @@ function M.S()
         if s[k] == nil then s[k] = v end
     end
     if s.colors == "ember" then s.colors = "solar" end -- Solar took Ember's place (2026-11-03)
+    if s.colors == "snowfall" then s.colors = "frost" end -- renamed 2026-11-08
     if not SCHEMES[s.colors] then s.colors = DEFAULTS.colors end
     if type(s.strength) ~= "number" then s.strength = DEFAULTS.strength end
     s.strength = math.max(0.5, math.min(2.5, s.strength))

@@ -14,7 +14,7 @@ local SHOTS = {
     { file = "02-heat", map = 1434, prof = "skinning", mode = "heat", show = "account" },
     { file = "03-herbalism", map = 1429, prof = "herbalism", mode = "heat", show = "account", colors = "solar" },
     { file = "04-points", map = 1436, prof = "skinning", mode = "points", show = "account" },
-    { file = "05-community", map = 1413, prof = "skinning", mode = "heat", show = "community", colors = "snowfall" },
+    { file = "05-community", map = 1413, prof = "skinning", mode = "heat", show = "community", colors = "frost" },
     { file = "06-continent", map = 1415, prof = "skinning", mode = "heat", show = "account" },
     { file = "07-session", map = 1426, prof = "mining", mode = "spotlight", show = "account", session = true,
         subject = "tracker" },
