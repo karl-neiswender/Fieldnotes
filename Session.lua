@@ -4,24 +4,25 @@ local ADDON, FN = ...
 -- profession (professions v4 mockup, 2026-11-04): a row appears the first time you gather
 -- something of a profession this session, with its count, per hour on the shared clock, and
 -- your skill and what this session added (Cloth: how often humanoids dropped it). Then the
--- session's top loot. It appears with your first gather and hides after two minutes without one;
--- five quiet minutes end the session. Pause stops the clock. The chevron folds it to one line:
--- the clock, then each profession's initial and count. When a skill reaches its rank's cap, it
--- says so, once in chat and on screen: time to see a trainer.
+-- session's top loot. It appears with your first gather and stays until the session ends (Settings
+-- can hide it after two minutes without a gather). A session runs until you end it or log out: it
+-- is kept in memory only. Pause stops the clock. The chevron folds it to one line: the clock, then each profession's initial and count.
+-- The dots in its bottom right corner resize it. When a skill reaches its rank's cap, it says so,
+-- once in chat and on screen: time to see a trainer.
 
 local St = FN.Style
 local C = St.C
 
 local RUINED = 2934
-local IDLE = 300 -- seconds without a skin that end a session
-local FADE = 120 -- seconds without a skin before the tracker hides
-local LOOT_ROWS = 4
+local FADE = 120 -- seconds without a skin before the tracker hides, when that setting is on
+local LOOT_ROWS = 4 -- always room for this many; a taller window shows more
 
 -- count, ruined, loot, creatures: skinning's (the stats window reads them); total and allLoot:
 -- every profession's; profs[key] = { count, loots, skillStart }, in order of first gather
 local session = { count = 0, ruined = 0, loot = {}, creatures = {}, minutes = {}, paused = 0,
     total = 0, allLoot = {}, profs = {}, order = {} }
 FN.session = session
+local closed = false -- the X was pressed: gathers leave the window shut until asked or a new session
 
 -- seconds of skinning so far, leaving out pauses
 local function Active()
@@ -32,6 +33,7 @@ end
 FN.SessionSeconds = Active
 
 local function Reset(now)
+    closed = false
     session.count, session.ruined, session.paused = 0, 0, 0
     session.start, session.last, session.pausedAt = now, nil, nil
     session.skillStart = FN.SkinningSkill and FN.SkinningSkill() or nil
@@ -167,7 +169,28 @@ end
 -- The panel
 -- ------------------------------------------------------------
 local frame, ui = nil, {}
-local W, PADX = 232, 14
+local W, PADX = 232, 14 -- W is the default width and the smallest
+local MAX_W, MAX_H = 420, 560
+local sizing = false -- the corner dots are being dragged
+local reopened = 0 -- when a click last asked for the window (GetTime), so it does not hide at once
+
+-- how solid the window's background is, 0 to 1 (Settings); text, icons and buttons stay solid
+function FN.TrackerOpacity()
+    return math.max(0, math.min(1, tonumber(FN.db.settings.trackerAlpha) or 1))
+end
+
+function FN.SetTrackerOpacity(v)
+    FN.db.settings.trackerAlpha = v
+    if frame then frame:SetEtchFade(FN.TrackerOpacity()) end
+end
+
+-- the size you dragged it to: a width, and a height only if you made it taller than its content
+local function SavedSize()
+    local s = FN.db.settings.trackerSize
+    if type(s) ~= "table" then return W, nil end
+    local h = tonumber(s.h)
+    return math.max(W, math.min(MAX_W, tonumber(s.w) or W)), h and math.min(MAX_H, h) or nil
+end
 
 -- a button with an icon before its label (pause, play)
 local function IconChoice(parent, onClick)
@@ -189,29 +212,176 @@ local function Compact() return FN.db.settings.trackerCompact == true end
 
 -- the panel hangs from its top edge, so folding and growing move only its bottom (it was placed
 -- by its middle, so both edges moved). Saved that way, it stays where it was left.
+local function HangFromTop()
+    local left, top = frame:GetLeft(), frame:GetTop()
+    if not left or not top then return end
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    FN.db.settings.trackerPos = { "TOPLEFT", "BOTTOMLEFT", left, top }
+end
+
 local function SetHeightFromTop(h)
     local point, _, relPoint = frame:GetPoint()
     local hung = point == "TOPLEFT" and relPoint == "BOTTOMLEFT"
-    local left, top = frame:GetLeft(), frame:GetTop()
     -- never while it is being dragged (the mover owns its position), and only once
-    if not frame.dragging and not hung and left and top then
-        frame:ClearAllPoints()
-        frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
-        FN.db.settings.trackerPos = { "TOPLEFT", "BOTTOMLEFT", left, top }
-    end
+    if not frame.dragging and not hung then HangFromTop() end
     frame:SetHeight(h)
+end
+
+-- quiet long enough to hide: only when Settings asks for it, never while paused or being resized
+local function IdleHide()
+    if FN.db.settings.trackerAutoHide ~= true or sizing or session.pausedAt or not session.last then return false end
+    return GetTime() - math.max(session.last, reopened) > FADE
+end
+
+-- three dots in the bottom right corner; drag them to resize. The window never gets smaller than
+-- what it is showing. Dragged back to that smallest height, it goes back to fitting its content.
+local function BuildGrip()
+    local grip = CreateFrame("Button", nil, frame)
+    grip:SetSize(14, 14)
+    grip:SetPoint("BOTTOMRIGHT")
+    local dots = {}
+    for i, at in ipairs({ { 4, 4 }, { 8, 4 }, { 4, 8 } }) do
+        dots[i] = grip:CreateTexture(nil, "ARTWORK")
+        dots[i]:SetSize(2, 2)
+        dots[i]:SetPoint("BOTTOMRIGHT", -at[1], at[2])
+    end
+    local function Tint(lit)
+        local c = lit and C.TITLE or C.INK2
+        for _, d in ipairs(dots) do d:SetColorTexture(c[1], c[2], c[3], 1) end
+    end
+    Tint(false)
+    grip:SetScript("OnEnter", function() Tint(true) end)
+    grip:SetScript("OnLeave", function() if not sizing then Tint(false) end end)
+    grip:SetScript("OnMouseDown", function(_, button)
+        if button ~= "LeftButton" then return end
+        HangFromTop() -- the top left corner stays put while the bottom right follows the mouse
+        local minH = ui.needH or 120
+        local maxH = math.max(MAX_H, minH)
+        if frame.SetResizeBounds then
+            frame:SetResizeBounds(W, minH, MAX_W, maxH)
+        elseif frame.SetMinResize then
+            frame:SetMinResize(W, minH)
+            frame:SetMaxResize(MAX_W, maxH)
+        end
+        sizing = true
+        frame:StartSizing("BOTTOMRIGHT")
+    end)
+    grip:SetScript("OnMouseUp", function(self)
+        Tint(self:IsMouseOver())
+        if not sizing then return end
+        frame:StopMovingOrSizing()
+        sizing = false
+        HangFromTop()
+        local w, h = math.floor(frame:GetWidth() + 0.5), math.floor(frame:GetHeight() + 0.5)
+        FN.db.settings.trackerSize = { w = w, h = h > (ui.needH or 0) + 1 and h or nil }
+        FN.UpdateTracker()
+    end)
+    return grip
+end
+
+-- the gear is gold while its panel is open
+local function GearTint()
+    if not ui.gear then return end
+    local c = ui.settings and ui.settings:IsShown() and C.TITLE or C.INK2
+    ui.gear.icon:SetVertexColor(c[1], c[2], c[3])
+end
+
+-- the window's own settings, in a small panel beside it (always solid, so it stays readable however
+-- see-through the window is); made the first time the gear is pressed
+local function BuildSettings()
+    local PANEL_W, PAD = 190, 12
+    local p = St.Frame("Frame", frame)
+    p:SetSize(PANEL_W, 112)
+    St.Etch(p, St.STYLE.panel, 12, 1)
+    p:EnableMouse(true)
+    p:SetClampedToScreen(true)
+    p:Hide()
+
+    local title = St.Title(p, 12)
+    title:SetPoint("TOPLEFT", PAD, -12)
+    title:SetText("Window settings")
+
+    local label = St.Text(p, 10, C.INK2)
+    label:SetPoint("TOPLEFT", PAD, -36)
+    label:SetText("Background opacity")
+    local value = St.Text(p, 10, C.INK2)
+    value:SetPoint("TOPRIGHT", -PAD, -36)
+    value:SetJustifyH("RIGHT")
+    local function Percent(v) value:SetText(math.floor(v * 100 + 0.5) .. "%") end
+    local slider = St.Slider(p, PANEL_W - PAD * 2, 0, 1, 0.05, function(v)
+        FN.SetTrackerOpacity(v)
+        Percent(v)
+    end)
+    slider:SetPoint("TOPLEFT", PAD, -52)
+
+    local hideText = St.Text(p, 10, C.INK2)
+    hideText:SetPoint("TOPLEFT", PAD, -83)
+    hideText:SetText("Hide when idle")
+    local hide = CreateFrame("Button", nil, p)
+    hide:SetSize(36, 18)
+    hide:SetPoint("TOPRIGHT", -PAD, -80)
+    hide.toggle = St.Toggle(hide)
+    hide.toggle:SetAllPoints()
+    hide:SetScript("OnClick", function(self)
+        FN.db.settings.trackerAutoHide = FN.db.settings.trackerAutoHide ~= true
+        self.toggle:SetOn(FN.db.settings.trackerAutoHide == true)
+    end)
+    hide:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Hide when idle", 1, 1, 1)
+        GameTooltip:AddLine("On: the window hides after two minutes without a gather and comes back with your next one. Off: it stays until the session ends.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    hide:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    function p:Sync()
+        local v = FN.TrackerOpacity()
+        slider:Set(v)
+        Percent(v)
+        hide.toggle:SetOn(FN.db.settings.trackerAutoHide == true)
+    end
+    ui.settings = p
+end
+
+function FN.TrackerSettings() return ui.settings end
+
+function FN.ToggleTrackerSettings()
+    if not frame then return end
+    if not ui.settings then BuildSettings() end
+    local p = ui.settings
+    if p:IsShown() then
+        p:Hide()
+    else
+        p:Sync()
+        -- on whichever side has room, level with the window's top
+        local center = frame:GetCenter()
+        local onLeft = center and center > UIParent:GetWidth() / 2
+        p:ClearAllPoints()
+        if onLeft then
+            p:SetPoint("TOPRIGHT", frame, "TOPLEFT", -4, 0)
+        else
+            p:SetPoint("TOPLEFT", frame, "TOPRIGHT", 4, 0)
+        end
+        p:Show()
+    end
+    GearTint()
 end
 
 local function Build()
     frame = St.Frame("Frame", UIParent)
-    frame:SetSize(W, 200)
+    frame:SetSize(SavedSize(), 200)
     frame:SetFrameStrata("MEDIUM")
+    frame:SetResizable(true)
     St.Etch(frame, St.STYLE.panel, 12, 0.94)
     St.Movable(frame, "trackerPos")
+    frame:SetEtchFade(FN.TrackerOpacity())
     frame:HookScript("OnDragStart", function(self) self.dragging = true end)
     frame:HookScript("OnDragStop", function(self) self.dragging = false end)
+    frame:HookScript("OnSizeChanged", function() if sizing then FN.UpdateTracker() end end)
     St.PlaceSaved(frame, "trackerPos", "RIGHT", "RIGHT", -60, 120)
     frame:Hide()
+    ui.grip = BuildGrip()
 
     -- the header: the dot (glowing while you skin), the title, the clock and the fold chevron
     ui.dot = frame:CreateTexture(nil, "ARTWORK", nil, 2)
@@ -226,7 +396,10 @@ local function Build()
         FN.db.settings.trackerCompact = not Compact()
         FN.UpdateTracker()
     end)
-    ui.fold:SetPoint("TOPRIGHT", -PADX, -15)
+    -- the X closes the window only; the session carries on (the stop square ends it)
+    ui.close = St.IconButton(frame, "close-white", 10, function() FN.CloseTracker() end)
+    ui.close:SetPoint("TOPRIGHT", -PADX, -15)
+    ui.fold:SetPoint("RIGHT", ui.close, "LEFT", -9, 0)
     ui.fold:SetScript("OnEnter", function(self)
         self.icon:SetVertexColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
@@ -237,6 +410,8 @@ local function Build()
         self.icon:SetVertexColor(C.INK2[1], C.INK2[2], C.INK2[3])
         GameTooltip:Hide()
     end)
+    ui.gear = St.IconButton(frame, "gear-white", 11, function() FN.ToggleTrackerSettings() end)
+    ui.gear:SetPoint("RIGHT", ui.fold, "LEFT", -9, 0)
     -- the clock sits with the status it describes; the controls hang from the right edge, so the
     -- clock's changing width never moves them (it nudged them every second, seen in game)
     ui.clock = St.Text(frame, 11, C.INK2)
@@ -246,7 +421,7 @@ local function Build()
     -- and at the skill cap one orange line keeps the trainer in view
     -- a stop square, not an X: it ends the session, it does not close the panel
     ui.minStop = St.IconButton(frame, "stop-white", 9, function() FN.SessionEnd() end)
-    ui.minStop:SetPoint("RIGHT", ui.fold, "LEFT", -12, 0)
+    ui.minStop:SetPoint("RIGHT", ui.gear, "LEFT", -12, 0)
     ui.minPause = St.IconButton(frame, "pause-white", 10, function() FN.SessionTogglePause() end)
     ui.minPause:SetPoint("RIGHT", ui.minStop, "LEFT", -9, 0)
     local function IconTip(b, text)
@@ -261,11 +436,13 @@ local function Build()
             GameTooltip:Hide()
         end)
     end
+    IconTip(ui.close, "Close (the session keeps running)")
+    IconTip(ui.gear, "Window settings")
+    ui.gear:HookScript("OnLeave", GearTint) -- stays gold while its panel is open
     IconTip(ui.minStop, "End session")
     IconTip(ui.minPause, function() return session.pausedAt and "Resume" or "Pause" end)
     ui.line = St.Text(frame, 10, ORANGE)
     ui.line:SetPoint("TOPLEFT", PADX, -72)
-    ui.line:SetWidth(W - PADX * 2)
     ui.line:SetWordWrap(false)
 
     -- open: a row per profession gathered this session (made as needed, see Row below)
@@ -277,20 +454,7 @@ local function Build()
     ui.rule:SetColorTexture(0.33, 0.29, 0.20, 0.8)
     ui.rule:SetHeight(1)
 
-    ui.loot = {}
-    for i = 1, LOOT_ROWS do
-        local row = {}
-        row.icon = frame:CreateTexture(nil, "ARTWORK")
-        row.icon:SetSize(16, 16)
-        row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        row.name = St.Text(frame, 11, C.TEXT)
-        row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-        row.count = St.Text(frame, 11, C.TITLE)
-        row.count:SetPoint("RIGHT", frame, "RIGHT", -PADX, 0)
-        row.count:SetPoint("TOP", row.icon, "TOP", 0, -2)
-        row.count:SetJustifyH("RIGHT")
-        ui.loot[i] = row
-    end
+    ui.loot = {} -- made as needed, see LootRow below
 
     -- Pause (or Resume) and End session. Gold follows the likely next step: neither while
     -- running, Resume while paused. Ending is rare and stops the count, so it never leads.
@@ -299,12 +463,18 @@ local function Build()
     ui.finish = St.ChoiceButton(frame, function() FN.SessionEnd() end)
     ui.finish.text:SetText("End session")
 
+    -- the settings panel goes with the window, and starts closed next time
+    frame:HookScript("OnHide", function()
+        if ui.settings then ui.settings:Hide() end
+        GearTint()
+    end)
+
     local elapsed = 0
     frame:SetScript("OnUpdate", function(_, dt)
         elapsed = elapsed + dt
         if elapsed < 1 then return end
         elapsed = 0
-        if not session.pausedAt and session.last and GetTime() - session.last > FADE then
+        if IdleHide() then
             frame:Hide()
             return
         end
@@ -338,7 +508,6 @@ local function Row(i)
     r.count:SetPoint("RIGHT", r.rate, "LEFT", -6, 0)
     r.sub = St.Text(frame, 10, C.SUBTEXT)
     r.sub:SetPoint("TOPLEFT", r.name, "BOTTOMLEFT", 0, -3)
-    r.sub:SetWidth(W - PADX * 2 - 28)
     r.sub:SetWordWrap(false)
     r.rule = frame:CreateTexture(nil, "ARTWORK")
     r.rule:SetColorTexture(0.33, 0.29, 0.20, 0.45)
@@ -349,6 +518,25 @@ end
 
 local function ShowRow(r, on)
     for _, k in ipairs({ "chip", "mark", "name", "rate", "count", "sub", "rule" }) do r[k]:SetShown(on) end
+end
+
+-- one line of the session's loot: its icon, name and count
+local function LootRow(i)
+    local row = ui.loot[i]
+    if row then return row end
+    row = {}
+    row.icon = frame:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(16, 16)
+    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    row.name = St.Text(frame, 11, C.TEXT)
+    row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
+    row.name:SetWordWrap(false)
+    row.count = St.Text(frame, 11, C.TITLE)
+    row.count:SetPoint("RIGHT", frame, "RIGHT", -PADX, 0)
+    row.count:SetPoint("TOP", row.icon, "TOP", 0, -2)
+    row.count:SetJustifyH("RIGHT")
+    ui.loot[i] = row
+    return row
 end
 
 local function Hex(c) return string.format("%02x%02x%02x", c[1] * 255, c[2] * 255, c[3] * 255) end
@@ -365,6 +553,14 @@ function FN.UpdateTracker()
     local secs = Active()
     local paused = session.pausedAt ~= nil
     local compact = Compact()
+    -- while the corner dots are dragged the window's live size leads; otherwise the saved one
+    local w, wantH = SavedSize()
+    if sizing then
+        w, wantH = frame:GetWidth(), frame:GetHeight()
+    else
+        frame:SetWidth(w)
+    end
+    ui.grip:SetShown(not compact)
 
     ui.clock:SetText(Clock(secs))
     ui.title:SetText(paused and "Paused" or "Session")
@@ -414,6 +610,7 @@ function FN.UpdateTracker()
         ui.summary:SetShown(#parts > 0)
         ui.line:ClearAllPoints()
         ui.line:SetPoint("TOPLEFT", PADX, -54)
+        ui.line:SetWidth(w - PADX * 2)
         ui.line:SetShown(capNote ~= nil)
         if capNote then ui.line:SetText(capNote) end
         SetHeightFromTop(capNote and 74 or 58)
@@ -462,6 +659,7 @@ function FN.UpdateTracker()
                 sub = ""
             end
         end
+        r.sub:SetWidth(w - PADX * 2 - 28)
         r.sub:SetText(sub)
         local c = orange and ORANGE or C.SUBTEXT
         r.sub:SetTextColor(c[1], c[2], c[3])
@@ -483,11 +681,19 @@ function FN.UpdateTracker()
         if loot[a] ~= loot[b] then return loot[a] > loot[b] end
         return a < b
     end)
-    for i, row in ipairs(ui.loot) do
-        local id = ids[i]
+    -- the smallest this content fits in: its rows, four lines of loot, the buttons. Any height
+    -- beyond that goes to more lines of loot; the buttons stay on the bottom edge.
+    local base = math.min(#ids, LOOT_ROWS)
+    local needH = -y + base * 20 + (base > 0 and 6 or 2) + 22 + 14
+    local h = math.max(needH, wantH or 0)
+    ui.needH = needH
+    local shown = math.min(#ids, base + math.floor((h - needH) / 20))
+    for i = 1, math.max(shown, #ui.loot) do
+        local row, id = LootRow(i), i <= shown and ids[i] or nil
         if id then
             local name = FN.ItemInfo(id)
             row.icon:SetTexture(FN.ItemIcon(id))
+            row.name:SetWidth(w - PADX * 2 - 24 - 44)
             row.name:SetText(name or "...")
             row.count:SetText("x " .. loot[id])
             row.icon:ClearAllPoints()
@@ -497,28 +703,41 @@ function FN.UpdateTracker()
         row.name:SetShown(id ~= nil)
         row.count:SetShown(id ~= nil)
     end
-    local shown = math.min(#ids, LOOT_ROWS)
-    y = y - shown * 20 - (shown > 0 and 6 or 2)
 
+    local buttonY, buttonW = 22 + 14 - h, math.floor((w - PADX * 2 - 8) / 2)
     ui.pause.text:SetText(paused and "Resume" or "Pause")
     ui.pause.icon:SetTexture(St.Icon(paused and "play-white" or "pause-white"))
     ui.pause:SetChosen(paused)
     ui.pause:ClearAllPoints()
-    ui.pause:SetPoint("TOPLEFT", PADX, y)
-    ui.pause:SetWidth(98)
+    ui.pause:SetPoint("TOPLEFT", PADX, buttonY)
+    ui.pause:SetWidth(buttonW)
     ui.finish:ClearAllPoints()
-    ui.finish:SetPoint("TOPRIGHT", -PADX, y)
-    ui.finish:SetWidth(98)
-    SetHeightFromTop(-y + 22 + 14)
+    ui.finish:SetPoint("TOPRIGHT", -PADX, buttonY)
+    ui.finish:SetWidth(buttonW)
+    if not sizing then SetHeightFromTop(h) end
 end
 
 function FN.TrackerFrame() return frame end
 
-function FN.ShowTracker()
-    if FN.db.settings.tracker == false then return end
+-- asked: a click on the running session. It opens even after /fn tracker turned the automatic
+-- window off, and counts as activity so the idle hide does not take it away again at once.
+function FN.ShowTracker(asked)
+    if not asked and (closed or FN.db.settings.tracker == false) then return end
     if not frame then Build() end
+    if asked then
+        reopened = GetTime()
+        closed = false
+    end
     frame:Show()
+    frame:Raise()
     FN.UpdateTracker()
+end
+
+function FN.TrackerShown() return frame ~= nil and frame:IsShown() end
+
+function FN.CloseTracker()
+    closed = true
+    FN.HideTracker()
 end
 
 function FN.HideTracker()
@@ -535,11 +754,9 @@ function FN.SessionGather(prof, source, items)
     end
     local has = next(items) ~= nil
     if prof == "cloth" and not has and not session.start then return end -- an empty loot starts nothing
-    if FN.db.settings.autoSession == false then
-        -- sessions start only by hand (Settings): no session, nothing to count; a running one
-        -- never ends by itself
-        if not session.start then return end
-    elseif not session.start or not session.last or now - session.last > IDLE then
+    if not session.start then
+        -- sessions can be set to start only by hand (Settings): then no session, nothing to count
+        if FN.db.settings.autoSession == false then return end
         Reset(now)
     end
     local e = session.profs[prof]

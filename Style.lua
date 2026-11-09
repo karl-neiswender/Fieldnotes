@@ -98,11 +98,20 @@ function St.Etch(frame, style, edgeSize, alpha)
     frame.etchHi:SetPoint("TOPLEFT", inset, -inset)
     frame.etchHi:SetPoint("TOPRIGHT", -inset, -inset)
     frame.etchHi:SetVertexColor(1, 0.92, 0.70, 0.07)
+    local current, fade = style, 1
     function frame:SetEtch(st)
-        St.VGradient(self.etchBg, st.top, st.bottom, alpha, alpha)
+        current = st
+        -- the fade goes inside the gradient: a texture's own alpha does not hide a gradient in game
+        local a = (alpha or 1) * fade
+        St.VGradient(self.etchBg, st.top, st.bottom, a, a)
         if self.SetBackdropBorderColor then
-            self:SetBackdropBorderColor(st.edge[1], st.edge[2], st.edge[3], st.edge[4] or 1)
+            self:SetBackdropBorderColor(st.edge[1], st.edge[2], st.edge[3], (st.edge[4] or 1) * fade)
         end
+    end
+    -- fades the tile's fill and edge (0-1) and leaves whatever sits on it alone
+    function frame:SetEtchFade(v)
+        fade = v
+        self:SetEtch(current)
     end
     frame:SetEtch(style)
 end

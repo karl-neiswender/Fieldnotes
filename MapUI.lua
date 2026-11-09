@@ -1118,9 +1118,18 @@ local function SessionCard(parent, width)
             local p, e = M.PROF[key], s.profs[key]
             if p and e then GameTooltip:AddLine(p.label .. "  " .. e.count, p.color[1], p.color[2], p.color[3]) end
         end
+        if not FN.TrackerShown() then
+            GameTooltip:AddLine("Click to open the session window", C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
+        end
         GameTooltip:Show()
     end)
     sc:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- a click on a running session brings its window back (the pause and end icons keep their own clicks)
+    sc:SetScript("OnMouseUp", function(self, button)
+        if button ~= "LeftButton" or not FN.SessionRunning() or not self:IsMouseOver() then return end
+        FN.ShowTracker(true)
+        self:GetScript("OnEnter")(self) -- the tooltip drops its "click to open" line
+    end)
 
     function sc:Update()
         local running, paused = FN.SessionRunning(), FN.SessionPaused()

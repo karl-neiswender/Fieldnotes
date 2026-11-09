@@ -536,3 +536,16 @@
 - Snowfall renamed Frost (2026-11-08, Karl): key `frost`, label "Frost". A saved "snowfall" choice
   becomes "frost" in M.S(), the same way "ember" became "solar". Older entries above keep the old name.
   Checks pass (45, one new), copied to Era and Forever. Not yet seen in game; not committed.
+- Session window pass (2026-11-09, Karl; built without a mockup at his request): three dots in the bottom
+  right corner resize it (232 to 420 wide, up to 560 tall, never shorter than its content; settings.trackerSize,
+  and dragged back to its smallest it fits its content again). Extra height shows more loot lines, the buttons
+  stay on the bottom edge; folded it keeps the width and hides the dots. It no longer hides after two quiet
+  minutes unless "Hide when idle" is on in its own settings (settings.trackerAutoHide, default off).
+  A click on the running session's card in the panel reopens it, even after /fn tracker. The five-minute
+  idle reset is gone (Karl): a session runs until End or log out (memory only, so /reload ends it too).
+  A close X (far right of the header, chevron moved left of it) shuts the window without ending the session;
+  gathers leave it shut until the session card is clicked or a new session starts. A gear in the header
+  opens the window's own settings panel beside it, on the side with room (BuildSettings in Session.lua):
+  Background opacity fades the fill and edge only, 0 to 100% (settings.trackerAlpha, default 100%, live;
+  frame:SetEtchFade in Style.lua; text, icons and buttons stay solid), and Hide when idle. "Start with my
+  first gather" stays in the map Settings, since the window is not on screen before a session.

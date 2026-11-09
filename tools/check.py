@@ -409,6 +409,80 @@ local counted = ns.session.total == 1
 ns.SessionEnd()
 FieldnotesDB.settings.autoSession = nil
 dashResult = dashResult .. ((stayedOff and counted) and "a" or "-")
+-- the session window: stays up when idle unless Settings hides it, a click brings it back, and a
+-- saved size is held inside its limits
+do
+  local t0 = now
+  ns.SessionStart()
+  local tf = ns.TrackerFrame()
+  now = now + 200
+  tf.scripts.OnUpdate(tf, 2)
+  local stayed = tf:IsShown()
+  FieldnotesDB.settings.trackerAutoHide = true
+  tf.scripts.OnUpdate(tf, 2)
+  local hid = not tf:IsShown()
+  ns.ShowTracker(true)
+  tf.scripts.OnUpdate(tf, 2)
+  local reopenedStays = ns.TrackerShown()
+  FieldnotesDB.settings.trackerAutoHide = nil
+  FieldnotesDB.settings.tracker = false
+  tf:Hide()
+  ns.ShowTracker()
+  local autoRespected = not tf:IsShown()
+  ns.ShowTracker(true)
+  local clickOverrides = tf:IsShown()
+  FieldnotesDB.settings.tracker = nil
+  FieldnotesDB.settings.trackerSize = { w = 999, h = 400 }
+  ns.UpdateTracker()
+  local biggest = tf:GetWidth() == 420 and tf:GetHeight() == 400
+  FieldnotesDB.settings.trackerSize = { w = 100 }
+  ns.UpdateTracker()
+  local smallest = tf:GetWidth() == 232 and tf:GetHeight() > 0 and tf:GetHeight() < 400
+  FieldnotesDB.settings.trackerSize = nil
+  -- the X: a gather does not reopen it or end the session; a click does reopen it; a new session shows it
+  ns.CloseTracker()
+  local before = ns.session.total
+  ns.SessionGather("mining", 1731, { [2770] = 1 })
+  local closedStays = not tf:IsShown() and ns.SessionRunning() and ns.session.total == before + 1
+  ns.ShowTracker(true)
+  local closedReopens = tf:IsShown()
+  ns.CloseTracker()
+  ns.SessionEnd()
+  ns.SessionStart()
+  local newSessionShows = tf:IsShown()
+  -- a long quiet spell does not start a new session: the count carries on until End
+  ns.SessionGather("mining", 1731, { [2770] = 1 })
+  now = now + 3600
+  ns.SessionGather("mining", 1731, { [2770] = 1 })
+  local carriesOn = ns.session.total == 2
+  ns.SessionEnd()
+  -- opacity: only the background fades (the window's own alpha, which would fade its text, is left
+  -- alone), held to 0-100%, and full is the default
+  local fullByDefault = ns.TrackerOpacity() == 1
+  local edgeAlpha, windowFaded
+  tf.SetBackdropBorderColor = function(_, _, _, _, a) edgeAlpha = a end
+  tf.SetAlpha = function() windowFaded = true end
+  local edge = ns.Style.STYLE.panel.edge
+  ns.SetTrackerOpacity(0.6)
+  local opacitySet = math.abs(edgeAlpha - (edge[4] or 1) * 0.6) < 0.001 and FieldnotesDB.settings.trackerAlpha == 0.6
+  ns.SetTrackerOpacity(-1)
+  local opacityFloor = edgeAlpha == 0 and not windowFaded
+  ns.SetTrackerOpacity(nil)
+  tf.SetBackdropBorderColor, tf.SetAlpha = nil, nil
+  -- the gear's panel opens and closes, and goes when the window does
+  ns.ToggleTrackerSettings()
+  local sp = ns.TrackerSettings()
+  local panelOpens = sp:IsShown()
+  ns.ToggleTrackerSettings()
+  local panelCloses = not sp:IsShown()
+  ns.ToggleTrackerSettings()
+  tf.scripts.OnHide(tf)
+  local panelGoes = not sp:IsShown()
+  trackerPanelOk = panelOpens and panelCloses and panelGoes
+  now = t0
+  trackerWindowOk = stayed and hid and reopenedStays and autoRespected and clickOverrides and biggest and smallest
+    and closedStays and closedReopens and newSessionShows and carriesOn and fullByDefault and opacitySet and opacityFloor
+end
 ns.SessionStart()
 local sessionOn = ns.SessionRunning()
 ns.SessionEnd()
@@ -566,6 +640,10 @@ def play(flavor, stubs, verbose):
         ("map: drew without an error", rt.globals().mapError is None),
         ("every /fn command runs, in demo mode and with real records", len(list(rt.globals().commandErrors.values())) == 0),
         ("session tracker counts the real skin", bool(tracker)),
+        ("session window: stays when idle unless set to hide, a click reopens it, size held in limits",
+         rt.globals().trackerWindowOk is True),
+        ("session window: the gear's settings panel opens, closes and goes with the window",
+         rt.globals().trackerPanelOk is True),
         ("skill cap: one trainer alert, the tracker folds and opens", bool(cap_alert)),
         ("share: demo text reads back whole, a cut-off paste is caught, import adds to Community", bool(demo_share)),
         ("share: demo text and your own text are refused; someone else's joins Community", real_share == "ok"),
