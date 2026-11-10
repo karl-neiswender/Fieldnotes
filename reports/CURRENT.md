@@ -552,3 +552,47 @@
 - v0.9.1 release (2026-11-09, Karl's go): TOC 0.9.1, CHANGELOG 0.9.1 (session window, Viridis, Frost, Darken
   map fix). Tag v0.9.1 pushed to trigger the CurseForge workflow. Karl's screenshots showed the session window
   folded and open working; dragging to resize, the opacity slider and reopening were not shown in them.
+- Session window can expand up (2026-11-09, Karl; mockup design/session-expand-2026-11-09, option B):
+  Window settings > Expand, Down (default) or Up (settings.trackerExpand). Up: the header sits on the bottom
+  edge and never moves (the window hangs from BOTTOMLEFT, saved that way; switching keeps the header on the
+  same pixels, HEADER_FLIP 40); above it, the usual reading order: totals, loot, Pause / End; the resize dots
+  move to the top right; the chevron points the other way. A flipped section order (buttons on top, totals
+  by the header) was built first and rejected after Karl saw it in game ("hurting my brain"): do not
+  bring it back. Checks pass (48, one new), copied to Era and Forever. The reading-order version is not yet
+  seen in game; not committed.
+- Sessions survive a /reload (2026-11-09, Karl, item 1 of the tracker list): saved to db.liveSession at
+  PLAYER_LOGOUT, read back on PLAYER_ENTERING_WORLD only when isReloadingUi is true, cleared either way, so a
+  real log in still starts fresh. The clock is kept as seconds played. Paused, closed and hidden states carry
+  over. Checks pass (49, one new), copied to Era and Forever. Not yet seen in game; not committed. The
+  isReloadingUi argument is assumed on both clients; without it, a reload simply ends the session as before.
+- End session opens a full recap (2026-11-09, Karl picked option B of design/session-recap-2026-11-09): the
+  window stays open as "Session ended" with the frozen clock, each profession's count, "+N skill  ·  N/hr",
+  the loot, and Undo / Done (the X is Done too) until closed. Undo restores the session with the same clock,
+  paused state included. An empty session just closes. It opens even if the window was closed or /fn tracker
+  turned it off. The next session replaces it, so a gather while it shows starts a new session and Undo is
+  gone. A /reload keeps it. Fold chevron and gear are hidden; it is always the full window. Checks pass (50,
+  one new), copied to Era and Forever. Not yet seen in game; not committed.
+- AFK pauses the session (2026-11-10, Karl): going AFK (/afk or the game's idle timer) pauses a running
+  session; coming back resumes it. A pause by hand stays paused; a click while away wins. Carried over a
+  /reload. No setting, no new UI (the window just says "Paused"). The game's idle timer flags AFK after about
+  five minutes, so those minutes still count. Checks pass (51, one new), copied to Era and Forever. Not yet
+  seen in game; not committed.
+- Money category and the neutral look (2026-11-10, Karl approved design/money-2026-11-10, options 1A and 2B):
+  - Neutral look (Style.lua): chosen state and headings are warm ivory (C.TITLE, C.ACCENT, rowSel), edges
+    bronze grey, switches, sliders and bars ivory-lit; stray gold washes in MapUI and StatsPage, the chat
+    prefix and the dock title follow; the game's gold chosen side-tab art is desaturated to ivory. Gold
+    (C.MONEY, plus C.SILVER and C.COPPER) is for money only. Breaks the visual match with Forever Goal Tracker.
+  - Money (Recorder.lua): coin you loot, from CHAT_MSG_MONEY lines that match the game's YOU_LOOT_MONEY /
+    LOOT_MONEY_SPLIT, parsed with GOLD/SILVER/COPPER_AMOUNT (any language). Source: the loot window's
+    creature or object. Stored as item FN.COIN (0), its count the copper. Vendor value and sales left out.
+  - Map: a Money tab (Media/icons/money-white.tga: Codex's single silver coin, design/icons-v2-2026-11-04/coin.png), heat and hot
+    spots by coin loots, the key and hot spots say how much (FN.FormatMoney: "2g 14s 36c", coin letters
+    in their colors), dashboard row shows the amount. Stats page: Money and Per hour tiles as amounts,
+    "Where it came from" donut by zone, Best sources card. Demo mode has sample coin.
+  - Session: a Money row (amount, per hour, loots). It never starts a session, a pause holds it out, and it
+    is not counted as a gather. Known: the dock's material dropdown shows only "All money" on the Money page.
+  - Checks pass (56, five new; the stub now fires each frame once per event). Copied to Era and Forever.
+    Not yet seen in game; needs a full client restart for the new icon. Not committed.
+- Session rates steadied (2026-11-10, Karl: the money rate ticking every second was distracting): every
+  per-hour rate in the session window now moves in whole minutes and with each gather, and Money's rate
+  drops its copper once it passes a silver an hour. Checks pass (56), copied to Era and Forever. Not seen in game.

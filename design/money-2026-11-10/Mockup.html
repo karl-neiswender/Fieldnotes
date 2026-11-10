@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money category</title>
+<style>
+  :root {
+    --bg: #2b2a27; --top: #0f0e0d; --bottom: #060606;
+    --text: #e8e8e8; --ink2: #bdbdbd; --sub: #999;
+    --skin: #e8803b; --mine: #e35445; --herb: #70bf4f; --fish: #4fa3e0; --cloth: #a67ddb; --treas: #40c7ad;
+    --cu: #c8814a; --ag: #c9ccd4;
+  }
+  /* A: today's look. Gold is the chosen state, the headings and the window edge. Money takes coin yellow. */
+  .themeA { --edge: #544a33; --frame: #c79b1a; --head: #ffd75e; --chosen: #ffd100; --chosenFill: linear-gradient(90deg, #614a0f, #1c1404); --money: #f5c542; --rule: rgba(84,74,51,.8); }
+  /* B: neutral look. Chosen and headings turn to warm ivory, edges to bronze grey. Gold belongs to money only. */
+  .themeB { --edge: #4a463f; --frame: #8a8070; --head: #ece4d0; --chosen: #f2ead6; --chosenFill: linear-gradient(90deg, #3d3a33, #191816); --money: #ffcc33; --rule: rgba(90,86,78,.8); }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px 48px; background: var(--bg); color: var(--text); font: 13px/1.4 "Segoe UI", Arial, sans-serif; }
+  h1 { margin: 0 0 4px; font-size: 20px; color: #ffd75e; font-weight: 600; }
+  h2 { margin: 28px 0 4px; font-size: 16px; font-weight: 600; }
+  .lede { margin: 0 0 14px; color: var(--ink2); max-width: 78ch; }
+  .tag { display: inline-block; min-width: 20px; color: #ffd75e; }
+  .rec { font-size: 11px; color: #4cd964; margin-left: 6px; font-weight: 400; }
+
+  /* what counts */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; max-width: 1040px; }
+  .card { background: #1d1c1a; border: 1px solid #3d3a33; border-radius: 6px; padding: 12px 14px; }
+  .card h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+  .card p { margin: 0 0 6px; color: var(--ink2); }
+  .card ul { margin: 0; padding-left: 18px; color: var(--ink2); }
+  .card li { margin: 2px 0; }
+  .card .yes { color: #9be29b; } .card .no { color: #e8a0a0; }
+  .card.pick { border-color: #4cd964; }
+
+  /* color comparison */
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; margin-top: 10px; }
+  .opt { width: 470px; max-width: 100%; }
+  .opt h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .opt p.note { margin: 3px 0 10px; color: var(--ink2); min-height: 76px; }
+  .stage { display: flex; gap: 16px; padding: 18px 14px; border-radius: 4px; background: linear-gradient(160deg, #4a5a48, #33402f 55%, #3d3a2e); }
+
+  /* the dock's tab stack */
+  .tabs { display: flex; flex-direction: column; gap: 4px; flex: none; }
+  .tab { position: relative; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--edge); border-left: 0;
+    border-radius: 0 7px 7px 0; background: linear-gradient(90deg, #1a1815, #0b0a09); }
+  .tab.word { height: 92px; writing-mode: vertical-rl; font-size: 13px; color: var(--head); border-color: var(--frame); }
+  .tab .i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); opacity: .75; }
+  .tab.on { background: var(--chosenFill); border-color: var(--chosen); }
+  .tab.on::before { content: ""; position: absolute; left: -1px; top: 6px; bottom: 6px; width: 2px; background: var(--chosen); }
+  .tab.on .i { opacity: 1; }
+  .tab.coin .i { width: 14px; height: 14px; background: radial-gradient(circle at 35% 35%, #fff3b0, var(--money) 55%, #8a6510); }
+
+  /* the session window */
+  .win { width: 236px; padding: 0 14px 14px; background: linear-gradient(var(--top), var(--bottom)); border: 1px solid var(--frame); border-radius: 6px; }
+  .head { height: 34px; display: flex; align-items: center; gap: 7px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #4cd964; box-shadow: 0 0 5px #4cd964; }
+  .title { color: var(--head); font-size: 12px; font-weight: 600; }
+  .clock { color: var(--ink2); font-size: 11px; }
+  .prof { height: 34px; display: grid; grid-template-columns: 20px 1fr auto; column-gap: 8px; align-items: start; font-size: 12px; }
+  .chip { width: 20px; height: 20px; margin-top: 2px; border-radius: 3px; display: grid; place-items: center; font-size: 10px; font-weight: 700;
+    color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+  .prof.tall { height: 46px; }
+  .sub { font-size: 10px; line-height: 1.3; color: var(--sub); grid-column: 2 / 4; margin-top: -2px; }
+  .money { color: var(--money); }
+  .rule { height: 1px; background: var(--rule); margin: 4px 0 8px; }
+  .loot { height: 20px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .ic { width: 16px; height: 16px; background: #6e5637; border-radius: 2px; }
+  .loot b { margin-left: auto; font-weight: 400; color: var(--chosen); }
+  .btns { display: flex; gap: 8px; margin-top: 10px; }
+  .btn { flex: 1; height: 22px; line-height: 20px; text-align: center; font-size: 11px; color: var(--ink2); background: #1b1916; border: 1px solid var(--edge); border-radius: 3px; }
+  .btn.on { color: var(--chosen); border-color: var(--chosen); }
+
+  /* coins, the game's own way: gold, silver, copper */
+  .coins { white-space: nowrap; }
+  .coins i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px 0 2px; vertical-align: 0; }
+  .g { background: var(--money); } .s { background: var(--ag); } .c { background: var(--cu); }
+  .verdict { margin-top: 10px; font-size: 12px; color: var(--ink2); }
+  .verdict b { color: var(--text); font-weight: 600; }
+  .muted { color: var(--sub); font-size: 12px; max-width: 78ch; }
+</style>
+</head>
+<body>
+  <h1>Money: a new category</h1>
+  <p class="lede">Mockup for discussion (2026-11-10). Two decisions: what counts as money, and which color it gets. Typefaces and icons are stand-ins. Sample session: 31 minutes in Stranglethorn Vale.</p>
+
+  <h2>1. What counts as money?</h2>
+  <div class="cards">
+    <div class="card pick">
+      <h3><span class="tag">A</span>Coin you loot <span class="rec">suggested</span></h3>
+      <p>The copper, silver and gold in a loot window, from creatures and chests.</p>
+      <ul>
+        <li class="yes">Has a place, so it gets a map tab and heat like every other category: where the money drops.</li>
+        <li class="yes">Exact. Fieldnotes already sees coin in loot windows.</li>
+        <li class="no">Leaves out what your leather and ore are worth.</li>
+      </ul>
+    </div>
+    <div class="card pick">
+      <h3><span class="tag">B</span>Plus "worth at a vendor" <span class="rec">suggested, as a second line</span></h3>
+      <p>Each item you gathered, priced at what a vendor pays. Shown in the session, never on the map.</p>
+      <ul>
+        <li class="yes">Answers "was this farm worth it?" without selling anything.</li>
+        <li class="yes">The game knows every item's vendor price.</li>
+        <li class="no">An estimate. The auction house pays more for most leather and herbs.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="tag">C</span>What you actually sell</h3>
+      <p>Vendor sales (the money that arrives while a vendor is open) and auction house sales (read from your mail).</p>
+      <ul>
+        <li class="yes">The real number.</li>
+        <li class="no">Not gathering: it happens in town, often days later, and has no place on the map.</li>
+        <li class="no">AH money only shows when you open your mail. Belongs in a later ledger feature, if at all.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="muted" style="margin-top:10px">Suggestion: A is the category (tab, map, session row). B is one extra line under it in the session window and the stats. C waits.</p>
+
+  <h2>2. Which color?</h2>
+  <p class="lede">The same dock tabs and session window in both. Money is chosen on the tabs. In the session, Pause is the gold "next step" button and the loot counts are gold.</p>
+  <div class="row">
+    <div class="opt themeA">
+      <h3><span class="tag">A</span>Keep today's gold look</h3>
+      <p class="note">Gold stays the chosen state, the headings and the window edge (Forever Goal Tracker's look). Money gets a coin yellow. Money's numbers, the chosen tab and the loot counts all read as the same gold, so it is hard to tell "money" from "selected".</p>
+      <div class="stage">
+        <div class="tabs">
+          <div class="tab word">Fieldnotes</div>
+          <div class="tab" style="--c:var(--skin)"><span class="i"></span></div>
+          <div class="tab" style="--c:var(--mine)"><span class="i"></span></div>
+          <div class="tab" style="--c:var(--cloth)"><span class="i"></span></div>
+          <div class="tab coin on"><span class="i"></span></div>
+        </div>
+        <div class="win">
+          <div class="head"><span class="dot"></span><span class="title">Session</span><span class="clock">31:08</span></div>
+          <div class="prof" style="--c:var(--skin)"><span class="chip">S</span><span>Skinning</span><span>38</span><span class="sub">+11 skill  ·  73/hr</span></div>
+          <div class="prof tall" style="--c:var(--money)"><span class="chip">$</span><span>Money</span><span class="money coins">2<i class="g"></i>14<i class="s"></i>36<i class="c"></i></span><span class="sub">4g 12s/hr<br>Loot worth 1g 80s at a vendor</span></div>
+          <div class="rule"></div>
+          <div class="loot"><span class="ic"></span>Medium Leather<b>x 22</b></div>
+          <div class="loot"><span class="ic"></span>Heavy Leather<b>x 9</b></div>
+          <div class="btns"><div class="btn on">Pause</div><div class="btn">End session</div></div>
+        </div>
+      </div>
+      <p class="verdict"><b>Keeps the family look.</b> Money does not stand out.</p>
+    </div>
+
+    <div class="opt themeB">
+      <h3><span class="tag">B</span>Neutral look, gold is money <span class="rec">suggested</span></h3>
+      <p class="note">The chosen state and headings turn warm ivory, and edges turn bronze grey. Every bit of gold on screen then means money, the same way the game's own coin colors do. The windows stop matching Forever Goal Tracker's gold, and every window gets a restyle.</p>
+      <div class="stage">
+        <div class="tabs">
+          <div class="tab word">Fieldnotes</div>
+          <div class="tab" style="--c:var(--skin)"><span class="i"></span></div>
+          <div class="tab" style="--c:var(--mine)"><span class="i"></span></div>
+          <div class="tab" style="--c:var(--cloth)"><span class="i"></span></div>
+          <div class="tab coin on"><span class="i"></span></div>
+        </div>
+        <div class="win">
+          <div class="head"><span class="dot"></span><span class="title">Session</span><span class="clock">31:08</span></div>
+          <div class="prof" style="--c:var(--skin)"><span class="chip">S</span><span>Skinning</span><span>38</span><span class="sub">+11 skill  ·  73/hr</span></div>
+          <div class="prof tall" style="--c:var(--money)"><span class="chip">$</span><span>Money</span><span class="money coins">2<i class="g"></i>14<i class="s"></i>36<i class="c"></i></span><span class="sub">4g 12s/hr<br>Loot worth 1g 80s at a vendor</span></div>
+          <div class="rule"></div>
+          <div class="loot"><span class="ic"></span>Medium Leather<b>x 22</b></div>
+          <div class="loot"><span class="ic"></span>Heavy Leather<b>x 9</b></div>
+          <div class="btns"><div class="btn on">Pause</div><div class="btn">End session</div></div>
+        </div>
+      </div>
+      <p class="verdict"><b>Money owns gold.</b> Bigger change: Style.lua's colors, every window.</p>
+    </div>
+  </div>
+  <p class="muted" style="margin-top:14px">Either way, amounts use the game's own coin colors (gold, silver, copper dots), and the heat on Money's map tab uses the usual ramps (Thermal, Solar...), not gold. The "$" chip is a stand-in until there is a coin icon.</p>
+</body>
+</html>

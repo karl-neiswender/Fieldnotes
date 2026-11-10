@@ -36,7 +36,10 @@ Widget.__index = function(t, k)
   return function() end
 end
 function NewWidget(kind) return setmetatable({ kind = kind, events = {}, scripts = {}, shown = true, w = 0, h = 0, text = "" }, Widget) end
-function Widget:RegisterEvent(e) self.events[e] = true; handlers[#handlers + 1] = self end
+function Widget:RegisterEvent(e)
+  if not next(self.events) then handlers[#handlers + 1] = self end -- (once per frame, as the game calls it)
+  self.events[e] = true
+end
 function Widget:UnregisterEvent(e) self.events[e] = nil end
 function Widget:SetScript(name, fn) self.scripts[name] = fn end
 function Widget:HookScript(name, fn) self.scripts[name] = fn end
@@ -61,6 +64,7 @@ function Widget:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
 function Widget:CreateTexture() local t = NewWidget("texture"); t.owner = self; textures[#textures + 1] = t; return t end
 function Widget:CreateFontString() return NewWidget("fontstring") end
 function Widget:CreateLine() local l = NewWidget("line"); l.owner = self; return l end
+function Widget:SetPoint(...) local n = select("#", ...); self.pn, self.py = (...), select(n, ...) end
 function Widget:Click() if self.scripts.OnClick then self.scripts.OnClick(self) end end
 textures = {}
 function CreateFrame(kind, name, parent) local f = NewWidget(kind); f.parent = parent; return f end
@@ -253,6 +257,22 @@ Fire("LOOT_READY"); Fire("LOOT_CLOSED")
 treasureOk = Count("treasure") == 1 and Last("treasure"):find(":2843:1:0:118=1$") ~= nil
   and FieldnotesDB.nodes[2843].name == "Battered Chest"
 
+-- money: coin from a loot window, read from the game's loot line, once, with its source; a line
+-- that is not a loot (a quest's reward) does not count
+YOU_LOOT_MONEY, LOOT_MONEY_SPLIT = "You loot %s", "Your share of the loot is %s."
+local moneyBefore = Count("money")
+now = now + 5
+loot = { { money = true, guid = "Creature-0-1-0-1-116-00000EEE" } }
+Fire("LOOT_READY")
+Fire("CHAT_MSG_MONEY", "You loot 2 Silver, 14 Copper")
+Fire("LOOT_CLOSED")
+Fire("CHAT_MSG_MONEY", "You receive 5 Silver.")
+now = now + 3
+Fire("CHAT_MSG_MONEY", "Your share of the loot is 7 Copper.")
+local moneyRecs = FieldnotesDB.events.money and FieldnotesDB.events.money[1434] or {}
+moneyOk = Count("money") == moneyBefore + 2 and moneyRecs[1] and moneyRecs[1]:find(":116:1:0:0=214$") ~= nil
+  and moneyRecs[2]:find(":0=7$") ~= nil
+
 SlashCmdList.FIELDNOTES("summary")
 SlashCmdList.FIELDNOTES("")
 local trackerShown = ns.session.count == 1
@@ -357,6 +377,13 @@ FieldnotesDB.settings.map.prof = "all"
 FieldnotesDB.settings.map.leather = "hides"
 ns.Map.SetProf("skinning")
 keyOpens = keyOpens and FieldnotesDB.settings.map.leather == 0 and FieldnotesDB.settings.map.prof == "skinning"
+-- Money: its page draws, leads with an amount, and the dashboard sums its copper
+FieldnotesDB.settings.map.prof = "money"
+Open("heat", "account")
+local mm = ns.Map.model
+moneyMapOk = mm.prof == "money" and mm.p.money == true and (mm.skins == 0 or (mm.copper or 0) > 0)
+  and (ns.Map.Summary("account", 0).money.copper or 0) > 0
+Open("points", "account")
 FieldnotesDB.settings.map.prof = "skinning"
 FieldnotesDB.settings.map.leather = 0
 Open("heat", "account")
@@ -479,6 +506,160 @@ do
   tf.scripts.OnHide(tf)
   local panelGoes = not sp:IsShown()
   trackerPanelOk = panelOpens and panelCloses and panelGoes
+  -- Expand up: the header keeps its spot on screen, the window hangs from its bottom edge, and the
+  -- sections keep their reading order above it (rows, loot, then the buttons just over the header)
+  do
+    local pos = { "TOPLEFT", "BOTTOMLEFT", 500, 700 }
+    tf.GetLeft, tf.GetTop, tf.GetBottom = function() return 500 end, function() return 700 end, function() return 500 end
+    tf.GetPoint = function() return pos[1], nil, pos[2], pos[3], pos[4] end
+    tf.SetPoint = function(_, p, _, rp, x, y) pos = { p, rp, x, y } end
+    ns.SessionStart()
+    ns.SessionGather("skinning", 1, { [2318] = 3 })
+    ns.SessionGather("mining", 1731, { [2770] = 1 })
+    ns.UpdateTracker()
+    local downH = tf:GetHeight()
+    ns.SetTrackerExpand("up")
+    local s = FieldnotesDB.settings
+    local turned = pos[1] == "BOTTOMLEFT" and pos[4] == 660 and s.trackerExpand == "up"
+      and s.trackerPos[1] == "BOTTOMLEFT" and s.trackerPos[4] == 660
+    local p, h = ns.TrackerParts(), tf:GetHeight()
+    local ic1, ic2, r1, r2 = p.loot[1].icon.py, p.loot[2].icon.py, p.rows[1].chip.py, p.rows[2].chip.py
+    local stacked = h == downH and p.dot.pn == "BOTTOMLEFT" and p.grip.pn == "TOPRIGHT" and r1 == -16 and r2 == r1 - 34
+      and p.rule.py < r2 - 20 and ic1 < p.rule.py and ic2 == ic1 - 20 and p.pause.py < ic2 - 16 and p.pause.py - 22 == 36 - h
+    s.trackerCompact = true
+    ns.UpdateTracker()
+    local folds = p.summary.pn == "BOTTOMLEFT" and p.summary.py == 36 and tf:GetHeight() == 58
+    s.trackerCompact = false
+    tf.GetTop = function() return 900 end
+    ns.SetTrackerExpand("down")
+    local back = pos[1] == "TOPLEFT" and pos[4] == 540 and s.trackerExpand == nil and p.dot.pn == "TOPLEFT"
+      and p.pause.py == 36 - tf:GetHeight()
+    ns.SessionEnd()
+    s.trackerPos = nil
+    tf.GetLeft, tf.GetTop, tf.GetBottom, tf.GetPoint, tf.SetPoint = nil, nil, nil, nil, nil
+    trackerExpandOk = turned and stacked and folds and back
+  end
+  -- a /reload carries the session over (the clock without the reload's own moments); a real log in
+  -- drops it; moving between zones touches nothing
+  do
+    ns.SessionStart()
+    ns.SessionGather("mining", 1731, { [2770] = 2 })
+    now = now + 90
+    local secs = ns.SessionSeconds()
+    Fire("PLAYER_LOGOUT")
+    local wasSaved = FieldnotesDB.liveSession ~= nil
+    ns.SessionEnd() -- a reload empties memory
+    now = now + 30
+    Fire("PLAYER_ENTERING_WORLD", false, true)
+    local s = ns.session
+    local cameBack = wasSaved and ns.SessionRunning() and s.total == 1 and s.profs.mining.count == 1
+      and s.allLoot[2770] == 2 and s.order[1] == "mining" and ns.SessionSeconds() == secs
+      and FieldnotesDB.liveSession == nil and tf:IsShown()
+    Fire("PLAYER_LOGOUT")
+    ns.SessionEnd()
+    Fire("PLAYER_ENTERING_WORLD", true, false)
+    local dropped = not ns.SessionRunning() and FieldnotesDB.liveSession == nil
+    ns.SessionStart()
+    Fire("PLAYER_ENTERING_WORLD", false, false)
+    local zoned = ns.SessionRunning()
+    ns.SessionEnd()
+    Fire("PLAYER_LOGOUT")
+    local nothingSaved = FieldnotesDB.liveSession == nil
+    trackerReloadOk = cameBack and dropped and zoned and nothingSaved
+  end
+  -- AFK pauses a running session and coming back resumes it; a pause by hand stays paused
+  do
+    local away = false
+    UnitIsAFK = function(u) return u == "player" and away end
+    ns.SessionStart()
+    now = now + 60
+    away = true
+    Fire("PLAYER_FLAGS_CHANGED", "target")
+    local otherUnit = not ns.SessionPaused()
+    Fire("PLAYER_FLAGS_CHANGED", "player")
+    local paused = ns.SessionPaused()
+    now = now + 600
+    away = false
+    Fire("PLAYER_FLAGS_CHANGED", "player")
+    local resumed = not ns.SessionPaused() and ns.SessionSeconds() == 60
+    ns.SessionTogglePause()
+    away = true
+    Fire("PLAYER_FLAGS_CHANGED", "player")
+    away = false
+    Fire("PLAYER_FLAGS_CHANGED", "player")
+    local handStays = ns.SessionPaused()
+    ns.SessionTogglePause()
+    away = true
+    Fire("PLAYER_FLAGS_CHANGED", "player")
+    ns.SessionTogglePause() -- resumed by hand while still away
+    away = false
+    Fire("PLAYER_FLAGS_CHANGED", "player")
+    local clickWins = not ns.SessionPaused()
+    ns.SessionEnd()
+    UnitIsAFK = nil
+    trackerAfkOk = otherUnit and paused and resumed and handStays and clickWins
+  end
+  -- Money joins a running session as an amount: it never starts one, a pause holds it out, it is not
+  -- a gather, and the window shows it formatted
+  do
+    local p = ns.TrackerParts()
+    ns.SessionGather("money", 116, { [0] = 500 })
+    local noStart = not ns.SessionRunning()
+    ns.SessionStart()
+    ns.SessionGather("skinning", 1, { [2318] = 1 })
+    ns.SessionGather("money", 116, { [0] = 21436 })
+    local e = ns.session.profs.money
+    local joins = e ~= nil and e.copper == 21436 and e.count == 1 and ns.session.total == 1
+      and ns.SessionLabel() == "1 skin" and ns.session.allLoot[0] == nil
+    ns.SessionTogglePause()
+    ns.SessionGather("money", 116, { [0] = 100 })
+    local held = e ~= nil and e.copper == 21436
+    ns.SessionTogglePause()
+    ns.UpdateTracker()
+    local shown = p.rows[2].count.text
+    local shows = shown:find("^2") ~= nil and shown:find("36") ~= nil and p.rows[2].sub.text:find("per hour") ~= nil
+    ns.SessionEnd()
+    p.finish:Click()
+    trackerMoneyOk = noStart and joins and held and shows and ns.FormatMoney(21436, true) == "2g 14s 36c"
+      and ns.FormatMoney(0, true) == "0c" and ns.FormatMoney(10005, true) == "1g 5c"
+  end
+  -- End session opens the recap; Undo puts the session back with the same clock; Done closes it; an
+  -- empty session opens nothing; the next session replaces it; a /reload keeps it
+  do
+    local p = ns.TrackerParts()
+    ns.SessionStart()
+    ns.SessionGather("mining", 1731, { [2770] = 2 })
+    ns.SessionGather("skinning", 1, { [2318] = 1 })
+    now = now + 60
+    local secs = ns.SessionSeconds()
+    ns.SessionEnd()
+    local opens = not ns.SessionRunning() and tf:IsShown() and p.title.text == "Session ended"
+      and p.pause.text.text == "Undo" and p.finish.text.text == "Done" and p.rows[1].name.text ~= ""
+      and p.rows[1].sub.text:find("/hr") ~= nil and p.rows[1].rate.text == ""
+    now = now + 45
+    ns.SessionUndo()
+    local undone = ns.SessionRunning() and ns.session.total == 2 and ns.SessionSeconds() == secs and ns.session.allLoot[2770] == 2
+      and p.title.text == "Session" and p.pause.text.text == "Pause" and p.finish.text.text == "End session" and ns.SessionRecap() == nil
+    ns.SessionEnd()
+    p.finish:Click()
+    local done = not tf:IsShown() and ns.SessionRecap() == nil and not ns.SessionRunning()
+    ns.SessionStart()
+    ns.SessionEnd()
+    local emptyCloses = not tf:IsShown() and ns.SessionRecap() == nil
+    ns.SessionStart()
+    ns.SessionGather("mining", 1731, { [2770] = 1 })
+    ns.SessionEnd()
+    ns.SessionGather("mining", 1731, { [2770] = 1 })
+    local replaced = ns.SessionRunning() and ns.session.total == 1 and p.title.text == "Session" and ns.SessionRecap() == nil
+    ns.SessionEnd()
+    Fire("PLAYER_LOGOUT")
+    ns.SessionDone() -- a reload empties memory
+    Fire("PLAYER_ENTERING_WORLD", false, true)
+    local reloaded = ns.SessionRecap() ~= nil and tf:IsShown() and not ns.SessionRunning() and FieldnotesDB.liveSession == nil
+    ns.CloseTracker()
+    local xCloses = not tf:IsShown() and ns.SessionRecap() == nil
+    trackerRecapOk = opens and undone and done and emptyCloses and replaced and reloaded and xCloses
+  end
   now = t0
   trackerWindowOk = stayed and hid and reopenedStays and autoRespected and clickOverrides and biggest and smallest
     and closedStays and closedReopens and newSessionShows and carriesOn and fullByDefault and opacitySet and opacityFloor
@@ -488,6 +669,7 @@ local sessionOn = ns.SessionRunning()
 ns.SessionEnd()
 print("map        layouts: maximized " .. tostring(toolbarLayout) .. ", small " .. tostring(dockLayout))
 local layouts = (toolbarLayout == "toolbar" and dockLayout == "dock" and sessionOn and not ns.SessionRunning()) and 1 or 0
+neutralOk = ns.Style.C.TITLE[3] > 0.7 and ns.Style.STYLE.rowSel.edge[3] > 0.7 and ns.Style.C.MONEY[3] < 0.4
 local mapResult = layouts .. "," .. continentBadges .. "," .. spot .. "," .. hides .. "," .. settingsOpen .. "," .. recent .. "," .. heat .. "," .. pointsMe .. "," .. pointsAll .. "," .. pointsCommunity .. "," .. empty .. "," .. off .. "," .. spotsListed .. "," .. heatDots
 
 -- 7. the Stats page in the dock, on the demo: /fn opens it, the Stats tab closes it again
@@ -510,9 +692,13 @@ page:Update()
 local allCount = #page.data.recs
 local skinOnly = 0
 for _ in pairs(page.data.byProf) do skinOnly = skinOnly + 1 end
+local noCoinItem = page.data.items[0] == nil
 mapS.statsProf = "cloth"
 page:Update()
 local clothCard = next(page.data.cloth) ~= nil
+mapS.statsProf = "money"
+page:Update()
+statsMoneyOk = noCoinItem and page.data.copper > 0 and u.tiles[1].label.text == "Money" and page.data.items[0] == nil
 mapS.statsProf = "all"
 ns.MapUI.dock.stats.scripts.OnClick(ns.MapUI.dock.stats)
 statsPageOk = opened and not ns.StatsShown() and skinOnly >= 5 and allCount > 3000 and clothCard
@@ -644,6 +830,15 @@ def play(flavor, stubs, verbose):
          rt.globals().trackerWindowOk is True),
         ("session window: the gear's settings panel opens, closes and goes with the window",
          rt.globals().trackerPanelOk is True),
+        ("session window expands up: header holds still, sections in reading order", rt.globals().trackerExpandOk is True),
+        ("session: a /reload carries it over, a real log in does not", rt.globals().trackerReloadOk is True),
+        ("session recap: End opens it, Undo restores, Done closes, a reload keeps it", rt.globals().trackerRecapOk is True),
+        ("money: looted coin recorded once from the loot line; a quest reward is not", rt.globals().moneyOk is True),
+        ("money in a session: joins as an amount, never starts one, held out while paused", rt.globals().trackerMoneyOk is True),
+        ("money on the map: its page draws with an amount; the dashboard sums it", rt.globals().moneyMapOk is True),
+        ("money on the stats page: amount tiles; coin never listed as an item", rt.globals().statsMoneyOk is True),
+        ("neutral look: chosen and headings are ivory, gold is money's", rt.globals().neutralOk is True),
+        ("session: AFK pauses it, coming back resumes it, a pause by hand stays", rt.globals().trackerAfkOk is True),
         ("skill cap: one trainer alert, the tracker folds and opens", bool(cap_alert)),
         ("share: demo text reads back whole, a cut-off paste is caught, import adds to Community", bool(demo_share)),
         ("share: demo text and your own text are refused; someone else's joins Community", real_share == "ok"),

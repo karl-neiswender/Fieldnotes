@@ -34,10 +34,10 @@ ICONS = [
     ("fishing", "fishing-white"), ("cloth", "cloth-white"), ("statistics", "stats-white"),
     ("gear", "gear-white"), ("play", "play-white"), ("pause", "pause-white"), ("stop", "stop-white"),
     ("share", "share-white"), ("warning", "warning-white"), ("book", "book-white"),
-    ("treasure", "treasure-white"),
+    ("book-open", "book-open-white"), ("treasure", "treasure-white"), ("coin", "money-white"),
 ]
 TINT = {"skinning": (232, 128, 58), "mining": (227, 84, 69), "treasure": (242, 212, 58), "herbalism": (111, 191, 79),
-        "fishing": (79, 163, 224), "cloth": (167, 125, 220)}
+        "fishing": (79, 163, 224), "cloth": (167, 125, 220), "coin": (255, 204, 51)}
 
 
 def ink(im):

@@ -1,19 +1,22 @@
 local ADDON, FN = ...
 
--- The look Fieldnotes shares with Forever Goal Tracker, so the two read as one family:
--- etched tiles (a warm vertical gradient inside the tooltip border, with a 1px sheen catching
--- light along the top), gold for whatever is chosen, title-gold headings with a dark drop
--- shadow, and the same pill switch, knob and icons (Media/pill, Media/knob, Media/icons).
--- Colors and gradients are Forever Goal Tracker's own values (its Core.lua C and STYLE).
+-- The Fieldnotes look: etched tiles (a dark vertical gradient inside the tooltip border, with a 1px
+-- sheen catching light along the top), Forever Goal Tracker's pill switch, knob and icons
+-- (Media/pill, Media/knob, Media/icons). Neutral since 2026-11-10 (Karl, design/money-2026-11-10,
+-- option 2B): warm ivory for whatever is chosen and for headings, bronze-grey edges. Gold is kept
+-- for money alone (C.MONEY and the coin colors), the way the game colors its own coins.
 -- Text uses the game's own font (STANDARD_TEXT_FONT) at set sizes.
 
 local St = {}
 FN.Style = St
 
 local C = {
-    TITLE   = { 1.00, 0.843, 0.369 }, -- heading gold
-    ACCENT  = { 1.00, 0.82, 0.00 },   -- gold
-    GOLD2   = { 0.784, 0.608, 0.102 }, -- deep gold
+    TITLE   = { 0.925, 0.894, 0.816 }, -- heading ivory
+    ACCENT  = { 0.949, 0.918, 0.839 }, -- chosen ivory
+    GOLD2   = { 0.541, 0.502, 0.439 }, -- bronze grey (the name is older than the neutral look)
+    MONEY   = { 1.00, 0.80, 0.20 },    -- money, and only money
+    SILVER  = { 0.788, 0.800, 0.831 }, -- the silver coin
+    COPPER  = { 0.784, 0.506, 0.290 }, -- the copper coin
     TEXT    = { 0.91, 0.91, 0.91 },
     INK2    = { 0.741, 0.741, 0.741 },
     SUBTEXT = { 0.600, 0.600, 0.600 }, -- (was 0.541: small grey labels on brown read faint)
@@ -21,16 +24,16 @@ local C = {
 St.C = C
 
 local STYLE = {
-    window   = { top = { 0.105, 0.095, 0.080 }, bottom = { 0.016, 0.016, 0.016 }, edge = { 0.78, 0.61, 0.10, 1 } },
-    row      = { top = { 0.150, 0.142, 0.130 }, bottom = { 0.050, 0.048, 0.045 }, edge = { 0.28, 0.26, 0.22, 1 } },
-    panel    = { top = { 0.060, 0.057, 0.052 }, bottom = { 0.022, 0.022, 0.022 }, edge = { 0.33, 0.29, 0.20, 1 } },
-    button   = { top = { 0.240, 0.225, 0.200 }, bottom = { 0.080, 0.075, 0.068 }, edge = { 0.42, 0.37, 0.26, 1 } },
-    btnHover = { top = { 0.330, 0.300, 0.240 }, bottom = { 0.120, 0.110, 0.090 }, edge = { 0.85, 0.68, 0.20, 1 } },
-    rowSel   = { top = { 0.380, 0.290, 0.060 }, bottom = { 0.110, 0.080, 0.015 }, edge = { 1.00, 0.82, 0.00, 1 } },
-    goldHover = { top = { 0.470, 0.365, 0.085 }, bottom = { 0.155, 0.115, 0.025 }, edge = { 1.00, 0.89, 0.30, 1 } },
-    -- the map dock and its tab: Forever Goal Tracker's warm brown window fill (with St.Grime over
-    -- it), edged like a panel so the map window's own gold frame stays the strongest line
-    dock     = { top = { 0.105, 0.095, 0.080 }, bottom = { 0.016, 0.016, 0.016 }, edge = { 0.33, 0.29, 0.20, 1 } },
+    window   = { top = { 0.105, 0.095, 0.080 }, bottom = { 0.016, 0.016, 0.016 }, edge = { 0.54, 0.50, 0.44, 1 } },
+    row      = { top = { 0.150, 0.144, 0.135 }, bottom = { 0.050, 0.048, 0.046 }, edge = { 0.27, 0.26, 0.24, 1 } },
+    panel    = { top = { 0.060, 0.058, 0.054 }, bottom = { 0.022, 0.022, 0.022 }, edge = { 0.30, 0.285, 0.26, 1 } },
+    button   = { top = { 0.235, 0.226, 0.212 }, bottom = { 0.080, 0.077, 0.072 }, edge = { 0.40, 0.38, 0.35, 1 } },
+    btnHover = { top = { 0.315, 0.302, 0.282 }, bottom = { 0.115, 0.110, 0.102 }, edge = { 0.74, 0.71, 0.65, 1 } },
+    rowSel   = { top = { 0.250, 0.240, 0.220 }, bottom = { 0.090, 0.087, 0.080 }, edge = { 0.949, 0.918, 0.839, 1 } },
+    goldHover = { top = { 0.320, 0.308, 0.285 }, bottom = { 0.120, 0.116, 0.106 }, edge = { 1.00, 0.97, 0.90, 1 } },
+    -- the map dock and its tab: the window fill (with St.Grime over it), edged like a panel so the
+    -- map window's own frame stays the strongest line
+    dock     = { top = { 0.105, 0.095, 0.080 }, bottom = { 0.016, 0.016, 0.016 }, edge = { 0.30, 0.285, 0.26, 1 } },
 }
 St.STYLE = STYLE
 
@@ -97,7 +100,7 @@ function St.Etch(frame, style, edgeSize, alpha)
     frame.etchHi:SetHeight(1)
     frame.etchHi:SetPoint("TOPLEFT", inset, -inset)
     frame.etchHi:SetPoint("TOPRIGHT", -inset, -inset)
-    frame.etchHi:SetVertexColor(1, 0.92, 0.70, 0.07)
+    frame.etchHi:SetVertexColor(1, 0.97, 0.90, 0.07)
     local current, fade = style, 1
     function frame:SetEtch(st)
         current = st
@@ -118,7 +121,7 @@ end
 
 -- A pill: a fixed-height rounded bar, in three slices of Media/pill (round caps, a stretched
 -- middle), so a hover can be as wide as its row with true round ends.
---   local p = St.Pill(frame, 15); p:Anchor(frame, 4, 4); p:SetColor(1, 0.82, 0, 0.14)
+--   local p = St.Pill(frame, 15); p:Anchor(frame, 4, 4); p:SetColor(1, 0.96, 0.86, 0.14)
 function St.Pill(parent, h, layer, sub)
     local p = {}
     local file = St.Media("pill")
@@ -158,23 +161,23 @@ function St.Text(parent, size, color)
     return fs
 end
 
--- a heading: title gold with a dark drop shadow
+-- a heading: title ivory with a dark drop shadow
 function St.Title(parent, size)
     local fs = St.Text(parent, size or 13, C.TITLE)
-    fs:SetShadowColor(0.2, 0.14, 0.02, 1)
+    fs:SetShadowColor(0.06, 0.055, 0.05, 1)
     fs:SetShadowOffset(1, -1)
     return fs
 end
 
--- A small etched button; b:SetChosen(true) makes it gold, the way Forever Goal Tracker marks
--- the chosen option in a row of choices.
+-- A small etched button; b:SetChosen(true) lights it ivory, marking the chosen option in a row
+-- of choices.
 function St.ChoiceButton(parent, onClick)
     local b = St.Frame("Button", parent)
     St.Etch(b, STYLE.button, 8)
     b.text = St.Text(b, 10, C.INK2)
     b.text:SetPoint("CENTER")
     b:SetHeight(22)
-    -- b.look (St.AccentLook) swaps the gold chosen state for a color's own; nil keeps gold
+    -- b.look (St.AccentLook) swaps the ivory chosen state for a color's own; nil keeps ivory
     function b:SetChosen(on)
         self.chosen = on
         local look = rawget(self, "look")
@@ -201,7 +204,7 @@ function St.ChoiceButton(parent, onClick)
 end
 
 -- A chosen state in a color of its own (a profession's page, Karl 2026-11-06): the same etched
--- tile as the gold one, its fill a dark step of the color, its edge the color itself, its text a
+-- tile as the ivory one, its fill a dark step of the color, its edge the color itself, its text a
 -- light step. Cached per color.
 local looks = {}
 function St.AccentLook(c)
@@ -218,11 +221,11 @@ function St.AccentLook(c)
     return look
 end
 
--- On/off switch: a pill track with a 1px rim and a gradient (gold on, dark off) and a round
+-- On/off switch: a pill track with a 1px rim and a gradient (ivory-lit on, dark off) and a round
 -- knob with its own top-lit gradient and a soft shadow. t:SetOn(on) moves it.
 local TOGGLE_LOOK = {
-    on  = { rim = { 0.85, 0.68, 0.20 }, top = { 0.55, 0.42, 0.10 }, bottom = { 0.22, 0.16, 0.03 },
-            knobTop = { 1.00, 0.96, 0.78 }, knobBottom = { 0.92, 0.70, 0.22 } },
+    on  = { rim = { 0.80, 0.77, 0.70 }, top = { 0.50, 0.48, 0.44 }, bottom = { 0.20, 0.19, 0.175 },
+            knobTop = { 1.00, 0.99, 0.96 }, knobBottom = { 0.82, 0.79, 0.72 } },
     off = { rim = { 0.32, 0.30, 0.26 }, top = { 0.17, 0.16, 0.15 }, bottom = { 0.05, 0.05, 0.05 },
             knobTop = { 0.66, 0.65, 0.62 }, knobBottom = { 0.36, 0.35, 0.33 } },
 }
@@ -243,7 +246,7 @@ function St.Toggle(parent)
     t.knob = t:CreateTexture(nil, "ARTWORK", nil, 2)
     t.knob:SetTexture(St.Media("knob"))
     t.knob:SetSize(14, 14)
-    -- t.onLook (St.ToggleLook) colors the on state; nil keeps gold
+    -- t.onLook (St.ToggleLook) colors the on state; nil keeps ivory
     function t:SetOn(on, hover)
         local L = on and (rawget(self, "onLook") or TOGGLE_LOOK.on) or TOGGLE_LOOK.off
         local lift = hover and 0.12 or 0
@@ -275,8 +278,9 @@ function St.ToggleLook(c)
     return look
 end
 
--- A recessed track with a lit gold fill (Forever Goal Tracker's progress bar, square-cornered):
--- deep amber on the left building to gold at the tip, the lower half shaded, a 1px sheen on top.
+-- A recessed track with a lit fill (Forever Goal Tracker's progress bar, square-cornered, in the
+-- neutral look): dark bronze grey on the left building to ivory at the tip, the lower half
+-- shaded, a 1px sheen on top.
 -- bar:SetValue(0..1)
 function St.Bar(parent, height)
     local bar = CreateFrame("Frame", nil, parent)
@@ -285,7 +289,7 @@ function St.Bar(parent, height)
     bar.track:SetAllPoints()
     bar.track:SetColorTexture(0.012, 0.012, 0.012, 1)
     bar.lip = bar:CreateTexture(nil, "BORDER")
-    bar.lip:SetColorTexture(1, 0.9, 0.6, 0.08)
+    bar.lip:SetColorTexture(1, 0.97, 0.88, 0.08)
     bar.lip:SetHeight(1)
     bar.lip:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
     bar.lip:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, 0)
@@ -293,7 +297,7 @@ function St.Bar(parent, height)
     bar.fill:SetTexture(SOLID)
     bar.fill:SetPoint("TOPLEFT", 1, -1)
     bar.fill:SetPoint("BOTTOMLEFT", 1, 1)
-    St.HGradient(bar.fill, { 0.32, 0.18, 0.01 }, { 1.00, 0.86, 0.30 })
+    St.HGradient(bar.fill, { 0.20, 0.19, 0.17 }, { 0.93, 0.90, 0.82 })
     bar.shade = bar:CreateTexture(nil, "ARTWORK", nil, 2)
     bar.shade:SetTexture(SOLID)
     bar.shade:SetAllPoints(bar.fill)
@@ -303,7 +307,7 @@ function St.Bar(parent, height)
     bar.sheen:SetHeight(1)
     bar.sheen:SetPoint("TOPLEFT", bar.fill, "TOPLEFT")
     bar.sheen:SetPoint("TOPRIGHT", bar.fill, "TOPRIGHT")
-    St.HGradient(bar.sheen, { 1, 0.9, 0.6 }, { 1, 1, 0.9 }, 0.05, 0.8)
+    St.HGradient(bar.sheen, { 1, 0.97, 0.88 }, { 1, 1, 0.97 }, 0.05, 0.8)
     function bar:SetValue(v)
         v = math.max(0, math.min(1, v or 0))
         local w = math.max(1, (self:GetWidth() - 2) * v)
@@ -437,7 +441,7 @@ function St.PlaceSaved(frame, key, point, relPoint, x, y)
     end
 end
 
--- A slider in the house style: a recessed track, a gold fill up to the knob, and Forever Goal
+-- A slider in the house style: a recessed track, an ivory fill up to the knob, and Forever Goal
 -- Tracker's knob. s:Set(v) places it without calling back; dragging calls onChange(v).
 function St.Slider(parent, width, min, max, step, onChange)
     local s = CreateFrame("Slider", nil, parent)
@@ -455,11 +459,11 @@ function St.Slider(parent, width, min, max, step, onChange)
     s.fill:SetTexture(SOLID)
     s.fill:SetHeight(4)
     s.fill:SetPoint("LEFT", s.track, "LEFT", 1, 0)
-    St.HGradient(s.fill, { 0.32, 0.18, 0.01 }, { 1.00, 0.86, 0.30 })
+    St.HGradient(s.fill, { 0.20, 0.19, 0.17 }, { 0.93, 0.90, 0.82 })
     local knob = s:CreateTexture(nil, "OVERLAY")
     knob:SetTexture(St.Media("knob"))
     knob:SetSize(14, 14)
-    St.VGradient(knob, { 1.00, 0.96, 0.78 }, { 0.92, 0.70, 0.22 })
+    St.VGradient(knob, { 1.00, 0.99, 0.96 }, { 0.82, 0.79, 0.72 })
     s:SetThumbTexture(knob)
     local quiet = false
     local function Fill(v)

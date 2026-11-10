@@ -56,6 +56,7 @@ local PROF_ICONS = {
     fishing = "fishing-white",
     cloth = "cloth-white",
     treasure = "treasure-white",
+    money = "money-white",
 }
 local MODES = {
     { key = "heat", label = "Heat", tip = "A glow where you gather most" },
@@ -374,7 +375,7 @@ local function ListRow(parent, onClick)
         self.text:SetTextColor(c[1], c[2], c[3])
         self.bar:SetShown(self.chosen)
         if self.chosen then
-            self.wash:SetVertexColor(1, 0.82, 0, self.hover and 0.16 or 0.10)
+            self.wash:SetVertexColor(1, 0.96, 0.86, self.hover and 0.16 or 0.10)
         else
             self.wash:SetVertexColor(1, 0.92, 0.70, self.hover and 0.07 or 0)
         end
@@ -558,7 +559,7 @@ local function SpotRow(k, i, width)
     row.rank = i
     row.wash = St.Pill(row, SPOT_ROW - 1)
     row.wash:Anchor(row, 1, 1)
-    row.wash:SetColor(1, 0.82, 0, 0)
+    row.wash:SetColor(1, 0.96, 0.86, 0)
     row.badge = row:CreateTexture(nil, "ARTWORK")
     row.badge:SetTexture(CIRCLE)
     row.badge:SetSize(13, 13)
@@ -609,7 +610,7 @@ local function SpotRow(k, i, width)
     end
     function row:Paint()
         local on = self.hover or self.lit
-        self.wash:SetColor(1, 0.82, 0, on and 0.14 or 0)
+        self.wash:SetColor(1, 0.96, 0.86, on and 0.14 or 0)
         self.halo:SetShown(on and true or false)
         if on then
             Breathe(self)
@@ -752,7 +753,7 @@ local function KeyCard(parent, width, withSpots, glass)
         local b = CreateFrame("Button", nil, k)
         b.wash = St.Pill(b, 16)
         b.wash:Anchor(b, 0, 0)
-        b.wash:SetColor(1, 0.82, 0, 0)
+        b.wash:SetColor(1, 0.96, 0.86, 0)
         local d = b:CreateTexture(nil, "ARTWORK")
         d:SetTexture(CIRCLE)
         d:SetSize(8, 8)
@@ -761,7 +762,7 @@ local function KeyCard(parent, width, withSpots, glass)
         b:SetScript("OnEnter", function(self)
             local l = self.entry
             if not l then return end
-            self.wash:SetColor(1, 0.82, 0, 0.14)
+            self.wash:SetColor(1, 0.96, 0.86, 0.14)
             CardTip(self, k)
             if l.prof then
                 M.SetLit(l.prof)
@@ -775,7 +776,7 @@ local function KeyCard(parent, width, withSpots, glass)
         end)
         if b.RegisterForClicks then b:RegisterForClicks("LeftButtonDown") end -- act on press
         b:SetScript("OnLeave", function(self)
-            self.wash:SetColor(1, 0.82, 0, 0)
+            self.wash:SetColor(1, 0.96, 0.86, 0)
             if self.entry and self.entry.prof then M.SetLit(nil) end
             GameTooltip:Hide()
         end)
@@ -846,7 +847,10 @@ local function KeyCard(parent, width, withSpots, glass)
             -- the number in the profession's color (Karl chose the strong page color, 2026-11-06)
             local n = m.skins or 0
             local word = (m.p and (n == 1 and m.p.unit or m.p.units)) or (n == 1 and "gather" or "gathers")
-            if m.p and m.p.color then
+            if m.p and m.p.money then
+                -- Money leads with the amount, its coin letters in their colors
+                self.big:SetText(FN.FormatMoney(m.copper or 0) .. "  |cff999999in " .. n .. " " .. word .. "|r")
+            elseif m.p and m.p.color then
                 self.big:SetText("|cff" .. Hex(NameTint(m.p.color)) .. n .. "|r " .. word)
             else
                 self.big:SetText(n .. " " .. word)
@@ -861,6 +865,8 @@ local function KeyCard(parent, width, withSpots, glass)
                 rows = {} -- the hot spots below name the creatures instead
             elseif m.prof == "fishing" then
                 rows = { { "Main catch", m.topLoot } }
+            elseif m.prof == "money" then
+                rows = { { "Most from", m.topWho } } -- the amount is the big line
             else
                 rows = { { m.prof == "skinning" and "Most skinned" or "Most from", m.topWho },
                     { "Main " .. (p.material or "leather"), m.topLoot } }
@@ -1514,9 +1520,9 @@ local TAB_SLIDE = 8 -- how much further the active tab reaches out (hover: 0.4 o
 local SEAM_IN = 5 -- how far into the dock the window reaches (past the dock's border)
 local RECESS = 0.72 -- inactive tabs: a shade darker, as if they sat behind the page
 local LIGHT_PEAK = 0.24 -- at the outer edge; 0.14 and 0.2 did not show in game, 0.34 was a little strong (Karl, 2026-11-05)
--- The open tab's gold edge (Karl, 2026-11-05): one gold for every tab, whatever its profession.
--- Full along the outer edge, fading along the top and bottom toward the dock.
-local EDGE_GOLD = { 1.00, 0.82, 0.00 } -- (the chosen gold, STYLE.rowSel's edge)
+-- The open tab's edge (Karl, 2026-11-05): one color for every tab, whatever its profession: the
+-- chosen ivory since the neutral look (2026-11-10), gold being money's.
+local EDGE_GOLD = C.ACCENT -- (the chosen ivory, STYLE.rowSel's edge)
 
 local function PageCopy(t)
     local clip = CreateFrame("Frame", nil, dock)
@@ -1571,6 +1577,11 @@ local function NewArt(t, chosen)
         if r ~= f.Icon and r.GetObjectType and r:GetObjectType() == "Texture" then
             r:ClearAllPoints()
             r:SetAllPoints(f)
+            -- the game's chosen art is gold: the neutral look turns it ivory (gold is money's)
+            if chosen and r.SetDesaturated then
+                pcall(r.SetDesaturated, r, true)
+                r:SetVertexColor(1, 0.97, 0.88)
+            end
         end
     end
     f:Hide()
@@ -1861,7 +1872,11 @@ local function DashRow(parent, p, width)
         -- a profession you do not have and have never gathered folds into one line under the card
         self.collapsed = (n == 0 and not learned)
         -- the count, with its unit
-        self.count:SetText(n > 0 and (FormatCount(n) .. " " .. (n == 1 and p.unit or p.units)) or "")
+        if p.money then -- Money counts its amount, not its loots
+            self.count:SetText(n > 0 and FN.FormatMoney(sum.copper or 0) or "")
+        else
+            self.count:SetText(n > 0 and (FormatCount(n) .. " " .. (n == 1 and p.unit or p.units)) or "")
+        end
         -- the line under the name: what is on this map, else where you gather most, else why not
         local sub
         if n == 0 then
@@ -1875,7 +1890,9 @@ local function DashRow(parent, p, width)
         -- and its right-hand twin: skill toward the cap, a capped note, or cloth's drop rate
         local frac, capped = 0, false
         local text, color = "", C.SUBTEXT
-        if p.key == "cloth" then
+        if p.money then
+            if n > 0 then text = FormatCount(n) .. " " .. (n == 1 and p.unit or p.units) end
+        elseif p.key == "cloth" then
             if n > 0 and sum.loots > 0 then
                 text = string.format("%d%% drop rate", math.floor(n / sum.loots * 100 + 0.5))
             end
@@ -2374,6 +2391,7 @@ local function BuildDock()
         -- top edge, above its bottom rule: a little below the strip's middle)
         tb.title = tb:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         tb.title:SetPoint("LEFT", tb, "LEFT", PAD, -2)
+        tb.title:SetTextColor(C.TITLE[1], C.TITLE[2], C.TITLE[3]) -- the game's gold is money's in Fieldnotes
         tb.title:SetJustifyH("LEFT")
     else
         tb.title = St.Title(tb, 13)

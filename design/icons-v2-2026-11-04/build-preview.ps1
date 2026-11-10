@@ -1,7 +1,7 @@
 Add-Type -AssemblyName System.Drawing
 $root = $PSScriptRoot
-$names = @('skinning','mining','herbalism','fishing','cloth','play','pause','stop','statistics','share','warning','book','treasure')
-$labels = @('Skinning','Mining','Herbalism','Fishing','Cloth','Play','Pause','Stop','Statistics','Share','Warning','Book','Treasure')
+$names = @('skinning','mining','herbalism','fishing','cloth','play','pause','stop','statistics','share','warning','book','book-open','treasure','coin')
+$labels = @('Skinning','Mining','Herbalism','Fishing','Cloth','Play','Pause','Stop','Statistics','Share','Warning','Closed book','Open book','Treasure','Coin')
 
 function New-Icon($name) {
     $source = [System.Drawing.Bitmap]::new((Join-Path $root ($name + '.png')))

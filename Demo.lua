@@ -249,12 +249,19 @@ function FN.DemoLoad()
                             if Rand() < l[2] then items[l[1]] = 1 + math.floor(Rand() * l[3]) end
                         end
                         if prof ~= "cloth" and not next(items) then items[g[5][1][1]] = 1 end
+                        local x, y = Clamp(spot[1] + Gauss() * spot[3]), Clamp(spot[2] + Gauss() * spot[3])
                         FN.Add(prof, mapID, {
-                            x = Clamp(spot[1] + Gauss() * spot[3]), y = Clamp(spot[2] + Gauss() * spot[3]),
-                            time = t, npc = g[1], char = char,
+                            x = x, y = y, time = t, npc = g[1], char = char,
                             skill = SkillAt(prof, now, t), items = items,
                         }, store)
                         gathered = gathered + 1
+                        -- Money: humanoids drop coin most times, chests always. Amounts come from
+                        -- the time, not Rand(), so the rest of the sample data stays as it was.
+                        if (prof == "cloth" and t % 5 < 3) or prof == "treasure" then
+                            local copper = prof == "treasure" and (250 + t % 1500) or (12 + t % 260)
+                            FN.Add("money", mapID, { x = x, y = y, time = t, npc = g[1], char = char, skill = 0,
+                                items = { [FN.COIN] = copper } }, store)
+                        end
                     end
                 end
             end

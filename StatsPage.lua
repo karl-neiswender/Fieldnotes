@@ -72,7 +72,7 @@ local function Tip(owner, title, color, rows, note)
     GameTooltip:SetOwner(owner, "ANCHOR_CURSOR")
     local c = color or C.TITLE
     GameTooltip:SetText(title, c[1], c[2], c[3])
-    for _, r in ipairs(rows or {}) do GameTooltip:AddDoubleLine(r[1], r[2], 1, 0.82, 0, 1, 1, 1) end
+    for _, r in ipairs(rows or {}) do GameTooltip:AddDoubleLine(r[1], r[2], 0.95, 0.92, 0.84, 1, 1, 1) end
     if note then GameTooltip:AddLine(note, 0.6, 0.6, 0.6, true) end
     GameTooltip:Show()
 end
@@ -166,7 +166,7 @@ local function Collect(pick, show, days)
     local since = (days and days > 0) and (now - days * 86400) or nil
     local d = { recs = {}, cloth = {}, now = now, since = since, byProf = {}, items = {}, itemProf = {},
         zone = {}, zoneSecs = {}, days = {}, perDay = {}, grid = {}, skill = {}, nodes = {}, npcs = {},
-        ruined = 0 }
+        ruined = 0, copper = 0, copperZone = {}, copperFrom = {} }
     for i = 0, DAYS - 1 do d.perDay[i] = {} end
     for dw = 1, 7 do
         d.grid[dw] = {}
@@ -199,8 +199,14 @@ local function Collect(pick, show, days)
         d.byProf[r.prof] = (d.byProf[r.prof] or 0) + 1
         d.zone[r.map] = (d.zone[r.map] or 0) + 1
         for id, n in pairs(r.items) do
-            d.items[id] = (d.items[id] or 0) + n
-            d.itemProf[id] = d.itemProf[id] or r.prof
+            if id == FN.COIN then -- Money: an amount, kept apart from the items
+                d.copper = d.copper + n
+                d.copperZone[r.map] = (d.copperZone[r.map] or 0) + n
+                if r.npc and r.npc > 0 then d.copperFrom[r.npc] = (d.copperFrom[r.npc] or 0) + n end
+            else
+                d.items[id] = (d.items[id] or 0) + n
+                d.itemProf[id] = d.itemProf[id] or r.prof
+            end
         end
         if r.items[RUINED] then d.ruined = d.ruined + 1 end
         if r.npc and r.npc > 0 then d.npcs[r.npc] = (d.npcs[r.npc] or 0) + 1 end
@@ -306,7 +312,7 @@ local function BarRows(card, n, w)
         r:SetPoint("TOPLEFT", card, "TOPLEFT", CP, -CP + 2 - (i - 1) * ROW_H)
         r.hl = r:CreateTexture(nil, "BACKGROUND")
         r.hl:SetTexture(SOLID)
-        r.hl:SetVertexColor(1, 0.82, 0, 0.07)
+        r.hl:SetVertexColor(1, 0.96, 0.86, 0.07)
         r.hl:SetAllPoints()
         r.hl:Hide()
         r.icon = r:CreateTexture(nil, "ARTWORK")
@@ -511,7 +517,7 @@ function SP.Build(parent, opts)
         r:SetPoint("TOPLEFT", mix.chart, "TOPRIGHT", 10, -4 - (i - 1) * 15)
         r.hl = r:CreateTexture(nil, "BACKGROUND")
         r.hl:SetTexture(SOLID)
-        r.hl:SetVertexColor(1, 0.82, 0, 0.08)
+        r.hl:SetVertexColor(1, 0.96, 0.86, 0.08)
         r.hl:SetAllPoints()
         r.hl:Hide()
         r.sq = r:CreateTexture(nil, "ARTWORK")
@@ -633,6 +639,16 @@ function SP.Build(parent, opts)
                         { "Share", math.floor(data.zone[topZone] / math.max(1, total) * 100 + 0.5) .. "%" } })
                 end },
         }
+        if P and P.money then -- Money leads with the amount and its rate
+            tiles[1] = { FN.FormatMoney(data.copper), "Money", Commas(total) .. " " .. unitWord,
+                function(o) Tip(o, "Money", nil, { { "Looted", FN.FormatMoney(data.copper, true) }, { Cap(unitWord), Commas(total) },
+                    { "Each time", FN.FormatMoney(math.floor(data.copper / math.max(1, total)), true) } }) end }
+            local rate = hours > 0.05 and math.floor(data.copper / hours) or 0
+            tiles[2] = { rate > 0 and FN.FormatMoney(rate) or "-", "Per hour", "while you gather",
+                function(o) Tip(o, "Per hour", nil, { { "Average", rate > 0 and FN.FormatMoney(rate, true) or "-" },
+                    { "Time gathering", string.format("%.1f hr", hours) } },
+                    "Counts the time between loots; gaps over five minutes are left out.") end }
+        end
         for i, t in ipairs(self.tiles) do
             local v = tiles[i]
             t.value:SetText(v[1])
@@ -709,7 +725,12 @@ function SP.Build(parent, opts)
         -- the donut
         do
             local parts = {}
-            if P then
+            if P and P.money then -- where the money came from: zones, by amount
+                local pal = M.PALETTES.moneyMix or {}
+                for i, z in ipairs(TopKeys(data.copperZone, 5)) do
+                    parts[#parts + 1] = { label = ZoneName(z), v = data.copperZone[z], color = pal[i] or M.OTHER_COLOR }
+                end
+            elseif P then
                 local pal = M.PALETTES[pick] or {}
                 for i, id in ipairs(TopKeys(data.items, 5)) do
                     parts[#parts + 1] = { label = ItemName(id), v = data.items[id], color = pal[i] or M.OTHER_COLOR }
@@ -721,10 +742,11 @@ function SP.Build(parent, opts)
             end
             local sum = 0
             for _, pt in ipairs(parts) do sum = sum + pt.v end
-            mix.label:SetText(P and "WHAT IT GAVE" or "PROFESSION MIX")
-            mix.aside:SetText(P and "items, top five" or "share of gathers")
-            mix.total:SetText(Commas(sum))
-            mix.unit:SetText(P and "items" or "gathers")
+            local money = P and P.money
+            mix.label:SetText(money and "WHERE IT CAME FROM" or P and "WHAT IT GAVE" or "PROFESSION MIX")
+            mix.aside:SetText(money and "zones, top five" or P and "items, top five" or "share of gathers")
+            mix.total:SetText(money and FN.FormatMoney(sum) or Commas(sum))
+            mix.unit:SetText(money and "" or P and "items" or "gathers")
             local f = mix.chart
             Begin(f)
             local N, R, r = 120, DN / 2 - 2, DN / 2 - 16
@@ -1016,6 +1038,17 @@ function SP.Build(parent, opts)
                         tip = c.drops .. " of " .. c.loots .. " loots gave cloth." }
                 end
                 note = "Of humanoid loots: how often each creature dropped cloth."
+            elseif pick == "money" then
+                title = "Best sources"
+                local function Source(id)
+                    local c = view.creatures and view.creatures[id]
+                    if c and c.name then return c.name end
+                    return Node(id)
+                end
+                for _, k in ipairs(TopKeys(data.copperFrom, 5)) do
+                    entries[#entries + 1] = { name = Source(k), v = data.copperFrom[k], text = FN.FormatMoney(data.copperFrom[k]) }
+                end
+                note = "The creatures and chests that gave the most coin."
             elseif pick == "treasure" then
                 title = "Best chests"
                 Named(data.npcs, Node, 5)
@@ -1036,7 +1069,7 @@ function SP.Build(parent, opts)
                 local e = entries[i]
                 if e then
                     SetRow(row, nil, e.name, e.text, e.v / (e.max or top), P.color, function(o)
-                        Tip(o, e.name, nil, { { e.max and "Rate" or "Count", e.text } }, e.tip)
+                        Tip(o, e.name, nil, { { e.max and "Rate" or (P.money and "Money" or "Count"), e.text } }, e.tip)
                     end)
                 else
                     row:Hide()

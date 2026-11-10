@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session recap</title>
+<style>
+  :root {
+    --bg: #2b2a27; --top: #0f0e0d; --bottom: #060606; --edge: #544a33;
+    --gold: #ffd75e; --text: #e8e8e8; --ink2: #bdbdbd; --sub: #999; --rule: rgba(84,74,51,.8);
+    --skin: #d08a4e; --mine: #e8c33f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 10px 40px; background: var(--bg); color: var(--text); font: 13px/1.35 "Segoe UI", Arial, sans-serif; }
+  h1 { margin: 0 0 4px; font-size: 20px; color: var(--gold); font-weight: 600; }
+  .lede { margin: 0 0 14px; color: var(--ink2); max-width: 70ch; }
+  button.act { background: #1a1815; color: var(--text); border: 1px solid var(--edge); border-radius: 3px; padding: 7px 12px; font: inherit; cursor: pointer; margin-bottom: 18px; }
+  button.act:hover { border-color: var(--gold); color: var(--gold); }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .opt { width: 300px; }
+  .opt h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .tag { color: var(--gold); margin-right: 6px; }
+  .opt p { margin: 3px 0 10px; color: var(--ink2); min-height: 72px; }
+  .stage { padding: 18px 16px; border-radius: 4px; background: linear-gradient(160deg, #4a5a48, #33402f 55%, #3d3a2e); min-height: 250px; }
+
+  .win { position: relative; width: 232px; padding: 0 14px 14px; overflow: hidden;
+    background: linear-gradient(var(--top), var(--bottom)); border: 1px solid var(--edge); border-radius: 6px; }
+  .head { height: 36px; display: flex; align-items: center; gap: 7px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sub); }
+  .title { color: var(--gold); font-size: 12px; font-weight: 600; }
+  .clock { color: var(--ink2); font-size: 11px; margin-left: 1px; }
+  .x { margin-left: auto; color: var(--ink2); font-size: 11px; }
+  .big { font-size: 12px; }
+  .small { font-size: 10px; color: var(--sub); margin-top: 3px; }
+  .btn { height: 22px; line-height: 20px; text-align: center; font-size: 11px; color: var(--ink2); background: #1b1916; border: 1px solid #3a3424; border-radius: 3px; margin-top: 12px; cursor: pointer; }
+  .btn:hover { color: var(--gold); border-color: var(--gold); }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--gold); transform-origin: left; animation: run 8s linear forwards; }
+  @keyframes run { to { transform: scaleX(0); } }
+
+  .prof { height: 34px; display: grid; grid-template-columns: 20px 1fr auto; column-gap: 8px; align-items: start; }
+  .chip { width: 20px; height: 20px; margin-top: 2px; border-radius: 3px; display: grid; place-items: center; font-size: 10px; font-weight: 700; }
+  .sub { font-size: 10px; color: var(--sub); grid-column: 2 / 4; margin-top: -2px; }
+  .rule { height: 1px; background: var(--rule); margin: 4px 0 8px; }
+  .loot { height: 20px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .ic { width: 16px; height: 16px; background: #6e5637; border-radius: 2px; }
+  .loot b { margin-left: auto; color: var(--gold); font-weight: 400; }
+  .btns { display: flex; gap: 8px; }
+  .btns .btn { flex: 1; }
+  .chat { margin-top: 12px; font-size: 11px; color: var(--ink2); }
+  .chat em { font-style: normal; color: var(--gold); }
+</style>
+</head>
+<body>
+  <h1>Session recap</h1>
+  <p class="lede">What you see right after pressing End session. Typefaces and icons are stand-ins. In Expand Up, the header sits at the bottom as usual.</p>
+  <button class="act" id="again">Replay the 8 seconds</button>
+  <div class="row">
+    <div class="opt">
+      <h2><span class="tag">A</span>Short recap, then gone</h2>
+      <p>The window shrinks to one line of totals with Undo. It leaves on its own after 8 seconds, or sooner with the X. Hovering holds it. The same line stays in chat.</p>
+      <div class="stage">
+        <div class="win" id="a">
+          <div class="head"><span class="dot"></span><span class="title">Session ended</span><span class="clock">18:02</span><span class="x">&#10005;</span></div>
+          <div class="big">42 skins</div>
+          <div class="small">Skinning +14</div>
+          <div class="btn">Undo</div>
+          <div class="bar"></div>
+        </div>
+        <p class="chat"><em>Fieldnotes:</em> Session ended. 42 skins in 18:02, Skinning +14.</p>
+      </div>
+    </div>
+    <div class="opt">
+      <h2><span class="tag">B</span>Full recap, you close it</h2>
+      <p>The window stays open with everything from the session until you press Done. It is more to read, and one more click after every session.</p>
+      <div class="stage">
+        <div class="win">
+          <div class="head"><span class="dot"></span><span class="title">Session ended</span><span class="clock">18:02</span><span class="x">&#10005;</span></div>
+          <div class="prof"><span class="chip" style="color:var(--skin);background:color-mix(in srgb, var(--skin) 16%, transparent)">S</span><span class="big">Skinning</span><span class="big">42</span><span class="sub">+14 skill  ·  140/hr</span></div>
+          <div class="prof"><span class="chip" style="color:var(--mine);background:color-mix(in srgb, var(--mine) 16%, transparent)">M</span><span class="big">Mining</span><span class="big">9</span><span class="sub">+3 skill  ·  30/hr</span></div>
+          <div class="rule"></div>
+          <div class="loot"><span class="ic"></span>Light Leather<b>x 41</b></div>
+          <div class="loot"><span class="ic"></span>Light Hide<b>x 12</b></div>
+          <div class="loot"><span class="ic"></span>Copper Ore<b>x 11</b></div>
+          <div class="btns"><div class="btn">Undo</div><div class="btn">Done</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+<script>
+  document.getElementById("again").onclick = () => {
+    const old = document.querySelector("#a .bar"), bar = old.cloneNode();
+    old.replaceWith(bar);
+  };
+</script>
+</body>
+</html>

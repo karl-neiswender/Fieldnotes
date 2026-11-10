@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session window: expand up</title>
+<style>
+  :root {
+    --bg: #2b2a27; --panel-top: #0f0e0d; --panel-bottom: #060606; --edge: #544a33;
+    --gold: #ffd75e; --text: #e8e8e8; --ink2: #bdbdbd; --sub: #999; --rule: rgba(84,74,51,.8);
+    --skin: #d08a4e; --mine: #e8c33f; --herb: #62b84c; --green: #4fbf3b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 10px 40px; background: var(--bg); color: var(--text);
+    font: 13px/1.35 "Segoe UI", Arial, sans-serif; }
+  h1 { margin: 0 0 4px; font-size: 20px; color: var(--gold); font-weight: 600; }
+  .lede { margin: 0 0 18px; color: var(--ink2); max-width: 70ch; }
+  .controls { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  button.act { background: #1a1815; color: var(--text); border: 1px solid var(--edge); border-radius: 3px;
+    padding: 7px 12px; font: inherit; cursor: pointer; }
+  button.act:hover { border-color: var(--gold); color: var(--gold); }
+
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .opt { width: 244px; }
+  .opt h2 { margin: 0; font-size: 15px; color: var(--text); font-weight: 600; }
+  .opt .tag { color: var(--gold); margin-right: 6px; }
+  .opt p { margin: 3px 0 10px; color: var(--ink2); min-height: 72px; }
+
+  .stage { position: relative; height: 440px; border-radius: 4px;
+    background: linear-gradient(160deg, #4a5a48, #33402f 55%, #3d3a2e); overflow: hidden; }
+  .pin { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(255,215,94,.65); }
+  .pin span { position: absolute; right: 6px; font-size: 10px; color: var(--gold); }
+  .pin.top span { top: -15px; }
+  .pin.bottom span { top: 2px; }
+
+  .win { position: absolute; left: 6px; width: 232px; padding: 0 14px;
+    background: linear-gradient(var(--panel-top), var(--panel-bottom)); border: 1px solid var(--edge); border-radius: 6px;
+    display: flex; flex-direction: column; }
+  .head { height: 36px; flex: none; display: flex; align-items: center; gap: 7px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px var(--green); }
+  .title { color: var(--gold); font-size: 12px; font-weight: 600; }
+  .clock { color: var(--ink2); font-size: 11px; margin-left: 1px; }
+  .icons { margin-left: auto; display: flex; gap: 9px; color: var(--ink2); font-size: 11px; }
+  .prof { height: 34px; display: grid; grid-template-columns: 20px 1fr auto 46px; column-gap: 8px; align-items: start; }
+  .chip { width: 20px; height: 20px; margin-top: 2px; border-radius: 3px; display: grid; place-items: center; font-size: 10px; font-weight: 700; }
+  .name, .count { font-size: 12px; }
+  .rate { font-size: 10px; color: var(--sub); text-align: right; padding-top: 2px; }
+  .sub { font-size: 10px; color: var(--sub); grid-column: 2 / 5; margin-top: -2px; white-space: nowrap; }
+  .rule { flex: none; height: 1px; background: var(--rule); margin: 0 0 8px; }
+  .loot { height: 20px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .ic { width: 16px; height: 16px; background: #6e5637; border-radius: 2px; }
+  .loot b { margin-left: auto; color: var(--gold); font-weight: 400; }
+  .btns { display: flex; gap: 8px; margin: 2px 0 14px; }
+  .btns div { flex: 1; height: 22px; line-height: 20px; text-align: center; font-size: 11px; color: var(--ink2);
+    background: #1b1916; border: 1px solid #3a3424; border-radius: 3px; }
+  .summary { height: 22px; font-size: 12px; display: flex; gap: 18px; align-items: center; }
+  .summary i { font-style: normal; font-weight: 700; margin-right: 4px; }
+  .grip { position: absolute; width: 14px; height: 14px; color: var(--ink2); font-size: 9px; line-height: 14px; text-align: center; letter-spacing: -1px; }
+
+  .settings { margin-top: 26px; width: 190px; padding: 12px; background: linear-gradient(var(--panel-top), var(--panel-bottom));
+    border: 1px solid var(--edge); border-radius: 6px; }
+  .settings .t { color: var(--gold); font-weight: 600; font-size: 12px; margin-bottom: 12px; }
+  .settings .l { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink2); margin-bottom: 6px; }
+  .bar { height: 4px; background: #3a3424; border-radius: 2px; margin-bottom: 14px; position: relative; }
+  .bar::after { content: ""; position: absolute; right: 0; top: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink2); }
+  .pair { display: flex; gap: 4px; margin-bottom: 14px; }
+  .pair div { flex: 1; height: 22px; line-height: 20px; text-align: center; font-size: 11px; border: 1px solid #3a3424; border-radius: 3px; color: var(--ink2); background: #1b1916; }
+  .pair .on { color: var(--gold); border-color: var(--gold); background: #2a2413; }
+  .sw { width: 36px; height: 18px; border-radius: 9px; background: #3a3424; }
+  .note { margin-top: 8px; color: var(--sub); font-size: 11px; width: 190px; }
+</style>
+</head>
+<body>
+  <h1>Session window: expand up</h1>
+  <p class="lede">The dashed line is the spot on your screen that stays put. Fold the window or add a gather and watch what moves. Typefaces and icons are stand-ins.</p>
+  <div class="controls">
+    <button class="act" id="fold">Fold / open</button>
+    <button class="act" id="add">Gather a new profession</button>
+  </div>
+  <div class="row">
+    <div class="opt">
+      <h2>Today: Down</h2>
+      <p>The header stays put. Everything opens below it.</p>
+      <div class="stage" id="down"></div>
+    </div>
+    <div class="opt">
+      <h2><span class="tag">A</span>Up, header stays on top</h2>
+      <p>The window looks the same. Its bottom edge stays put, so the header and its buttons ride up and down as it grows.</p>
+      <div class="stage" id="a"></div>
+    </div>
+    <div class="opt">
+      <h2><span class="tag">B</span>Up, content opens above the header</h2>
+      <p>The exact flip of today. The header sits on the bottom edge and never moves. Sections keep their reading order above it: totals, loot, then the buttons.</p>
+      <div class="stage" id="b"></div>
+    </div>
+    <div>
+      <div class="settings">
+        <div class="t">Window settings</div>
+        <div class="l"><span>Background opacity</span><span>100%</span></div>
+        <div class="bar"></div>
+        <div class="l"><span>Expand</span></div>
+        <div class="pair"><div>Down</div><div class="on">Up</div></div>
+        <div class="l" style="align-items:center;margin:0"><span>Hide when idle</span><span class="sw"></span></div>
+      </div>
+      <p class="note">The new setting, the same for A or B. Down stays the default.</p>
+    </div>
+  </div>
+<script>
+  const PROFS = [
+    { n: "Skinning", c: "--skin", k: "S", v: 34, r: "212/hr", s: "Skill 120 / 150  ·  +6 this session" },
+    { n: "Mining", c: "--mine", k: "M", v: 9, r: "56/hr", s: "Skill 88 / 150  ·  +2 this session" },
+    { n: "Herbalism", c: "--herb", k: "H", v: 5, r: "31/hr", s: "Skill 41 / 75  ·  +1 this session" },
+  ];
+  const LOOT = [["Light Leather", 41], ["Light Hide", 12], ["Copper Ore", 11], ["Peacebloom", 7]];
+  let folded = false, shown = 2;
+
+  const hex = c => `var(${c})`;
+  const head = () => `<div class="head"><span class="dot"></span><span class="title">Session</span><span class="clock">12:34</span>
+    <span class="icons">${folded ? "<span>&#10073;&#10073;</span><span>&#9632;</span>" : ""}<span>&#9881;</span><span>${folded ? "&#8964;" : "&#8963;"}</span><span>&#10005;</span></span></div>`;
+  const summary = () => `<div class="summary">${PROFS.slice(0, shown).map(p => `<span><i style="color:${hex(p.c)}">${p.k}</i>${p.v}</span>`).join("")}</div>`;
+  const rows = () => PROFS.slice(0, shown).map(p => `<div class="prof">
+      <span class="chip" style="color:${hex(p.c)};background:color-mix(in srgb, ${hex(p.c)} 16%, transparent)">${p.k}</span>
+      <span class="name">${p.n}</span><span class="count">${p.v}</span><span class="rate">${p.r}</span><span class="sub">${p.s}</span></div>`).join("");
+  const body = () => `<div class="rule" style="margin-top:4px"></div>
+    ${LOOT.map(([n, c]) => `<div class="loot"><span class="ic"></span>${n}<b>x ${c}</b></div>`).join("")}
+    <div class="btns" style="margin-top:6px"><div>&#10073;&#10073; Pause</div><div>End session</div></div>`;
+
+  // option B: the sections run upward from the header, so the buttons end up on the top edge
+  const flipped = () => `<div style="height:14px"></div>
+    <div class="btns" style="margin:0 0 8px"><div>&#10073;&#10073; Pause</div><div>End session</div></div>
+    ${LOOT.map(([n, c]) => `<div class="loot"><span class="ic"></span>${n}<b>x ${c}</b></div>`).join("")}
+    <div class="rule" style="margin:6px 0 8px"></div>
+    ${rows()}`;
+
+  const PIN_DOWN = 28, PIN_UP = 412;
+  function pin(y, cls, text) { return `<div class="pin ${cls}" style="top:${y}px"><span>${text}</span></div>`; }
+
+  function render() {
+    document.getElementById("down").innerHTML = pin(PIN_DOWN, "top", "stays put") +
+      `<div class="win" style="top:${PIN_DOWN}px">${head()}${folded ? summary() + '<div style="height:14px"></div>' : rows() + body()}
+        ${folded ? "" : '<span class="grip" style="right:1px;bottom:1px">&#8942;&#8942;</span>'}</div>`;
+
+    document.getElementById("a").innerHTML = pin(PIN_UP, "bottom", "stays put") +
+      `<div class="win" style="bottom:${440 - PIN_UP}px">${head()}${folded ? summary() + '<div style="height:14px"></div>' : rows() + body()}
+        ${folded ? "" : '<span class="grip" style="right:1px;bottom:1px">&#8942;&#8942;</span>'}</div>`;
+
+    document.getElementById("b").innerHTML = pin(PIN_UP, "bottom", "stays put") +
+      `<div class="win" style="bottom:${440 - PIN_UP}px">${folded ? '<div style="height:12px"></div>' + summary() : '<div style="height:12px"></div>' + rows() + body().replace('margin-top:6px', 'margin:6px 0 4px')}
+        ${head()}${folded ? "" : '<span class="grip" style="right:1px;top:1px">&#8942;&#8942;</span>'}</div>`;
+  }
+  document.getElementById("fold").onclick = () => { folded = !folded; render(); };
+  document.getElementById("add").onclick = () => { shown = shown >= PROFS.length ? 1 : shown + 1; render(); };
+  render();
+</script>
+</body>
+</html>

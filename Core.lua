@@ -10,10 +10,12 @@ _G.Fieldnotes = FN
 --   nodes      { [objectID] = { name } }   mining veins and herbs, as creatures are for skins
 --   settings   { chat = true, demo = false }
 --   demo       sample data in the same shape (chars, creatures, events), only while loaded
+--   liveSession  the running session, written at logout for a /reload and cleared on the way back in
 --
 -- One record per gather, the same shape for every profession, kept as text so years of
 -- skinning stay small:  "x:y:time:source:char:skill:itemID=count,itemID=count"
 --   source the creature (skinning, cloth), the node (mining, herbalism) or 0 (fishing)
+--   money  coin looted is kept as the item 0 (FN.COIN): "0=2136" is 21 silver 36 copper
 --   x, y   position on the zone map, 0-1000 (empty when the game gives none, as in instances)
 --   time   seconds since 1970 (time())
 FN.DB_VERSION = 1
@@ -29,9 +31,28 @@ function FN.ItemIcon(id)
     if GetItemIcon then return GetItemIcon(id) end
 end
 
+-- Money: looted coin is recorded as this item ID, its count the copper (Recorder.lua)
+FN.COIN = 0
+
+-- 21436 copper -> "2g 14s 36c", each letter in its coin's color (numbers stay plain; gold is
+-- money's color in the neutral look). plain: no colors. Zero parts are left out; nothing is "0c".
+local COIN_HEX = { g = "ffcc33", s = "c9ccd4", c = "c8814a" }
+function FN.FormatMoney(copper, plain)
+    copper = math.floor(tonumber(copper) or 0)
+    local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+    local out = {}
+    local function Part(n, letter)
+        out[#out + 1] = plain and (n .. letter) or (n .. "|cff" .. COIN_HEX[letter] .. letter .. "|r")
+    end
+    if g > 0 then Part(g, "g") end
+    if s > 0 then Part(s, "s") end
+    if c > 0 or #out == 0 then Part(c, "c") end
+    return table.concat(out, " ")
+end
+
 local DEFAULT_SETTINGS = { chat = true }
 
-local ACCENT = "|cffe9b265"
+local ACCENT = "|cffece4d0" -- C.TITLE: the neutral look keeps gold for money
 function FN.Print(msg)
     DEFAULT_CHAT_FRAME:AddMessage(ACCENT .. "Fieldnotes|r  " .. tostring(msg))
 end

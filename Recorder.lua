@@ -15,6 +15,10 @@ local ADDON, FN = ...
 --   Its loot with no gathering cast before it, when the object's name says chest (from the
 --   Opening cast that came first) or the loot holds money (any language). Quest crates give
 --   neither and are left out. The source is the object; one opened twice counts once.
+-- Money: coin you loot (design/money-2026-11-10, option 1A), from the game's own "You loot ..." and
+--   "Your share of the loot is ..." lines, which come once per coin taken, so a corpse opened twice
+--   counts once. Vendor and auction house money are not gathering and are left out. The source is
+--   the loot window's creature or object; the amount is kept as FN.COIN, its count the copper.
 
 local PROFS = {
     -- spell IDs by rank (Apprentice to Artisan), and a spell whose name is the skill line's
@@ -285,6 +289,63 @@ local function RecordTreasure(guid)
     Record("treasure", id, items, links, name or "Treasure")
 end
 
+-- the loot window open now (or last): its source, for the coin it gives
+local lootFrom -- { id, at }
+
+-- "You loot 2 Silver, 14 Copper" -> 214. The coin words come from the game's own strings, so this
+-- reads every language; a word with grammatical forms (|4one:few:many;) matches any of them.
+local function CoinPattern(fmt, fallback)
+    fmt = type(fmt) == "string" and fmt or fallback
+    local p = fmt:gsub("|4[^;]*;", "\1"):gsub("%%d", "\2"):gsub("([%^%$%(%)%.%[%]%*%+%-%?%%])", "%%%1")
+    return (p:gsub("\1", "%%S+"):gsub("\2", "(%%d+)"))
+end
+local COINS -- { pattern, copper each }, built on first use (the strings load with the game)
+function FN.ParseMoney(msg)
+    if type(msg) ~= "string" then return 0 end
+    COINS = COINS or {
+        { CoinPattern(_G.GOLD_AMOUNT, "%d Gold"), 10000 },
+        { CoinPattern(_G.SILVER_AMOUNT, "%d Silver"), 100 },
+        { CoinPattern(_G.COPPER_AMOUNT, "%d Copper"), 1 },
+    }
+    local total = 0
+    for _, c in ipairs(COINS) do
+        local n = msg:match(c[1])
+        if n then total = total + tonumber(n) * c[2] end
+    end
+    return total
+end
+
+-- only the game's loot lines carry coin you gathered (not, say, a quest's reward)
+local function LineMatcher(fmt)
+    if type(fmt) ~= "string" then return nil end
+    local p = fmt:gsub("%%s", "\1"):gsub("([%^%$%(%)%.%[%]%*%+%-%?%%])", "%%%1")
+    return "^" .. (p:gsub("\1", ".+"))
+end
+local MONEY_LINES
+local function IsLootMoney(msg)
+    MONEY_LINES = MONEY_LINES or {}
+    if not MONEY_LINES.built then
+        MONEY_LINES.built = true
+        for _, g in ipairs({ "YOU_LOOT_MONEY", "LOOT_MONEY_SPLIT", "YOU_LOOT_MONEY_GUILD", "LOOT_MONEY_SPLIT_GUILD" }) do
+            local m = LineMatcher(_G[g])
+            if m then MONEY_LINES[#MONEY_LINES + 1] = m end
+        end
+    end
+    if #MONEY_LINES == 0 then return true end -- a client without them: trust the event
+    for _, m in ipairs(MONEY_LINES) do
+        if msg:find(m) then return true end
+    end
+    return false
+end
+
+local function RecordMoney(msg)
+    if not IsLootMoney(msg) then return end
+    local copper = FN.ParseMoney(msg)
+    if copper <= 0 then return end
+    local source = lootFrom and GetTime() - lootFrom.at < 30 and lootFrom.id or 0
+    Record("money", source, { [FN.COIN] = copper }, {})
+end
+
 local pending -- { prof, cast, name, guid, sent }
 local fishingAt -- GetTime() of the last Fishing cast, for clients without IsFishingLoot
 local pickAt = 0
@@ -302,12 +363,19 @@ On("PLAYER_TARGET_CHANGED")
 On("LOOT_READY")
 On("LOOT_OPENED")
 On("LOOT_CLOSED")
+On("CHAT_MSG_MONEY")
 
 local function OnLoot()
     -- both loot events can fire for one loot window: take the first
     local now = GetTime()
     if now - lastLootAt < 0.5 then return end
     lastLootAt = now
+    do -- the source of any coin this window gives
+        local guid, kind = LootSource()
+        local id = guid and (kind == "creature" and NpcFromGUID(guid) or IdFromGUID(guid, "GameObject"))
+        if id and kind == "node" then FN.NoteNode(id) end
+        lootFrom = { id = id or 0, at = now }
+    end
     if pending and now - pending.sent > (PROFS[pending.prof].window or 6) then pending = nil end
     if pending then
         local cast = pending
@@ -373,6 +441,8 @@ f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
         OnLoot()
     elseif event == "LOOT_CLOSED" then
         lastLootAt = 0
+    elseif event == "CHAT_MSG_MONEY" then
+        RecordMoney(a1)
     end
 end)
 

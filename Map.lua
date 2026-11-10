@@ -95,6 +95,9 @@ local PALETTES = {
     fishing = { { 0.27, 0.62, 0.92 }, { 0.64, 0.85, 0.98 }, { 0.14, 0.36, 0.70 }, { 0.42, 0.48, 0.90 } }, -- (4th was teal: Treasure's now)
     cloth = { { 0.66, 0.45, 0.90 }, { 0.86, 0.75, 0.98 }, { 0.42, 0.25, 0.66 }, { 0.82, 0.46, 0.78 } },
     treasure = { { 0.22, 0.76, 0.66 }, { 0.64, 0.93, 0.86 }, { 0.10, 0.48, 0.42 }, { 0.44, 0.64, 0.60 } },
+    money = { { 1.00, 0.80, 0.20 } }, -- coin is one material: every dot is gold
+    -- the stats donut's zones on the Money page: golds, pale to deep, then a bronze
+    moneyMix = { { 1.00, 0.80, 0.20 }, { 1.00, 0.92, 0.62 }, { 0.80, 0.56, 0.08 }, { 0.98, 0.70, 0.36 }, { 0.58, 0.44, 0.20 } },
 }
 M.PALETTES = PALETTES
 local RUINED_COLOR = { 0.56, 0.54, 0.50 }
@@ -119,6 +122,10 @@ M.PROFS = {
         material = "cloth", verb = "looted for cloth", anyone = true },
     { key = "treasure", label = "Treasure", color = { 0.25, 0.78, 0.68 }, unit = "chest", units = "chests",
         material = "loot", verb = "opened", anyone = true },
+    -- coin you loot (design/money-2026-11-10): gold is its color alone since the neutral look.
+    -- money: its records hold the copper as item FN.COIN, shown as an amount, never as an item
+    { key = "money", label = "Money", color = { 1.00, 0.80, 0.20 }, unit = "coin loot", units = "coin loots",
+        material = "money", verb = "looted", anyone = true, money = true },
 }
 M.PROF = {}
 for _, p in ipairs(M.PROFS) do M.PROF[p.key] = p end
@@ -188,6 +195,7 @@ end
 
 local function ItemName(id)
     if id == RUINED then return "Ruined scraps" end
+    if id == FN.COIN then return "Coin" end
     return (FN.ItemInfo(id)) or "..."
 end
 
@@ -198,12 +206,26 @@ end
 
 -- a record's source by name: the creature (skinning, cloth) or the object (mining, herbalism, treasure)
 local function SourceName(prof, id)
+    if prof == "money" then -- a creature's corpse or a chest
+        local c = FN.View().creatures[id]
+        if c and c.name then return c.name end
+        local n = FN.View().nodes and FN.View().nodes[id]
+        return (n and n.name) or "Unknown source"
+    end
     if prof == "mining" or prof == "herbalism" or prof == "treasure" then
         local n = FN.View().nodes and FN.View().nodes[id]
         return (n and n.name) or "Unknown node"
     end
     return CreatureName(id)
 end
+
+-- the copper in a set of records (Money's)
+local function Copper(recs)
+    local n = 0
+    for _, r in ipairs(recs) do n = n + (r.items[FN.COIN] or 0) end
+    return n
+end
+M.Copper = Copper
 
 local function Top(counts, n)
     local keys = {}
@@ -295,7 +317,7 @@ function M.Summary(show, days)
     local view, me = FN.View(), FN.ViewChar()
     summary, summaryKey = {}, key
     for _, p in ipairs(M.PROFS) do
-        local n, loots, best, bestN, onMap = 0, 0, nil, 0, 0
+        local n, loots, best, bestN, onMap, copper = 0, 0, nil, 0, 0, 0
         if show ~= "community" or p.key == "skinning" then
             for mapID, list in pairs(view.events[p.key] or {}) do
                 local here = 0
@@ -303,6 +325,7 @@ function M.Summary(show, days)
                     local r = FN.Decode(str)
                     if r and (show ~= "me" or r.char == me) and (not since or r.time >= since) then
                         loots = loots + 1
+                        copper = copper + (r.items[FN.COIN] or 0)
                         if p.key ~= "cloth" or next(r.items) then here = here + 1 end
                     end
                 end
@@ -313,7 +336,8 @@ function M.Summary(show, days)
         end
         local info = best and best ~= 0 and C_Map.GetMapInfo(best)
         -- here: the gathers on the map you are looking at (the dashboard's "41 here")
-        summary[p.key] = { n = n, loots = loots, bestZone = info and info.name, here = onMap }
+        -- copper: Money's amount, the same span
+        summary[p.key] = { n = n, loots = loots, bestZone = info and info.name, here = onMap, copper = copper }
     end
     return summary
 end
@@ -324,7 +348,9 @@ local function LeatherList(all, prof)
     local counts, hides, ruined = {}, 0, 0
     for _, r in ipairs(all) do
         for id, n in pairs(r.items) do
-            if skinning and id == RUINED then
+            if id == FN.COIN then
+                -- coin is an amount, never one of the list's materials
+            elseif skinning and id == RUINED then
                 ruined = ruined + n
             elseif skinning and HIDES[id] then
                 hides = hides + n
@@ -342,6 +368,7 @@ local function LeatherList(all, prof)
         list[#list + 1] = { key = id, label = ItemName(id), count = counts[id], color = color }
     end
     for id in pairs(HIDES) do colorOf[id] = colorOf[id] or HIDE_COLOR end
+    if PALETTES.money and prof == "money" then colorOf[FN.COIN] = PALETTES.money[1] end
     if hides > 0 then list[#list + 1] = { key = "hides", label = "Hides", count = hides, color = HIDE_COLOR } end
     if ruined > 0 then list[#list + 1] = { key = "ruined", label = "Ruined scraps", count = ruined, color = RUINED_COLOR } end
     return list, colorOf, rank
@@ -763,10 +790,11 @@ local function DrawContinent(s, mapID, zoneType, model)
 
     local rows, max, total = {}, 0, 0
     for _, pz in ipairs(perZone) do
-        local n, who, loot = 0, {}, {}
+        local n, who, loot, copper = 0, {}, {}, 0
         for _, r in ipairs(pz.recs) do
             if Matches(r, s.leather) then
                 n = n + 1
+                copper = copper + (r.items[FN.COIN] or 0)
                 if r.npc > 0 then who[r.npc] = (who[r.npc] or 0) + 1 end
                 for id, k in pairs(r.items) do
                     if id ~= RUINED then loot[id] = (loot[id] or 0) + k end
@@ -774,7 +802,7 @@ local function DrawContinent(s, mapID, zoneType, model)
             end
         end
         if n > 0 then
-            rows[#rows + 1] = { zone = pz.zone, value = n, who = who, loot = loot }
+            rows[#rows + 1] = { zone = pz.zone, value = n, who = who, loot = loot, copper = copper }
             max = math.max(max, n)
             total = total + n
         end
@@ -808,6 +836,7 @@ local function DrawContinent(s, mapID, zoneType, model)
             for _, npc in ipairs(Top(row.who, 2)) do names[#names + 1] = SourceName(s.prof, npc) end
         end
         for _, id in ipairs(Top(row.loot, 2)) do items[#items + 1] = ItemName(id) end
+        if s.prof == "money" then items = { FN.FormatMoney(row.copper) } end
         local unitP = M.PROF[s.prof] or { unit = "gather", units = "gathers" }
         b.zone = {
             id = row.zone.id, name = row.zone.name,
@@ -819,6 +848,8 @@ local function DrawContinent(s, mapID, zoneType, model)
     ui.badgeCount = #rows
 
     model.skins = total
+    model.copper = 0
+    for _, row in ipairs(rows) do model.copper = model.copper + row.copper end
     model.zones = #rows
     model.bestZone = rows[1] and rows[1].zone.name
     model.scale = "Badge size and color: " .. ((M.PROF[s.prof] and M.PROF[s.prof].units) or "gathers")
@@ -1006,6 +1037,7 @@ local HOW = {
     fishing = "Fish here and every catch shows on this map.",
     cloth = "Loot humanoids here: each one that drops cloth shows on this map.",
     treasure = "Open a chest here and it shows on this map, with its loot.",
+    money = "Loot coin here and each one shows on this map, with how much.",
 }
 
 local function Draw()
@@ -1208,17 +1240,18 @@ local function Draw()
     local found = {}
     for _, peak in ipairs(Peaks(g, max, cols)) do -- hottest first
         local hx, hy = (peak.c + 0.5) / cols, (peak.r + 0.5) / rows
-        local near, who, loot = 0, {}, {}
+        local near, who, loot, copper = 0, {}, {}, 0
         for _, r in ipairs(recs) do
             if math.abs(r.x / 1000 - hx) < core / cols and math.abs(r.y / 1000 - hy) < core / rows then
                 near = near + 1
+                copper = copper + (r.items[FN.COIN] or 0)
                 if r.npc > 0 then who[r.npc] = (who[r.npc] or 0) + 1 end
                 local m = MainItem(r, rank)
                 loot[m] = (loot[m] or 0) + 1
             end
         end
         if near > 0 then
-            found[#found + 1] = { hx = hx, hy = hy, near = near, who = who, loot = loot,
+            found[#found + 1] = { hx = hx, hy = hy, near = near, who = who, loot = loot, copper = copper,
                 heat = (g[peak.r * cols + peak.c + 1] or 0) / math.max(max, 1e-9) }
         end
     end
@@ -1229,6 +1262,7 @@ local function Draw()
             local names, items = {}, {}
             for _, npc in ipairs(Top(who, 2)) do names[#names + 1] = SourceName(s.prof, npc) end
             for _, id in ipairs(Top(loot, 2)) do items[#items + 1] = ItemName(id) end
+            if s.prof == "money" then items = { FN.FormatMoney(f.copper) } end -- how much, not "Coin"
             local p = Pin(i)
             -- the map art is drawn at its own (smaller) scale; size the pin and its number for the
             -- screen so they read the same at any map size
@@ -1279,6 +1313,10 @@ local function Draw()
     local topWho, topLoot = Top(who, 1)[1], Top(loot, 1)[1]
     model.topWho = topWho and SourceName(s.prof, topWho)
     model.topLoot = topLoot and ItemName(topLoot)
+    if s.prof == "money" then
+        model.copper = Copper(recs)
+        model.topLoot = FN.FormatMoney(model.copper)
+    end
     if s.mode == "heat" then
         model.peak = rawMax -- the key numbers its ramp from 1 to this
     elseif s.mode == "spotlight" then
