@@ -1,6 +1,6 @@
 # Fieldnotes changelog
 
-## Unreleased
+## 0.10.1
 
 - **Looting coin starts a session** (unless sessions are set to start by hand), and resumes a paused
   one, like any other gather.

@@ -610,3 +610,5 @@
   boxes?"): RecordTreasure skips a loot window with no coin and only quest items (GetLootSlotInfo's
   isQuestItem, or item class 12), whatever the object's name. CHANGELOG Unreleased entry; the treasure
   check gains a quest chest. Checks pass (56), copied to Era and Forever. Not seen in game. Committed and pushed.
+- v0.10.1 release (2026-11-11, Karl: "mark for release"): TOC 0.10.1, CHANGELOG 0.10.1 (coin starts a
+  session, quest boxes are no longer treasure). Tag v0.10.1 pushed to trigger the CurseForge workflow.
