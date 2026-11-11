@@ -4,6 +4,8 @@
 
 - **Looting coin starts a session** (unless sessions are set to start by hand), and resumes a paused
   one, like any other gather.
+- **Quest boxes are no longer treasure.** A box that holds only a quest's item is left out, even
+  when its name says chest.
 
 ## 0.10.0
 

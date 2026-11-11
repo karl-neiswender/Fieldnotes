@@ -128,7 +128,7 @@ loot = {}
 function GetNumLootItems() return #loot end
 function LootSlotHasItem(i) return loot[i] ~= nil and not loot[i].money end
 function GetLootSlotLink(i) return "|cffffffff|Hitem:" .. loot[i].id .. "::::::::|h[x]|h|r" end
-function GetLootSlotInfo(i) return "icon", "x", loot[i].n end
+function GetLootSlotInfo(i) return "icon", "x", loot[i].n, nil, 1, false, loot[i].quest end
 function GetLootSourceInfo(i) return loot[i] and loot[i].guid, 1 end
 function GetItemInfo(id) return nil end
 SlashCmdList = {}
@@ -253,6 +253,12 @@ now = now + 5
 Fire("UNIT_SPELLCAST_SENT", "player", "Crate of Supplies", "cast-8", 3365)
 now = now + 2
 loot = { { id = 5000, n = 1, guid = "GameObject-0-1-0-1-9999-00000DDD" } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+-- a quest's box named like a chest, holding only the quest's item, is not treasure either
+now = now + 5
+Fire("UNIT_SPELLCAST_SENT", "player", "Sealed Supply Chest", "cast-9", 3365)
+now = now + 2
+loot = { { id = 5001, n = 1, quest = true, guid = "GameObject-0-1-0-1-9998-00000DDE" } }
 Fire("LOOT_READY"); Fire("LOOT_CLOSED")
 treasureOk = Count("treasure") == 1 and Last("treasure"):find(":2843:1:0:118=1$") ~= nil
   and FieldnotesDB.nodes[2843].name == "Battered Chest"
@@ -800,7 +806,7 @@ def play(flavor, stubs, verbose):
         ("cloth: humanoid loots counted once each, with or without cloth; Pick Pocket left out",
          rt.globals().gatherResult[2] == "c"),
         ("other professions leave skinning alone", rt.globals().gatherResult[3] == "s"),
-        ("treasure: a chest recorded once with its object; a quest crate is not", rt.globals().treasureOk is True),
+        ("treasure: a chest recorded once with its object; a quest crate or quest box is not", rt.globals().treasureOk is True),
         ("tracker: one session, a row per profession in the order gathered",
          rt.globals().sessionOrder == "skinning,cloth,mining,fishing"),
         ("dashboard: every gather a dot, no heat", rt.globals().dashResult[0] == "d" and rt.globals().dashResult[3] == "m"),

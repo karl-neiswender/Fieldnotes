@@ -605,4 +605,8 @@
 - Coin starts a session (2026-11-11, Karl: "When I loot copper/coin, the session tracker does not start"):
   SessionGather now resumes a paused session for any gather, coin included, and coin starts a session when
   none runs (unless sessions are set to start by hand). Money still is not counted as a gather. CHANGELOG
-  Unreleased entry. Not seen in game. Not committed.
+  Unreleased entry. Not seen in game. Committed and pushed (1cb484f).
+- Quest boxes left out of Treasure (2026-11-11, Karl: "for treasure chests, can we NOT track quest objective
+  boxes?"): RecordTreasure skips a loot window with no coin and only quest items (GetLootSlotInfo's
+  isQuestItem, or item class 12), whatever the object's name. CHANGELOG Unreleased entry; the treasure
+  check gains a quest chest. Checks pass (56), copied to Era and Forever. Not seen in game. Committed and pushed.

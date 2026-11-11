@@ -14,7 +14,8 @@ local ADDON, FN = ...
 -- Treasure: a chest, trunk or strongbox in the world (a game object, not a lockbox in your bags).
 --   Its loot with no gathering cast before it, when the object's name says chest (from the
 --   Opening cast that came first) or the loot holds money (any language). Quest crates give
---   neither and are left out. The source is the object; one opened twice counts once.
+--   neither and are left out, and so is a box holding only quest items (no coin, nothing else),
+--   whatever its name. The source is the object; one opened twice counts once.
 -- Money: coin you loot (design/money-2026-11-10, option 1A), from the game's own "You loot ..." and
 --   "Your share of the loot is ..." lines, which come once per coin taken, so a corpse opened twice
 --   counts once. Vendor and auction house money are not gathering and are left out. The source is
@@ -265,15 +266,32 @@ end
 -- a treasure: its loot, when the window comes from a chest (see the top). opening: the Opening
 -- cast that came before it, { name, cast, sent }
 local opening
+
+-- a loot slot holding a quest item: the game's own flag, or the item's Quest class (12)
+local function IsQuestSlot(slot)
+    if select(7, GetLootSlotInfo(slot)) then return true end
+    local link = GetLootSlotLink(slot)
+    local info = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    if not link or not info then return false end
+    local classID = select(6, info(link))
+    return classID == 12
+end
+
 local function RecordTreasure(guid)
     local id = IdFromGUID(guid, "GameObject")
     if not id or looted[guid] then return end
     local name = opening and GetTime() - opening.sent < 10 and opening.name or nil
     opening = nil
-    local money = false
+    local money, other = false, false
     for slot = 1, GetNumLootItems() do
-        if not LootSlotHasItem(slot) then money = true end
+        if not LootSlotHasItem(slot) then
+            money = true
+        elseif not IsQuestSlot(slot) then
+            other = true
+        end
     end
+    -- a quest's box (a chest by name, holding only the quest's item) is not treasure
+    if not money and not other then return end
     local chest = money
     local lower = name and name:lower()
     if lower then
