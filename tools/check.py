@@ -599,12 +599,20 @@ do
     UnitIsAFK = nil
     trackerAfkOk = otherUnit and paused and resumed and handStays and clickWins
   end
-  -- Money joins a running session as an amount: it never starts one, a pause holds it out, it is not
-  -- a gather, and the window shows it formatted
+  -- Money starts a session (unless sessions start by hand), resumes a paused one, is not a gather, and
+  -- the window shows it formatted
   do
     local p = ns.TrackerParts()
+    FieldnotesDB.settings.autoSession = false
     ns.SessionGather("money", 116, { [0] = 500 })
-    local noStart = not ns.SessionRunning()
+    local byHand = not ns.SessionRunning()
+    FieldnotesDB.settings.autoSession = nil
+    ns.SessionGather("money", 116, { [0] = 500 })
+    local starts = ns.SessionRunning() and ns.session.total == 0 and ns.session.profs.money ~= nil
+      and ns.session.profs.money.copper == 500
+    ns.SessionEnd()
+    ns.SessionDone()
+    local noStart = byHand and starts
     ns.SessionStart()
     ns.SessionGather("skinning", 1, { [2318] = 1 })
     ns.SessionGather("money", 116, { [0] = 21436 })
@@ -613,8 +621,7 @@ do
       and ns.SessionLabel() == "1 skin" and ns.session.allLoot[0] == nil
     ns.SessionTogglePause()
     ns.SessionGather("money", 116, { [0] = 100 })
-    local held = e ~= nil and e.copper == 21436
-    ns.SessionTogglePause()
+    local held = e ~= nil and e.copper == 21536 and not ns.SessionPaused()
     ns.UpdateTracker()
     local shown = p.rows[2].count.text
     local shows = shown:find("^2") ~= nil and shown:find("36") ~= nil and p.rows[2].sub.text:find("per hour") ~= nil
@@ -834,7 +841,7 @@ def play(flavor, stubs, verbose):
         ("session: a /reload carries it over, a real log in does not", rt.globals().trackerReloadOk is True),
         ("session recap: End opens it, Undo restores, Done closes, a reload keeps it", rt.globals().trackerRecapOk is True),
         ("money: looted coin recorded once from the loot line; a quest reward is not", rt.globals().moneyOk is True),
-        ("money in a session: joins as an amount, never starts one, held out while paused", rt.globals().trackerMoneyOk is True),
+        ("money in a session: joins as an amount, starts one unless by hand, resumes a pause", rt.globals().trackerMoneyOk is True),
         ("money on the map: its page draws with an amount; the dashboard sums it", rt.globals().moneyMapOk is True),
         ("money on the stats page: amount tiles; coin never listed as an item", rt.globals().statsMoneyOk is True),
         ("neutral look: chosen and headings are ivory, gold is money's", rt.globals().neutralOk is True),

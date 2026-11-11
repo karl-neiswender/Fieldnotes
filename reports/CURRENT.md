@@ -589,8 +589,8 @@
     spots by coin loots, the key and hot spots say how much (FN.FormatMoney: "2g 14s 36c", coin letters
     in their colors), dashboard row shows the amount. Stats page: Money and Per hour tiles as amounts,
     "Where it came from" donut by zone, Best sources card. Demo mode has sample coin.
-  - Session: a Money row (amount, per hour, loots). It never starts a session, a pause holds it out, and it
-    is not counted as a gather. Known: the dock's material dropdown shows only "All money" on the Money page.
+  - Session: a Money row (amount, per hour, loots). It is not counted as a gather. (Changed 2026-11-11:
+    coin now starts and resumes a session, see below.) Known: the dock's material dropdown shows only "All money" on the Money page.
   - Checks pass (56, five new; the stub now fires each frame once per event). Copied to Era and Forever.
     Not yet seen in game; needs a full client restart for the new icon. Not committed.
 - Session rates steadied (2026-11-10, Karl: the money rate ticking every second was distracting): every
@@ -602,3 +602,7 @@
 - Demo mode hidden from players (2026-11-10, Karl: it is only for us): README, the /fn help list, the changelog
   and the share import message no longer mention it. /fn demo, /fn demo off, /fn fake and /fn shots still
   work. In-game "Sample data" labels show only while demo mode is on. Checks pass (56). Not committed.
+- Coin starts a session (2026-11-11, Karl: "When I loot copper/coin, the session tracker does not start"):
+  SessionGather now resumes a paused session for any gather, coin included, and coin starts a session when
+  none runs (unless sessions are set to start by hand). Money still is not counted as a gather. CHANGELOG
+  Unreleased entry. Not seen in game. Not committed.

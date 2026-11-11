@@ -962,9 +962,18 @@ end
 -- cloth or with nothing; only the ones with cloth count.
 function FN.SessionGather(prof, source, items)
     local now = GetTime()
+    if session.pausedAt then -- a gather (coin too) while paused carries on the session
+        session.paused = session.paused + (now - session.pausedAt)
+        session.pausedAt = nil
+        afkPaused = false
+    end
     if prof == "money" then
-        -- coin joins a running session only: it never starts one, and a pause holds it out
-        if not session.start or session.pausedAt then return end
+        -- coin starts a session like any gather, but is not counted as one
+        if not session.start then
+            if FN.db.settings.autoSession == false then return end
+            Reset(now)
+            if FN.Map and FN.Map.Refresh then FN.Map.Refresh() end -- the tab's recording dot
+        end
         local e = session.profs.money
         if not e then
             e = { count = 0, loots = 0, copper = 0 }
@@ -975,11 +984,6 @@ function FN.SessionGather(prof, source, items)
         e.copper = (e.copper or 0) + (items[FN.COIN] or 0)
         FN.ShowTracker()
         return
-    end
-    if session.pausedAt then -- a gather while paused carries on the session
-        session.paused = session.paused + (now - session.pausedAt)
-        session.pausedAt = nil
-        afkPaused = false
     end
     local has = next(items) ~= nil
     if prof == "cloth" and not has and not session.start then return end -- an empty loot starts nothing

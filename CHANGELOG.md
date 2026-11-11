@@ -1,5 +1,10 @@
 # Fieldnotes changelog
 
+## Unreleased
+
+- **Looting coin starts a session** (unless sessions are set to start by hand), and resumes a paused
+  one, like any other gather.
+
 ## 0.10.0
 
 - **Money, a new category.** Fieldnotes now counts the coin you loot from creatures and chests,
