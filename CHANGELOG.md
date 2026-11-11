@@ -61,11 +61,11 @@
   profession's color.
 - Stats rows lose the letter boxes, and the Stats header says "All zones", since stats count
   every zone.
-- "Sample data" sits in the header on every page, and empty pages say how they fill.
+- Empty pages say how they fill.
 - The Fieldnotes tab no longer looks selected all the time.
 - Fixed: the old map's numbers flashing over a new zone when you click into it, grey streaks on the
   Stats donut, flicker between Home rows, a tooltip running off the screen, and a zigzag skill
-  chart in sample data.
+  chart.
 
 ## 0.8.0
 
@@ -111,7 +111,6 @@
 - **A new look:** painted icons for every profession and control, a soft glow in each profession's
   color, tabs that glide out when chosen, a dock that runs the full height of the map window, and
   scrolling where a page runs long.
-- Demo mode (`/fn demo`) now includes ore, herbs, fish and cloth.
 - The Stats window and Share still cover skinning only. More professions are coming to both.
 - Tested on Classic Era. Warcraft Forever is supported but unconfirmed until it launches.
 
@@ -162,7 +161,6 @@
   Reset puts them back. The gear turns gold while anything differs from the defaults.
 - The map key now says how much the busiest area holds ("Up to 54 skins in one area").
 - `/fn summary` prints the numbers in chat, as `/fn` used to.
-- Demo skins now come in sessions, so the rates have something to measure.
 
 ## 0.3.0
 
@@ -175,7 +173,6 @@
   - A small key in the corner: the count, the leading creature and leather, and the color scale.
 - Everything sits in one slim bar along the top of the map. Click Fieldnotes in the bar to switch
   the overlay off and on.
-- Demo mode now includes a sample Community layer.
 
 ## 0.1.0
 
@@ -184,6 +181,3 @@
 - A short chat line after each skin (`/fn chat` turns it off).
 - `/fn` shows your skinning so far, this session's skins per minute and this zone's
   top creatures and leather.
-- Demo mode for trying it out: `/fn demo` loads sample skins across twelve zones,
-  `/fn fake` pretends to skin something where you stand, `/fn demo off` removes it all.
-  Your own records are never touched.

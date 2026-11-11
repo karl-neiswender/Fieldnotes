@@ -129,9 +129,7 @@ SlashCmdList.FIELDNOTES = function(msg)
         FN.Print("/fn summary  the same numbers in chat")
         FN.Print("/fn tracker  turn the session tracker on or off")
         FN.Print("/fn chat  turn the chat line for each gather on or off")
-        FN.Print("/fn demo  load sample data to try Fieldnotes (your own records stay as they are)")
-        FN.Print("/fn fake  pretend to skin something where you stand (demo mode only)")
-        FN.Print("/fn demo off  remove the sample data")
-        FN.Print("/fn shots  take the gallery screenshots (sample data, put back after)")
+        -- (/fn demo, /fn demo off, /fn fake and /fn shots still work: they are for testing and
+        -- screenshots, so players are not told about them; Karl, 2026-11-10)
     end
 end

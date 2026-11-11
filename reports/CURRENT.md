@@ -599,3 +599,6 @@
 - v0.10.0 release (2026-11-10, Karl's go: "its working well"): TOC 0.10.0, CHANGELOG 0.10.0 (Money, neutral
   look, AFK pause, session recap, expand up, sessions over /reload, steadier rates). Tag v0.10.0 pushed to
   trigger the CurseForge workflow.
+- Demo mode hidden from players (2026-11-10, Karl: it is only for us): README, the /fn help list, the changelog
+  and the share import message no longer mention it. /fn demo, /fn demo off, /fn fake and /fn shots still
+  work. In-game "Sample data" labels show only while demo mode is on. Checks pass (56). Not committed.

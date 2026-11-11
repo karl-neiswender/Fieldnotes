@@ -1030,7 +1030,7 @@ local function KeyCard(parent, width, withSpots, glass)
         end
         -- (the dock's key leaves the note to the dock's header, demoInHeader, so it never costs a
         -- hot spot and every page drops the same lines in the same order)
-        local demo = m.inDemo and not compact and not rawget(self, "demoInHeader")
+        local demo = m.inDemo and not FN.shooting and not compact and not rawget(self, "demoInHeader")
         self.demo:SetShown(demo and true or false)
         if demo then
             self.demo:ClearAllPoints()
@@ -2888,7 +2888,8 @@ local function RenderDock(m)
     local place = dash and ("All professions" .. (m.place and ("  ·  " .. m.place) or "")) or (m.place or "")
     -- sample data is said once, up here, on every page (it was the key's last line, dropped first
     -- when short, so some pages said it and some did not)
-    if m.inDemo then place = place .. "  ·  |cff999999Sample data|r" end -- C.SUBTEXT (gold read as a third accent)
+    -- (not in the gallery screenshots: players never see demo mode)
+    if m.inDemo and not FN.shooting then place = place .. "  ·  |cff999999Sample data|r" end -- C.SUBTEXT (gold read as a third accent)
     dock.place:SetText(place)
     dock.page:SetShown(not dash)
     dock.dash:SetShown(dash)

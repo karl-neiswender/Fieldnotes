@@ -284,7 +284,7 @@ function Share.Import(share)
     local store = Target()
     if share.sender == Share.ID() and store == FN.db then return false, "That's your own share text." end
     if share.demo and store == FN.db then
-        return false, "That's sample data from demo mode. It can only be imported in demo mode."
+        return false, "That's test data, so it can't be imported."
     end
     store.community = store.community or {}
     store.community.senders = store.community.senders or {}
