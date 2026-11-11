@@ -1,5 +1,22 @@
 # Fieldnotes changelog
 
+## 0.10.0
+
+- **Money, a new category.** Fieldnotes now counts the coin you loot from creatures and chests,
+  including your share in a group. It has its own map tab with heat and hot spots, a row on the Home
+  dashboard, its own stats page (where it came from, the best creatures and chests, per hour), and a
+  row in the session window. Vendor and auction house money are not counted.
+- **A new, neutral look.** Chosen buttons, headings and switches are warm ivory with bronze-grey
+  edges. Gold now means money and nothing else, shown in the game's own gold, silver and copper.
+- **Going AFK pauses your session,** and coming back resumes it. A session you paused yourself stays
+  paused.
+- **End session shows a full recap:** the time, each profession's count, skill gained, per hour and
+  your loot, with Undo in case you ended it by mistake.
+- **The session window can expand up.** In its settings, choose Up to keep the header on the bottom
+  edge and have the window open above it.
+- **Sessions survive a /reload.** Logging out still ends them.
+- Per-hour numbers in the session window change once a minute instead of every second.
+
 ## 0.9.1
 
 - **Resize the session window.** Drag the three dots in its bottom right corner. A taller window

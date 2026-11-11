@@ -3,7 +3,7 @@
 ## Notes: A gathering journal. Remembers every skin, vein, herb, catch, cloth drop and treasure chest: what it gave you and where.
 ## Author: Karl
 ## IconTexture: Interface\AddOns\Fieldnotes\Media\icon
-## Version: 0.9.1
+## Version: 0.10.0
 ## SavedVariables: FieldnotesDB
 ## Category: Professions
 ## X-Category: Professions

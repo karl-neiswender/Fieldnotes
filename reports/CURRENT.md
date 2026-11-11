@@ -596,3 +596,6 @@
 - Session rates steadied (2026-11-10, Karl: the money rate ticking every second was distracting): every
   per-hour rate in the session window now moves in whole minutes and with each gather, and Money's rate
   drops its copper once it passes a silver an hour. Checks pass (56), copied to Era and Forever. Not seen in game.
+- v0.10.0 release (2026-11-10, Karl's go: "its working well"): TOC 0.10.0, CHANGELOG 0.10.0 (Money, neutral
+  look, AFK pause, session recap, expand up, sessions over /reload, steadier rates). Tag v0.10.0 pushed to
+  trigger the CurseForge workflow.
