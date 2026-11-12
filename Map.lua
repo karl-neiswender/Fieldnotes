@@ -134,6 +134,7 @@ for _, p in ipairs(M.PROFS) do M.PROF[p.key] = p end
 local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "thermal", when = 0, strength = 1,
     spread = 1, dim = 0.18, dots = false, prof = "skinning", spotsShown = false }
 local DIM_MAX = 0.85 -- Darken map: the dimming layer's most, so the zone art never goes fully black
+local VEIL_REACH = 6 -- Darken map reaches this many canvas widths/heights past each edge
 M.DEFAULTS = DEFAULTS
 
 -- the map's settings. leather: 0 (all), an item ID, "hides" or "ruined"
@@ -914,8 +915,17 @@ local function Layer()
         local ok, l = pcall(om.ArtTopLevel)
         if ok and type(l) == "number" and l > level then level = l end
     end
-    -- the darkening sits right on the art, the heat just above it
-    veil:SetFrameStrata(canvas:GetFrameStrata())
+    -- the darkening sits right on the art, the heat just above it. It reaches well past the
+    -- canvas on every side (the scroll window clips it to the view), so OpenMap's neighboring
+    -- zones dim too.
+    local w, h = canvas:GetSize()
+    w, h = (w or 0) * VEIL_REACH, (h or 0) * VEIL_REACH
+    veil:ClearAllPoints()
+    veil:SetPoint("TOPLEFT", canvas, "TOPLEFT", -w, h)
+    veil:SetPoint("BOTTOMRIGHT", canvas, "BOTTOMRIGHT", w, -h)
+    -- the heat's own layer, not the canvas's: after a maximize the canvas can report a higher
+    -- layer than its pins draw on, and the darkening put there covered them all (2026-11-12)
+    veil:SetFrameStrata(overlay:GetFrameStrata())
     veil:SetFrameLevel(level + 1)
     M.overlayLevel = level + 2
     overlay:SetFrameLevel(M.overlayLevel)
@@ -1387,6 +1397,13 @@ function M.Debug()
         .. Size(WorldMapFrame.GetCanvas and WorldMapFrame:GetCanvas()))
     FN.Print("  map " .. tostring(M.drawnMap))
     FN.Print("  overlay " .. Size(overlay) .. "; darken " .. Size(veil) .. "; control layer " .. tostring(M.strata))
+    -- one of Blizzard's own pins, to compare with the darkening's layer and level
+    local pin
+    if WorldMapFrame.EnumerateAllPins then
+        local ok, iter = pcall(WorldMapFrame.EnumerateAllPins, WorldMapFrame)
+        if ok and iter then for p in iter do if p:IsShown() then pin = p break end end end
+    end
+    FN.Print("  a Blizzard pin " .. (pin and Size(pin) or "none shown"))
     if FN.MapUI and FN.MapUI.Debug then FN.MapUI.Debug(Size) end
     local s = S()
     FN.Print(string.format("  settings: on %s, %s, %s; last error: %s", tostring(s.on), s.mode, s.show,
@@ -1403,11 +1420,11 @@ local function Init()
     overlay:SetAllPoints(canvas)
     overlay:SetFrameLevel(canvas:GetFrameLevel() + 5)
     overlay:EnableMouse(false)
-    -- Darken map covers the map's visible window, not the canvas: the canvas is only the current
-    -- map's rectangle, and OpenMap draws the neighboring zones past it, which cut the dimming off
-    local view = WorldMapFrame.ScrollContainer or canvas
-    veil = CreateFrame("Frame", nil, view)
-    veil:SetAllPoints(view)
+    -- Darken map lives on the canvas, so it draws under the heat and the map's pins: the scroll
+    -- window draws its whole canvas as one layer, and a frame on the scroll window itself covered
+    -- all of it (2026-11-12). Layer() stretches it past the canvas to cover OpenMap's neighbors.
+    veil = CreateFrame("Frame", nil, canvas)
+    veil:SetAllPoints(canvas)
     veil:EnableMouse(false)
     mute = veil:CreateTexture(nil, "BACKGROUND")
     mute:SetAllPoints()
