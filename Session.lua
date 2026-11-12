@@ -806,6 +806,11 @@ function FN.UpdateTracker()
         ui.summary:SetPoint(anchor, PADX, sign * 36)
         ui.summary:SetText(table.concat(parts, "     "))
         ui.summary:SetShown(#parts > 0)
+        -- the folded line never wraps or clips: the window widens to fit it (the saved width is untouched)
+        if #parts > 0 then
+            w = math.max(w, math.ceil(ui.summary:GetStringWidth()) + PADX * 2)
+            frame:SetWidth(w)
+        end
         ui.line:ClearAllPoints()
         ui.line:SetPoint(anchor, PADX, sign * 54)
         ui.line:SetWidth(w - PADX * 2)
