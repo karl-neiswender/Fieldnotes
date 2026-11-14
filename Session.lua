@@ -92,7 +92,10 @@ local function Restore(s)
     if s.shown then FN.ShowTracker() end
 end
 
-function FN.SessionHas(prof) return session.start ~= nil and session.profs[prof] ~= nil end
+function FN.SessionHas(prof)
+    local e = session.start ~= nil and session.profs[prof]
+    return e and e.count > 0 or false
+end
 
 local function ProfInfo(key)
     return FN.Map and FN.Map.PROF and FN.Map.PROF[key] or { key = key, label = key, unit = "gather", units = "gathers",
@@ -1001,13 +1004,15 @@ function FN.SessionGather(prof, source, items)
     if not e then
         e = { count = 0, loots = 0, skillStart = not ProfInfo(prof).anyone and FN.ProfessionSkill and FN.ProfessionSkill(prof) or nil }
         session.profs[prof] = e
-        session.order[#session.order + 1] = prof
     end
     e.loots = e.loots + 1
+    -- an empty humanoid loot only counts toward cloth's drop rate: Cloth gets no row (and the map
+    -- tab no dot) until cloth has dropped. A coin-started session let it show a 0 row (2026-11-14)
     if prof == "cloth" and not has then
-        FN.UpdateTracker()
+        if e.count > 0 then FN.UpdateTracker() end -- its drop rate moved
         return
     end
+    if e.count == 0 then session.order[#session.order + 1] = prof end
     e.count = e.count + 1
     session.total = session.total + 1
     session.last = now
