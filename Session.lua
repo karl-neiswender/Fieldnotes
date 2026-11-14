@@ -401,7 +401,7 @@ end
 local function BuildSettings()
     local PANEL_W, PAD = 190, 12
     local p = St.Frame("Frame", frame)
-    p:SetSize(PANEL_W, 165)
+    p:SetSize(PANEL_W, 195)
     St.Etch(p, St.STYLE.panel, 12, 1)
     p:EnableMouse(true)
     p:SetClampedToScreen(true)
@@ -470,12 +470,35 @@ local function BuildSettings()
     end)
     hide:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+    -- the clock as hours:minutes:seconds instead of minutes:seconds
+    local hoursText = St.Text(p, 10, C.INK2)
+    hoursText:SetPoint("TOPLEFT", PAD, -166)
+    hoursText:SetText("Show hours")
+    local hours = CreateFrame("Button", nil, p)
+    hours:SetSize(36, 18)
+    hours:SetPoint("TOPRIGHT", -PAD, -163)
+    hours.toggle = St.Toggle(hours)
+    hours.toggle:SetAllPoints()
+    hours:SetScript("OnClick", function(self)
+        FN.db.settings.trackerHours = FN.db.settings.trackerHours ~= true
+        self.toggle:SetOn(FN.db.settings.trackerHours == true)
+        FN.UpdateTracker()
+    end)
+    hours:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Show hours", 1, 1, 1)
+        GameTooltip:AddLine("On: the clock reads hours, minutes and seconds (1:05:30). Off: minutes and seconds (65:30).", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    hours:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     function p:Sync()
         local v = FN.TrackerOpacity()
         slider:Set(v)
         Percent(v)
         SyncExpand()
         hide.toggle:SetOn(FN.db.settings.trackerAutoHide == true)
+        hours.toggle:SetOn(FN.db.settings.trackerHours == true)
     end
     ui.settings = p
 end
@@ -646,7 +669,11 @@ local function Build()
     end)
 end
 
+-- 65:30, or 1:05:30 with Show hours (Window settings)
 local function Clock(secs)
+    if FN.db.settings.trackerHours == true then
+        return string.format("%d:%02d:%02d", math.floor(secs / 3600), math.floor(secs % 3600 / 60), math.floor(secs % 60))
+    end
     return string.format("%d:%02d", math.floor(secs / 60), math.floor(secs % 60))
 end
 
