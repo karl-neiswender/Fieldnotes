@@ -2059,7 +2059,14 @@ local function BuildDock()
     dock = St.Frame("Frame", dockClip)
     -- Forever: the game's side tab (LargeSideTabButtonTemplate), as before 2026-11-07 and as Spoken
     -- Places hangs one. A client without it (Era) gets the corner button below.
-    local okTab, native = pcall(CreateFrame, "Frame", "FieldnotesMapTab", WorldMapFrame, "LargeSideTabButtonTemplate")
+    -- Its parent is a holder the map's size, not the map: other add-ons that hang their tab under
+    -- the lowest side tab look at the map's own children only (Spoken Places), so they stay where
+    -- they are and ours goes last, under them. As the map's child, Spoken's went under ours, and
+    -- the two chased each other (2026-11-16, Karl: "put it below the last tab").
+    local tabHolder = CreateFrame("Frame", nil, WorldMapFrame)
+    tabHolder:SetAllPoints(WorldMapFrame)
+    tabHolder:EnableMouse(false)
+    local okTab, native = pcall(CreateFrame, "Frame", "FieldnotesMapTab", tabHolder, "LargeSideTabButtonTemplate")
     if okTab and native and type(native.Icon) == "table" and native.Icon.SetTexture and native.SetCustomOnMouseUpHandler then
         tab = native
         tab.native = true
@@ -2563,6 +2570,8 @@ local function IsOurs(f)
     for _ = 1, 8 do
         if not f then return false end
         if f == dockClip or f == list or f == tab then return true end
+        -- (the side tab's holder, BuildDock)
+        if tab and rawget(tab, "native") and f ~= WorldMapFrame and f == tab:GetParent() then return true end
         -- a protected frame (the game's own) is not ours, and asking for its parent errors
         -- (2026-11-16: that error threw away the whole side tab scan)
         if f.IsForbidden and f:IsForbidden() then return false end
@@ -2652,6 +2661,25 @@ end
 -- finding them, since no list holds them): the lowest one, and how far the widest reaches past the
 -- edge. Shorter than half the map, which keeps out a panel standing beside it.
 local sideInfo = {} -- what the last look saw, for /fn debug
+
+-- whether `f` hangs off our tab, through its anchors: Spoken Places' tab goes under the lowest side
+-- tab, ours among them, and a tooltip is anchored to its owner. Placing ours under such a frame
+-- loops, and the game drops both (2026-11-16: both tabs vanished, "Cannot anchor to a region
+-- dependent on it").
+local function HangsOffTab(f, depth)
+    depth = depth or 0
+    if depth > 6 or not f then return false end
+    if f == tab then return true end
+    if f.IsForbidden and f:IsForbidden() then return false end
+    local okN, n = pcall(f.GetNumPoints, f)
+    if not okN or type(n) ~= "number" then return false end
+    for i = 1, n do
+        local ok, _, rel = pcall(f.GetPoint, f, i)
+        if ok and type(rel) == "table" and rel ~= UIParent and HangsOffTab(rel, depth + 1) then return true end
+    end
+    return false
+end
+
 local function SideTabs(border)
     local _, eb, er, et = ScreenRect(border)
     if not er then return nil, 0 end
@@ -2675,7 +2703,7 @@ local function SideTabs(border)
     local xs = {}
     for i, e in ipairs(edges) do xs[i] = string.format("%.0f", e) end
     sideInfo.edge = string.format("edges x %s, y %.0f to %.0f", table.concat(xs, ", "), eb, et)
-    local lowest, lowestBottom, reach = nil, nil, 0
+    local lowest, lowestBottom, lowestLeft, reach = nil, nil, nil, 0
     local seen = {}
     -- `deep`: also look inside a shown frame that is not a tab itself, as OpenMap hangs its tabs
     -- on a frame the map's whole size (2026-11-16: ours sat at the top, under theirs)
@@ -2683,13 +2711,14 @@ local function SideTabs(border)
         if type(parent) ~= "table" or not parent.GetChildren then return end
         for _, f in ipairs({ parent:GetChildren() }) do
             if not seen[f] and not (f.IsForbidden and f:IsForbidden()) and f ~= tab and not IsOurs(f)
-                and f.IsVisible and f:IsVisible() then
+                and f.IsVisible and f:IsVisible() and not (f.IsObjectType and f:IsObjectType("GameTooltip"))
+                and not HangsOffTab(f) then
                 seen[f] = true
                 local l, b, r, top = ScreenRect(f)
                 if l and OnEdge(l, r) and top <= et + COLUMN_SLACK
                     and b >= eb - COLUMN_SLACK and top - b < (et - eb) / 2 and r - l < 120 then
                     reach = math.max(reach, r - er)
-                    if not lowestBottom or b < lowestBottom then lowest, lowestBottom = f, b end
+                    if not lowestBottom or b < lowestBottom then lowest, lowestBottom, lowestLeft = f, b, l end
                     if #sideInfo < 8 then
                         sideInfo[#sideInfo + 1] = string.format("%s %.0f to %.0f, y %.0f to %.0f",
                             tostring(f.GetName and f:GetName() or "?"), l, r, b, top)
@@ -2705,9 +2734,13 @@ local function SideTabs(border)
     end
     Look(UIParent, false) -- (its own children only: it has far too many grandchildren)
     local k = (border:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
-    return lowest, reach / k
+    -- (how far below the border's top the lowest tab ends, and its left edge off the border's
+    -- right, in the border's units)
+    return lowest, reach / k, lowestBottom and (et - lowestBottom) / k or nil,
+        lowestLeft and (lowestLeft - er) / k or 0
 end
-local sideLowest, sideReach = nil, 0
+local sideLowest, sideReach, sideDrop, sideX = nil, 0, nil, 0
+local lastDrop -- where the tab was last put, to look again when it moves
 
 local lastScan, wantScan = 0, false
 
@@ -2755,8 +2788,9 @@ local function LayoutDock()
     if rawget(tab, "native") then
         -- Forever: the map window's full height, past the side tabs on its edge, a wider gap off it
         if wantScan or GetTime() - lastScan > 1.5 then
-            local ok, low, reach = pcall(SideTabs, border)
-            sideLowest, sideReach = ok and low or nil, ok and reach or 0
+            local ok, low, reach, drop, x = pcall(SideTabs, border)
+            sideLowest, sideReach, sideDrop = ok and low or nil, ok and reach or 0, ok and drop or nil
+            sideX = ok and x or 0
             sideInfo.err = (not ok) and tostring(low) or nil
         end
         if top and bottom and top > bottom then dock:SetHeight(top - bottom) end
@@ -2782,8 +2816,18 @@ local function LayoutDock()
     if rawget(tab, "native") then
         -- the side tab: under the lowest other side tab, else near the window's top; shown while
         -- the panel is closed
-        if sideLowest and side == "RIGHT" then
-            tab:SetPoint("TOPLEFT", sideLowest, "BOTTOMLEFT", 0, -SIDE_TAB_GAP)
+        -- (placed by measure off the border, never anchored to the other tab, which may hang
+        -- off ours: see HangsOffTab)
+        -- Moved, look again in a moment: a tab that goes under ours (Spoken Places') leaves its
+        -- old place empty, and ours belongs there (2026-11-16: a tab-high gap above ours). Once
+        -- nothing moves, this stops.
+        local drop = side == "RIGHT" and sideDrop or nil
+        if drop ~= lastDrop and not (drop and lastDrop and math.abs(drop - lastDrop) < 1) then
+            lastDrop = drop
+            if C_Timer and C_Timer.After then C_Timer.After(0.3, MapUI.Rescan) end
+        end
+        if sideDrop and side == "RIGHT" then
+            tab:SetPoint("TOPLEFT", border, "TOPRIGHT", sideX, -(sideDrop + SIDE_TAB_GAP))
         elseif side == "RIGHT" then
             tab:SetPoint("TOPLEFT", border, "TOPRIGHT", 0, -SIDE_TAB_TOP)
         else

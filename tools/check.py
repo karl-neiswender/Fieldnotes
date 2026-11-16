@@ -260,8 +260,14 @@ Fire("UNIT_SPELLCAST_SENT", "player", "Sealed Supply Chest", "cast-9", 3365)
 now = now + 2
 loot = { { id = 5001, n = 1, quest = true, guid = "GameObject-0-1-0-1-9998-00000DDE" } }
 Fire("LOOT_READY"); Fire("LOOT_CLOSED")
-treasureOk = Count("treasure") == 1 and Last("treasure"):find(":2843:1:0:118=1$") ~= nil
-  and FieldnotesDB.nodes[2843].name == "Battered Chest"
+-- a rogue's picked footlocker: no coin, no Opening cast, named by the Pick Lock before it
+now = now + 5
+Fire("UNIT_SPELLCAST_SENT", "player", "Battered Footlocker", "cast-10", 1804)
+now = now + 20
+loot = { { id = 858, n = 1, guid = "GameObject-0-1-0-1-2844-00000DDF" } }
+Fire("LOOT_READY"); Fire("LOOT_CLOSED")
+treasureOk = Count("treasure") == 2 and Last("treasure"):find(":2844:1:0:858=1$") ~= nil
+  and FieldnotesDB.nodes[2843].name == "Battered Chest" and FieldnotesDB.nodes[2844].name == "Battered Footlocker"
 
 -- money: coin from a loot window, read from the game's loot line, once, with its source; a line
 -- that is not a loot (a quest's reward) does not count
@@ -806,7 +812,7 @@ def play(flavor, stubs, verbose):
         ("cloth: humanoid loots counted once each, with or without cloth; Pick Pocket left out",
          rt.globals().gatherResult[2] == "c"),
         ("other professions leave skinning alone", rt.globals().gatherResult[3] == "s"),
-        ("treasure: a chest recorded once with its object; a quest crate or quest box is not", rt.globals().treasureOk is True),
+        ("treasure: a chest recorded once with its object, a picked footlocker too; a quest crate or quest box is not", rt.globals().treasureOk is True),
         ("tracker: one session, a row per profession in the order gathered",
          rt.globals().sessionOrder == "skinning,cloth,mining,fishing"),
         ("dashboard: every gather a dot, no heat", rt.globals().dashResult[0] == "d" and rt.globals().dashResult[3] == "m"),

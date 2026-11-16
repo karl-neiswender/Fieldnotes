@@ -13,7 +13,8 @@ local ADDON, FN = ...
 --   counts once. Pick Pocket's loot never counts.
 -- Treasure: a chest, trunk or strongbox in the world (a game object, not a lockbox in your bags).
 --   Its loot with no gathering cast before it, when the object's name says chest (from the
---   Opening cast that came first) or the loot holds money (any language). Quest crates give
+--   Opening cast that came first, or a rogue's Pick Lock on it) or the loot holds money (any
+--   language). Quest crates give
 --   neither and are left out, and so is a box holding only quest items (no coin, nothing else),
 --   whatever its name. The source is the object; one opened twice counts once.
 -- Money: coin you loot (design/money-2026-11-10, option 1A), from the game's own "You loot ..." and
@@ -32,6 +33,10 @@ FN.GATHER_PROFS = PROFS
 local PICK_POCKET = 921
 -- the game's Opening casts (a chest's lid, a locked one picked or forced): their target's name
 local OPENING = { [3365] = true, [6247] = true, [6477] = true, [6478] = true, [21651] = true, [22810] = true }
+-- a rogue's Pick Lock: on a chest in the world it names the chest, which is opened a moment later
+-- (2026-11-16: picked Battered Footlockers with no coin went unrecorded, their name unknown)
+local PICK_LOCK = 1804
+local PICKED_FOR = 120 -- seconds a picked lock's name stays with the chest
 -- words in a treasure's name (English; elsewhere the money test still finds one)
 local CHEST_WORDS = { "chest", "trunk", "strongbox", "coffer", "footlocker", "cache", "treasure", "lockbox" }
 local CLOTH = { [2589] = true, [2592] = true, [4306] = true, [4338] = true, [14047] = true, [14256] = true }
@@ -42,7 +47,7 @@ local bySpell, spellName = {}, {}
 for prof, p in pairs(PROFS) do
     for _, id in ipairs(p.spells) do bySpell[id] = prof end
 end
-local pickName, openName
+local pickName, openName, lockName
 
 local function SpellName(id)
     if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
@@ -61,6 +66,10 @@ end
 
 local function IsOpening(spellID)
     return OPENING[spellID] or (openName and SpellName(spellID) == openName)
+end
+
+local function IsPickLock(spellID)
+    return spellID == PICK_LOCK or (lockName and SpellName(spellID) == lockName)
 end
 
 local function IsPickPocket(spellID)
@@ -264,8 +273,8 @@ local function RecordKill(guid)
 end
 
 -- a treasure: its loot, when the window comes from a chest (see the top). opening: the Opening
--- cast that came before it, { name, cast, sent }
-local opening
+-- cast that came before it, { name, cast, sent }; picked: the last lock picked, the same shape
+local opening, picked
 
 -- a loot slot holding a quest item: the game's own flag, or the item's Quest class (12)
 local function IsQuestSlot(slot)
@@ -280,8 +289,10 @@ end
 local function RecordTreasure(guid)
     local id = IdFromGUID(guid, "GameObject")
     if not id or looted[guid] then return end
-    local name = opening and GetTime() - opening.sent < 10 and opening.name or nil
-    opening = nil
+    local now = GetTime()
+    local name = opening and now - opening.sent < 10 and opening.name or nil
+    if not name and picked and now - picked.sent < PICKED_FOR then name = picked.name end
+    opening, picked = nil, nil
     local money, other = false, false
     for slot = 1, GetNumLootItems() do
         if not LootSlotHasItem(slot) then
@@ -434,6 +445,10 @@ f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
             opening = { name = a2 ~= "" and a2 or nil, cast = a3, sent = GetTime() }
             return
         end
+        if IsPickLock(a4) then
+            picked = { name = a2 ~= "" and a2 or nil, cast = a3, sent = GetTime() }
+            return
+        end
         local prof = ProfOfSpell(a4)
         if not prof then return end
         if prof == "fishing" then
@@ -455,6 +470,7 @@ f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
         -- unit, cast GUID, spell ID
         if a1 == "player" and pending and a2 == pending.cast then pending = nil end
         if a1 == "player" and opening and a2 == opening.cast then opening = nil end
+        if a1 == "player" and picked and a2 == picked.cast then picked = nil end
     elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
         OnLoot()
     elseif event == "LOOT_CLOSED" then
@@ -468,6 +484,7 @@ table.insert(FN.onLogin, function()
     for prof, p in pairs(PROFS) do spellName[prof] = SpellName(p.spells[1]) end
     pickName = SpellName(PICK_POCKET)
     openName = SpellName(3365)
+    lockName = SpellName(PICK_LOCK)
 end)
 
 -- the game's word for humanoid creatures (UnitCreatureType is in the client's language)
