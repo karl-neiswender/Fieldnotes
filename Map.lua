@@ -1383,8 +1383,89 @@ local skillWatch = CreateFrame("Frame")
 pcall(skillWatch.RegisterEvent, skillWatch, "SKILL_LINES_CHANGED")
 skillWatch:SetScript("OnEvent", function() M.Refresh() end)
 
--- /fn debug: what the overlay is doing, for when it doesn't show
+-- /fn debug's copy window: the same lines as in chat, in a box selected for Ctrl+C
+local debugWin
+local function DebugWindow(text)
+    if not debugWin then
+        local W, H, PAD = 560, 380, 16
+        local f = St.Frame("Frame", UIParent)
+        f:SetSize(W, H)
+        f:SetFrameStrata("FULLSCREEN_DIALOG")
+        St.Etch(f, St.STYLE.window, 16)
+        St.Movable(f, "debugPos")
+        St.PlaceSaved(f, "debugPos", "CENTER", "CENTER", 0, 40)
+        _G.FieldnotesDebugFrame = f
+        if UISpecialFrames then table.insert(UISpecialFrames, "FieldnotesDebugFrame") end
+        local title = St.Title(f, 16)
+        title:SetPoint("TOPLEFT", PAD + 2, -PAD)
+        title:SetText("Fieldnotes debug")
+        local hint = St.Text(f, 11, C.SUBTEXT)
+        hint:SetPoint("LEFT", title, "RIGHT", 10, -1)
+        hint:SetText("Ctrl+C to copy")
+        local close = St.IconButton(f, "close-white", 14, function() f:Hide() end)
+        close:SetPoint("TOPRIGHT", -PAD, -PAD)
+        local area = St.Scroll(f)
+        area.scroll:SetPoint("TOPLEFT", PAD, -PAD - 30)
+        area.scroll:SetPoint("BOTTOMRIGHT", -PAD - 6, PAD)
+        local tw = W - 2 * PAD - 12
+        area.content:SetWidth(tw)
+        local eb = CreateFrame("EditBox", nil, area.content)
+        eb:SetMultiLine(true)
+        eb:SetAutoFocus(false)
+        eb:SetFont(STANDARD_TEXT_FONT, 11, "")
+        eb:SetTextColor(C.TEXT[1], C.TEXT[2], C.TEXT[3])
+        eb:SetWidth(tw)
+        eb:SetPoint("TOPLEFT")
+        pcall(eb.SetMaxLetters, eb, 0)
+        pcall(eb.SetMaxBytes, eb, 0)
+        eb:SetScript("OnEscapePressed", function() f:Hide() end)
+        -- read only: any typing puts the text back
+        eb:SetScript("OnTextChanged", function(self, user)
+            if user and f.text then self:SetText(f.text) self:HighlightText() end
+        end)
+        -- measures the text's height at the box's width, so the scroll knows how far it goes
+        local ruler = f:CreateFontString(nil, "OVERLAY")
+        ruler:SetFont(STANDARD_TEXT_FONT, 11, "")
+        ruler:SetWidth(tw)
+        ruler:SetJustifyH("LEFT")
+        ruler:Hide()
+        f.eb, f.area, f.ruler = eb, area, ruler
+        debugWin = f
+    end
+    local f = debugWin
+    f.text = text
+    f.ruler:SetText(text)
+    local h = math.ceil(f.ruler:GetStringHeight() or 0) + 20
+    f.eb:SetHeight(h)
+    f.area.content:SetHeight(h)
+    f.eb:SetText(text)
+    f:Show()
+    if f.area.SetHeight then f.area:SetHeight(h) end
+    if f.area.Update then f.area:Update() end
+    f.eb:SetFocus()
+    f.eb:HighlightText()
+end
+
+-- /fn debug: what the overlay is doing, for when it doesn't show. Printed to chat and shown in
+-- a window to copy from.
+local Report
 function M.Debug()
+    local lines, print = {}, FN.Print
+    FN.Print = function(msg)
+        lines[#lines + 1] = tostring(msg)
+        print(msg)
+    end
+    local ok, err = pcall(Report)
+    FN.Print = print
+    if not ok then
+        lines[#lines + 1] = "debug ERROR: " .. tostring(err)
+        print("debug ERROR: " .. tostring(err))
+    end
+    local text = table.concat(lines, "\n"):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    pcall(DebugWindow, text)
+end
+
+Report = function()
     local function Size(f)
         if not f then return "missing" end
         local w, h = f:GetSize()

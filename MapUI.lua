@@ -2563,7 +2563,11 @@ local function IsOurs(f)
     for _ = 1, 8 do
         if not f then return false end
         if f == dockClip or f == list or f == tab then return true end
-        f = f.GetParent and f:GetParent() or nil
+        -- a protected frame (the game's own) is not ours, and asking for its parent errors
+        -- (2026-11-16: that error threw away the whole side tab scan)
+        if f.IsForbidden and f:IsForbidden() then return false end
+        local ok, parent = pcall(f.GetParent, f)
+        f = ok and parent or nil
     end
     return false
 end
@@ -2647,27 +2651,59 @@ end
 -- Forever: the side tabs other add-ons hang down the map window's right edge (Spoken Places' way of
 -- finding them, since no list holds them): the lowest one, and how far the widest reaches past the
 -- edge. Shorter than half the map, which keeps out a panel standing beside it.
+local sideInfo = {} -- what the last look saw, for /fn debug
 local function SideTabs(border)
     local _, eb, er, et = ScreenRect(border)
     if not er then return nil, 0 end
+    -- the edges a tab may hang on: the border's, and a shown windowed border's or quest log's,
+    -- which can end short of it (ForeverCore pins the quest log's tabs to the log's right edge;
+    -- Era's windowed map is MiniBorderFrame, as Spoken Places reads it). 2026-11-16: missed with
+    -- the border's alone.
+    local edges = { er }
+    for _, f in ipairs({ WorldMapFrame.MiniBorderFrame or false, QuestMapFrame or false }) do
+        if type(f) == "table" and f.IsVisible and f:IsVisible() then
+            local _, _, r = ScreenRect(f)
+            if r then edges[#edges + 1] = r end
+        end
+    end
+    local function OnEdge(l, r)
+        for _, e in ipairs(edges) do
+            if l >= e - COLUMN_SLACK and (l + r) / 2 > e then return true end
+        end
+    end
+    wipe(sideInfo)
+    local xs = {}
+    for i, e in ipairs(edges) do xs[i] = string.format("%.0f", e) end
+    sideInfo.edge = string.format("edges x %s, y %.0f to %.0f", table.concat(xs, ", "), eb, et)
     local lowest, lowestBottom, reach = nil, nil, 0
     local seen = {}
-    for _, parent in ipairs({ WorldMapFrame, WorldMapFrame.BorderFrame or false, QuestMapFrame or false, UIParent }) do
-        if type(parent) == "table" and parent.GetChildren then
-            for _, f in ipairs({ parent:GetChildren() }) do
-                if not seen[f] and not IsOurs(f) and f ~= tab and not (f.IsForbidden and f:IsForbidden())
-                    and f.IsVisible and f:IsVisible() then
-                    seen[f] = true
-                    local l, b, r, top = ScreenRect(f)
-                    if l and l >= er - COLUMN_SLACK and (l + r) / 2 > er and top <= et + COLUMN_SLACK
-                        and b >= eb - COLUMN_SLACK and top - b < (et - eb) / 2 and r - l < 120 then
-                        reach = math.max(reach, r - er)
-                        if not lowestBottom or b < lowestBottom then lowest, lowestBottom = f, b end
+    -- `deep`: also look inside a shown frame that is not a tab itself, as OpenMap hangs its tabs
+    -- on a frame the map's whole size (2026-11-16: ours sat at the top, under theirs)
+    local function Look(parent, deep)
+        if type(parent) ~= "table" or not parent.GetChildren then return end
+        for _, f in ipairs({ parent:GetChildren() }) do
+            if not seen[f] and not (f.IsForbidden and f:IsForbidden()) and f ~= tab and not IsOurs(f)
+                and f.IsVisible and f:IsVisible() then
+                seen[f] = true
+                local l, b, r, top = ScreenRect(f)
+                if l and OnEdge(l, r) and top <= et + COLUMN_SLACK
+                    and b >= eb - COLUMN_SLACK and top - b < (et - eb) / 2 and r - l < 120 then
+                    reach = math.max(reach, r - er)
+                    if not lowestBottom or b < lowestBottom then lowest, lowestBottom = f, b end
+                    if #sideInfo < 8 then
+                        sideInfo[#sideInfo + 1] = string.format("%s %.0f to %.0f, y %.0f to %.0f",
+                            tostring(f.GetName and f:GetName() or "?"), l, r, b, top)
                     end
+                elseif deep then
+                    Look(f, false)
                 end
             end
         end
     end
+    for _, parent in ipairs({ WorldMapFrame, WorldMapFrame.BorderFrame or false, QuestMapFrame or false }) do
+        Look(parent, true)
+    end
+    Look(UIParent, false) -- (its own children only: it has far too many grandchildren)
     local k = (border:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
     return lowest, reach / k
 end
@@ -2721,6 +2757,7 @@ local function LayoutDock()
         if wantScan or GetTime() - lastScan > 1.5 then
             local ok, low, reach = pcall(SideTabs, border)
             sideLowest, sideReach = ok and low or nil, ok and reach or 0
+            sideInfo.err = (not ok) and tostring(low) or nil
         end
         if top and bottom and top > bottom then dock:SetHeight(top - bottom) end
         local off = sideReach + FOREVER_GAP
@@ -3333,6 +3370,9 @@ function MapUI.Debug(Size)
     if dock and rawget(dock, "flat") then FN.Print("  dock frame: the game's flat panel (DefaultPanelFlatTemplate)") end
     if tab and rawget(tab, "native") then
         FN.Print(string.format("  side tab: under %s, panel %.0f off the map", sideLowest and (sideLowest.GetName and sideLowest:GetName() or "a side tab") or "nothing", sideReach + FOREVER_GAP))
+        if sideInfo.err then FN.Print("  side tabs ERROR: " .. sideInfo.err) end
+        if sideInfo.edge then FN.Print("  side tabs looked at " .. sideInfo.edge) end
+        for _, line in ipairs(sideInfo) do FN.Print("   side tab: " .. line) end
     end
     FN.Print("  dock frame: " .. (NINE_LAYOUT and dock and rawget(dock, "nine") and ("the game's (" .. NINE_LAYOUT .. ")")
         or ("etched" .. (NINE_LAYOUT and ", the game's failed" or ", this client has no game layout"))))
@@ -3414,6 +3454,12 @@ function MapUI.Init()
         C_Timer.After(0.3, MapUI.Rescan)
         C_Timer.After(2, MapUI.Rescan)
     end)
+    -- the quest log's side tabs come and go with it: look for them again
+    if QuestMapFrame and QuestMapFrame.HookScript then
+        local function Again() if dock then C_Timer.After(0.05, MapUI.Rescan) end end
+        QuestMapFrame:HookScript("OnShow", Again)
+        QuestMapFrame:HookScript("OnHide", Again)
+    end
     WorldMapFrame:HookScript("OnHide", function()
         if list then list:Hide() end
         if dock.sheetOpen then SetSheet(false) end
