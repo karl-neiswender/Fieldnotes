@@ -830,7 +830,8 @@ local function KeyCard(parent, width, withSpots, glass)
             l.b.keep = false
             l.b.entry = nil
         end
-        local showRamp = hasData and m.kind ~= "dash" and m.mode == "heat" or (hasData and m.kind == "continent")
+        local circles = hasData and m.kind == "continent" and m.badges ~= false
+        local showRamp = hasData and m.kind ~= "dash" and m.kind ~= "continent" and m.mode == "heat" or circles
         local numbered = showRamp and m.peak ~= nil
         for _, t in ipairs(self.ramp) do t:SetShown(showRamp) end
         self.track:SetShown(numbered)
@@ -838,7 +839,7 @@ local function KeyCard(parent, width, withSpots, glass)
         self.caption:SetShown(numbered and not compact)
         self.fewer:SetShown(showRamp and not numbered)
         self.more:SetShown(showRamp and not numbered)
-        self.scale:SetShown(not compact and (hasData and m.scale ~= nil and m.mode ~= "points" or (hasData and m.kind == "continent")))
+        self.scale:SetShown(not compact and (hasData and m.kind ~= "continent" and m.scale ~= nil and m.mode ~= "points" or circles))
         if not hasData then
             self.message:SetText(m.message)
             -- the card hugs the message: 12 above, 12 below (SetHeight adds the last 8)
@@ -855,12 +856,14 @@ local function KeyCard(parent, width, withSpots, glass)
             else
                 self.big:SetText(n .. " " .. word)
             end
-            self.caption:SetText((m.p and m.p.units or "gathers") .. " in one spot")
+            self.caption:SetText(m.peakMoney and "looted in one spot"
+                or ((m.p and m.p.units or "gathers") .. " in one spot"))
             y = -34
             local rows
             local p = m.p or {}
             if m.kind == "continent" then
-                rows = { { "Zones", m.zones and tostring(m.zones) }, { "Most " .. (p.units or ""), m.bestZone } }
+                rows = { { "Zones", m.zones and tostring(m.zones) },
+                    { p.money and "Most coin" or ("Most " .. (p.units or "")), m.bestZone } }
             elseif nSpots > 0 or m.kind == "dash" then
                 rows = {} -- the hot spots below name the creatures instead
             elseif m.prof == "fishing" then
@@ -893,16 +896,21 @@ local function KeyCard(parent, width, withSpots, glass)
                 self.track:SetWidth(barW)
                 self:PaintRamp(11, y - 1, barW, true)
                 y = y - 12
-                -- 1 at the quiet end, then even steps up to the busiest spot on this map
+                -- 1 at the quiet end, then even steps up to the busiest spot on this map. Money: copper,
+                -- on the heat's square-root scale (a quarter of the way is a sixteenth of the amount),
+                -- each tick in its largest coin
                 local peak = math.max(1, m.peak)
                 local marks = { { 0, 1 } }
-                if peak >= 8 then
-                    for q = 1, 3 do marks[#marks + 1] = { q / 4, math.floor(peak * q / 4 + 0.5) } end
+                if peak >= (m.peakMoney and 100 or 8) then
+                    for q = 1, 3 do
+                        local at = m.peakMoney and peak * (q / 4) ^ 2 or peak * q / 4
+                        marks[#marks + 1] = { q / 4, math.max(1, math.floor(at + 0.5)) }
+                    end
                 end
                 if peak > 1 then marks[#marks + 1] = { 1, peak } end
                 for i, mk in ipairs(marks) do
                     local t = self.ticks[i]
-                    t:SetText(mk[2])
+                    t:SetText(m.peakMoney and FN.ShortMoney(mk[2]) or mk[2])
                     t:ClearAllPoints()
                     local point = mk[1] == 0 and "TOPLEFT" or (mk[1] == 1 and "TOPRIGHT" or "TOP")
                     t:SetPoint(point, self, "TOPLEFT", 11 + barW * mk[1], y)
@@ -1282,6 +1290,26 @@ local function SettingsBody(parent, width, noWhen)
         GameTooltip:Show()
     end)
     b.spots:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- continent and world maps: one circle per zone (on by default), or none
+    b.zonesLabel = Label(parent, "CONTINENT MAPS")
+    b.zonesText = St.Text(parent, 10, C.INK2)
+    b.zonesText:SetText("Show zone circles")
+    b.zones = CreateFrame("Button", nil, parent)
+    b.zones:SetSize(36, 18)
+    b.zones.toggle = St.Toggle(b.zones)
+    b.zones.toggle:SetAllPoints()
+    b.zones:SetScript("OnClick", function(self)
+        M.S().zoneBadges = M.S().zoneBadges == false
+        self.toggle:SetOn(M.S().zoneBadges ~= false)
+        Refresh()
+    end)
+    b.zones:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Show zone circles", 1, 1, 1)
+        GameTooltip:AddLine("Off: continent and world maps show no circles. Zone maps are unchanged.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    b.zones:SetScript("OnLeave", function() GameTooltip:Hide() end)
     -- the session: start by itself with your first gather (on by default), or only by hand
     b.sessionLabel = Label(parent, "SESSION")
     b.autoText = St.Text(parent, 10, C.INK2)
@@ -1394,6 +1422,15 @@ local function SettingsBody(parent, width, noWhen)
         self.spots:ClearAllPoints()
         self.spots:SetPoint("TOPRIGHT", parent, "TOPLEFT", x + width, y)
         self.spots.toggle:SetOn(M.S().spotsShown)
+        y = y - 18 - 24
+        self.zonesLabel:ClearAllPoints()
+        self.zonesLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        y = y - 18
+        self.zonesText:ClearAllPoints()
+        self.zonesText:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 3)
+        self.zones:ClearAllPoints()
+        self.zones:SetPoint("TOPRIGHT", parent, "TOPLEFT", x + width, y)
+        self.zones.toggle:SetOn(M.S().zoneBadges ~= false)
         y = y - 18 - 24
         self.sessionLabel:ClearAllPoints()
         self.sessionLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
@@ -2694,9 +2731,12 @@ local function SideTabs(border)
             if r then edges[#edges + 1] = r end
         end
     end
+    -- (its left edge near one of them: a narrow frame anywhere right of the map, a button or a
+    -- tracker, passed once only the lower bound was checked, and the tab and panel went after it,
+    -- off the map and off screen, 2026-11-16)
     local function OnEdge(l, r)
         for _, e in ipairs(edges) do
-            if l >= e - COLUMN_SLACK and (l + r) / 2 > e then return true end
+            if l >= e - COLUMN_SLACK and l <= e + COLUMN_SLACK and (l + r) / 2 > e then return true end
         end
     end
     wipe(sideInfo)

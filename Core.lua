@@ -50,6 +50,15 @@ function FN.FormatMoney(copper, plain)
     return table.concat(out, " ")
 end
 
+-- an amount in its largest coin only, rounded ("2g", "14s", "35c"): for tight places like the
+-- map key's ticks and the zone circles
+function FN.ShortMoney(copper, plain)
+    copper = math.floor(tonumber(copper) or 0)
+    if copper >= 10000 then return FN.FormatMoney(math.floor(copper / 10000 + 0.5) * 10000, plain) end
+    if copper >= 100 then return FN.FormatMoney(math.floor(copper / 100 + 0.5) * 100, plain) end
+    return FN.FormatMoney(copper, plain)
+end
+
 local DEFAULT_SETTINGS = { chat = true }
 
 local ACCENT = "|cffece4d0" -- C.TITLE: the neutral look keeps gold for money

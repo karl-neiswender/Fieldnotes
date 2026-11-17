@@ -395,6 +395,23 @@ Open("heat", "account")
 local mm = ns.Map.model
 moneyMapOk = mm.prof == "money" and mm.p.money == true and (mm.skins == 0 or (mm.copper or 0) > 0)
   and (ns.Map.Summary("account", 0).money.copper or 0) > 0
+-- Money: coin sizes in the list, the key in copper; a size draws only its own loots
+local sizes, sizeKey = 0, nil
+for _, l in ipairs(mm.leathers or {}) do
+  if type(l.key) == "string" and l.key:find("^coin%-") then sizes = sizes + 1; sizeKey = sizeKey or l.key end
+end
+moneySizesOk = ns.ShortMoney(21437, true) == "2g" and ns.ShortMoney(1450, true) == "15s"
+  and ns.ShortMoney(35, true) == "35c"
+if mm.skins > 0 then
+  moneySizesOk = moneySizesOk and sizes > 0 and mm.peakMoney == true and mm.peak == math.floor(mm.peak)
+  FieldnotesDB.settings.map.leather = sizeKey
+  Open("heat", "account")
+  moneySizesOk = moneySizesOk and ns.Map.model.leather == sizeKey and ns.Map.model.skins > 0
+    and ns.Map.model.skins <= mm.skins
+  FieldnotesDB.settings.map.leather = 0
+else
+  moneySizesNoData = true
+end
 Open("points", "account")
 FieldnotesDB.settings.map.prof = "skinning"
 FieldnotesDB.settings.map.leather = 0
@@ -855,6 +872,7 @@ def play(flavor, stubs, verbose):
         ("money: looted coin recorded once from the loot line; a quest reward is not", rt.globals().moneyOk is True),
         ("money in a session: joins as an amount, starts one unless by hand, resumes a pause", rt.globals().trackerMoneyOk is True),
         ("money on the map: its page draws with an amount; the dashboard sums it", rt.globals().moneyMapOk is True),
+        ("money on the map: coin sizes filter it, the key reads in coin", rt.globals().moneySizesOk is True),
         ("money on the stats page: amount tiles; coin never listed as an item", rt.globals().statsMoneyOk is True),
         ("neutral look: chosen and headings are ivory, gold is money's", rt.globals().neutralOk is True),
         ("session: AFK pauses it, coming back resumes it, a pause by hand stays", rt.globals().trackerAfkOk is True),

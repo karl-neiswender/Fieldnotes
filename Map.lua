@@ -132,7 +132,8 @@ for _, p in ipairs(M.PROFS) do M.PROF[p.key] = p end
 
 -- prof: a profession's key, or "all" for the dashboard
 local DEFAULTS = { on = true, mode = "heat", show = "account", leather = 0, colors = "thermal", when = 0, strength = 1,
-    spread = 1, dim = 0.18, dots = false, prof = "skinning", spotsShown = false }
+    spread = 1, dim = 0.18, dots = false, prof = "skinning", spotsShown = false,
+    zoneBadges = true }
 local DIM_MAX = 0.85 -- Darken map: the dimming layer's most, so the zone art never goes fully black
 local VEIL_REACH = 6 -- Darken map reaches this many canvas widths/heights past each edge
 M.DEFAULTS = DEFAULTS
@@ -257,9 +258,29 @@ local function MainItem(r, rank)
     return best or RUINED
 end
 
+-- Money's list in place of materials: each coin loot by its size, from its total (2026-11-17,
+-- Karl). Colors are the coin letters' own (Core.lua COIN_HEX).
+local COIN_SIZES = {
+    { key = "coin-c", label = "Copper drops", min = 0, max = 99, color = { 0.78, 0.51, 0.29 } },
+    { key = "coin-s", label = "Silver drops", min = 100, max = 9999, color = { 0.79, 0.80, 0.83 } },
+    { key = "coin-g", label = "Gold drops", min = 10000, max = math.huge, color = { 1.00, 0.80, 0.20 } },
+}
+local COIN_SIZE = {}
+for _, z in ipairs(COIN_SIZES) do COIN_SIZE[z.key] = z end
+
+-- the size of one coin loot: its COIN_SIZES key
+local function CoinSize(r)
+    local c = r.items[FN.COIN] or 0
+    for _, z in ipairs(COIN_SIZES) do
+        if c >= z.min and c <= z.max then return z.key end
+    end
+    return "coin-c"
+end
+
 -- does a skin match the leather filter?
 local function Matches(r, leather)
     if leather == 0 then return true end
+    if COIN_SIZE[leather] then return CoinSize(r) == leather end
     if leather == "hides" then
         for id in pairs(r.items) do
             if HIDES[id] then return true end
@@ -370,6 +391,19 @@ local function LeatherList(all, prof)
     end
     for id in pairs(HIDES) do colorOf[id] = colorOf[id] or HIDE_COLOR end
     if PALETTES.money and prof == "money" then colorOf[FN.COIN] = PALETTES.money[1] end
+    if prof == "money" then -- coin by size, small to large; a size never looted stays off the list
+        local sizes = {}
+        for _, r in ipairs(all) do
+            local k = CoinSize(r)
+            sizes[k] = (sizes[k] or 0) + 1
+        end
+        for _, z in ipairs(COIN_SIZES) do
+            colorOf[z.key] = z.color
+            if sizes[z.key] then
+                list[#list + 1] = { key = z.key, label = z.label, count = sizes[z.key], color = z.color }
+            end
+        end
+    end
     if hides > 0 then list[#list + 1] = { key = "hides", label = "Hides", count = hides, color = HIDE_COLOR } end
     if ruined > 0 then list[#list + 1] = { key = "ruined", label = "Ruined scraps", count = ruined, color = RUINED_COLOR } end
     return list, colorOf, rank
@@ -384,19 +418,22 @@ local function Auto(n)
     return 3.6 * GRID_SCALE, 4, true
 end
 
--- returns the smoothed grid, its peak, and the most any one area holds before smoothing
-local function HeatGrid(recs, cols, rows, passes)
-    local g = {}
-    for i = 1, cols * rows do g[i] = 0 end
+-- returns the smoothed grid, its peak, the most any one area holds before smoothing, and the most
+-- gathers in one area. weigh: each record's weight (Money: its copper), else 1 each.
+local function HeatGrid(recs, cols, rows, passes, weigh)
+    local g, n = {}, {}
+    for i = 1, cols * rows do g[i], n[i] = 0, 0 end
     for _, r in ipairs(recs) do
         local c = math.min(cols - 1, math.floor(r.x / 1000 * cols))
         local rr = math.min(rows - 1, math.floor(r.y / 1000 * rows))
         local i = rr * cols + c + 1
-        g[i] = g[i] + 1
+        g[i] = g[i] + (weigh and weigh(r) or 1)
+        n[i] = n[i] + 1
     end
-    local rawMax = 0
+    local rawMax, rawCount = 0, 0
     for i = 1, #g do
         if g[i] > rawMax then rawMax = g[i] end
+        if n[i] > rawCount then rawCount = n[i] end
     end
     -- smooth with a 3x3 kernel so the heat reads as areas, not specks
     for _ = 1, passes do
@@ -421,7 +458,7 @@ local function HeatGrid(recs, cols, rows, passes)
     for i = 1, #g do
         if g[i] > max then max = g[i] end
     end
-    return g, max, rawMax
+    return g, max, rawMax, rawCount
 end
 
 -- the densest areas, at least six areas apart, strongest first
@@ -803,17 +840,21 @@ local function DrawContinent(s, mapID, zoneType, model)
             end
         end
         if n > 0 then
-            rows[#rows + 1] = { zone = pz.zone, value = n, who = who, loot = loot, copper = copper }
-            max = math.max(max, n)
+            -- Money's circles size and color by the copper looted, the others by how many
+            local value = s.prof == "money" and copper or n
+            rows[#rows + 1] = { zone = pz.zone, value = value, n = n, who = who, loot = loot, copper = copper }
+            max = math.max(max, value)
             total = total + n
         end
     end
     -- biggest first, so smaller badges sit on top where they overlap
     table.sort(rows, function(a, b) return a.value > b.value end)
 
+    -- Zone circles off (map settings): the key still counts the zones, the map stays bare
+    model.badges = s.zoneBadges ~= false
     local w, h = overlay:GetSize()
-    for i, row in ipairs(rows) do
-        local v = row.value / max
+    for i, row in ipairs(model.badges and rows or {}) do
+        local v = row.value / math.max(max, 1)
         local b = Badge(i)
         local size = 22 + 26 * math.sqrt(v) -- area grows with the value
         b:SetSize(size, size)
@@ -823,7 +864,7 @@ local function DrawContinent(s, mapID, zoneType, model)
         ApplyBadge(b, PinScale())
         local lr, lg, lb = Ramp(0.15 + 0.85 * v)
         b.disc:SetVertexColor(lr, lg, lb)
-        b.label:SetText(Short(row.value))
+        b.label:SetText(s.prof == "money" and FN.ShortMoney(row.copper, true) or Short(row.value))
         -- dark numbers on the pale end of the scale, light ones on the dark end
         if 0.299 * lr + 0.587 * lg + 0.114 * lb > 0.6 then
             b.label:SetTextColor(INK[1], INK[2], INK[3])
@@ -841,20 +882,20 @@ local function DrawContinent(s, mapID, zoneType, model)
         local unitP = M.PROF[s.prof] or { unit = "gather", units = "gathers" }
         b.zone = {
             id = row.zone.id, name = row.zone.name,
-            summary = row.value .. " " .. (row.value == 1 and unitP.unit or unitP.units),
+            summary = row.n .. " " .. (row.n == 1 and unitP.unit or unitP.units),
             who = table.concat(names, ", "), loot = table.concat(items, "  ·  "),
         }
         b:Show()
     end
-    ui.badgeCount = #rows
+    ui.badgeCount = model.badges and #rows or 0
 
     model.skins = total
     model.copper = 0
     for _, row in ipairs(rows) do model.copper = model.copper + row.copper end
     model.zones = #rows
     model.bestZone = rows[1] and rows[1].zone.name
-    model.scale = "Badge size and color: " .. ((M.PROF[s.prof] and M.PROF[s.prof].units) or "gathers")
-        .. " per zone. Click one to open it."
+    model.scale = "Badge size and color: " .. (s.prof == "money" and "coin looted"
+        or (M.PROF[s.prof] and M.PROF[s.prof].units) or "gathers") .. " per zone. Click one to open it."
     if #rows == 0 then
         model.message = s.show == "community" and "Nothing shared on this map yet."
             or ("Nothing " .. ((M.PROF[s.prof] and M.PROF[s.prof].verb) or "gathered") .. " on this map yet.")
@@ -1155,11 +1196,25 @@ local function Draw()
     local rows = math.max(1, math.floor(cols * h / w + 0.5))
     local cw, ch = w / cols, h / rows
     local spread, passes, hideThin = Auto(#recs)
-    local g, max, rawMax = HeatGrid(recs, cols, rows, passes)
-    SetFade(rawMax)
+    -- Money glows by the copper looted, not by how many loots (2026-11-17, Karl)
+    local money = s.prof == "money"
+    local g, max, rawMax, rawCount = HeatGrid(recs, cols, rows, passes, money and function(r)
+        return r.items[FN.COIN] or 0
+    end or nil)
+    SetFade(rawCount) -- the fade eases off by how many gathers, whatever the heat weighs
+    -- one lone gather's worth: thinner areas are left out when the heat is crowded
+    local thin = 0.35 / (GRID_SCALE * GRID_SCALE)
+    if money then
+        -- coin is lopsided (one elite's gold outweighs a camp of copper mobs), so the glow follows
+        -- the square root of the amount: rich spots still lead, the everyday ones still show
+        thin = thin * Copper(recs) / #recs
+        for i = 1, #g do g[i] = math.sqrt(g[i]) end
+        max, thin = math.sqrt(max), math.sqrt(thin)
+    end
+    if max <= 0 then max = 1 end -- (every loot here was 0 copper)
     local size = spread * s.spread * math.max(cw, ch)
     local function Counts(i)
-        return g[i] / max >= EDGE_FROM and (not hideThin or g[i] >= 0.35 / (GRID_SCALE * GRID_SCALE))
+        return g[i] / max >= EDGE_FROM and (not hideThin or g[i] >= thin)
     end
 
     if s.mode == "heat" then
@@ -1233,6 +1288,7 @@ local function Draw()
             local key = s.leather
             local c = (type(key) == "number" and key ~= 0 and colorOf[key])
                 or (key == "hides" and HIDE_COLOR) or (key == "ruined" and RUINED_COLOR)
+                or (money and colorOf[CoinSize(r)]) -- Money's dots: copper, silver or gold by size
                 or colorOf[MainItem(r, rank)] or OTHER_COLOR
             d:SetVertexColor(c[1], c[2], c[3], alpha)
         end
@@ -1272,7 +1328,9 @@ local function Draw()
             local names, items = {}, {}
             for _, npc in ipairs(Top(who, 2)) do names[#names + 1] = SourceName(s.prof, npc) end
             for _, id in ipairs(Top(loot, 2)) do items[#items + 1] = ItemName(id) end
-            if s.prof == "money" then items = { FN.FormatMoney(f.copper) } end -- how much, not "Coin"
+            if money then -- how much, not "Coin", and what one loot here gives on average
+                items = { FN.FormatMoney(f.copper), "avg " .. FN.FormatMoney(f.copper / near) }
+            end
             local p = Pin(i)
             -- the map art is drawn at its own (smaller) scale; size the pin and its number for the
             -- screen so they read the same at any map size
@@ -1303,7 +1361,8 @@ local function Draw()
                 heat = f.heat, color = { Ramp(f.heat) }, -- the spot's own place on the heat ramp
                 -- the key's one-line form: the top name and how many more ("Raw Brilliant Smallfish +1")
                 whoShort = names[1] and (names[1] .. (#names > 1 and ("  +" .. (#names - 1)) or "")) or "",
-                lootShort = items[1] and (items[1] .. (#items > 1 and ("  +" .. (#items - 1)) or "")) or "",
+                lootShort = money and items[1]
+                    or (items[1] and (items[1] .. (#items > 1 and ("  +" .. (#items - 1)) or "")) or ""),
                 coords = string.format("%d, %d", math.floor(hx * 100 + 0.5), math.floor(hy * 100 + 0.5)),
                 map = mapID, x = hx, y = hy, place = model.place,
             }
@@ -1328,7 +1387,8 @@ local function Draw()
         model.topLoot = FN.FormatMoney(model.copper)
     end
     if s.mode == "heat" then
-        model.peak = rawMax -- the key numbers its ramp from 1 to this
+        model.peak = rawMax -- the key numbers its ramp from 1 to this (Money: copper, on a root scale)
+        model.peakMoney = money or nil
     elseif s.mode == "spotlight" then
         model.scale = "Brightest where you " .. (s.prof == "fishing" and "fish" or "gather") .. " most"
     else

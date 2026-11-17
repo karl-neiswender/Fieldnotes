@@ -612,3 +612,9 @@
   check gains a quest chest. Checks pass (56), copied to Era and Forever. Not seen in game. Committed and pushed.
 - v0.10.1 release (2026-11-11, Karl: "mark for release"): TOC 0.10.1, CHANGELOG 0.10.1 (coin starts a
   session, quest boxes are no longer treasure). Tag v0.10.1 pushed to trigger the CurseForge workflow.
+- Money scale (2026-11-17, Karl, no mockup): Money's heat, hot spots and continent circles now weigh
+  the copper looted, not the number of loots, on a square-root scale so one rich drop does not drown
+  the rest. The key's ramp reads in coin (1c to the richest spot, each tick in its largest coin);
+  hot spots add the average per loot. The material list offers Copper drops (under 1s), Silver drops
+  (1s to 1g) and Gold drops (1g or more), and Points colors each dot by its size. Checks pass (57),
+  copied to Era and Forever. Not yet seen in game.
