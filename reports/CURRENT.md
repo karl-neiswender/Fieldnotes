@@ -617,4 +617,21 @@
   the rest. The key's ramp reads in coin (1c to the richest spot, each tick in its largest coin);
   hot spots add the average per loot. The material list offers Copper drops (under 1s), Silver drops
   (1s to 1g) and Gold drops (1g or more), and Points colors each dot by its size. Checks pass (57),
-  copied to Era and Forever. Not yet seen in game.
+  copied to Era and Forever. Seen in game by Karl (2026-11-17). Committed and pushed (a0b8fed).
+- Time page (2026-11-17, Karl approved design/time-2026-11-17/Playtime-v4.html: "Build it"):
+  - Playtime.lua keeps time per character (FieldnotesDB.playtime, local only): seconds per hour of each
+    day, AFK apart; one session per log in (a /reload carries it on); a roster of class, level, carried
+    coin and /played, asked quietly at log in (ChatFrame_DisplayTimePlayed held back for our own ask
+    only). /played before this version is kept as `pre`, worked out once.
+  - TimePage.lua, in the dock: range (Week, 2 Weeks, Month, Year, All), headline with the range before,
+    three facts sized to their words (days played, per day, longest; a clicked day: sessions, longest, first
+    log in), AFK switch (off by default, settings.timeAfk), class-stacked columns (click to narrow),
+    class key with shares, When you play grid, Gathered with per hour played on hover, Characters as a card
+    per class (level, gold looted in coin icons, time, a bar against the busiest; click for gathers,
+    carried coin, played in all); characters with gathers but no class yet share one closed card.
+    Shares StatsPage's drawing pieces (SP.kit).
+  - Rail: a Time tab (clock) above Stats; /fn time. Clock icon is a stand-in drawn to match the set
+    (design/icons-v2-2026-11-04/clock-64.png -> Media/icons/clock-white.tga, tools/icons.py).
+  - Not in this build from the mockup: hovering the class key to pick out one class.
+  - Checks pass (58, one new: time counted, AFK left out unless asked, /played quiet, every range
+    draws). Copied to Era and Forever. Seen in game by Karl (2026-11-17) and tuned from his screenshots.

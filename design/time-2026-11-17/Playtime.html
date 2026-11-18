@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldnotes playtime</title>
+<style>
+:root {
+  --head: #ece4d0; --chosen: #f2ead6; --bronze: #8a8070; --edge: #4a463f; --rest: #a9a59c;
+  --text: #e8e8e8; --ink2: #bdbdbd; --sub: #999; --faint: #6d665a; --track: #2a2824;
+  --skinning: #e8803b; --mining: #e35445; --herbalism: #70bf4f; --fishing: #4fa3e0; --cloth: #a67ddb; --treasure: #40c7ad;
+  --money: #ffcc33; --silver: #c9ccd4; --copper: #c8814a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 30% 30%, #2a3138 0%, #11161b 70%); color: var(--text);
+  font: 13px/1.4 "Segoe UI", Arial, sans-serif; min-height: 100vh; }
+button { font: inherit; cursor: pointer; color: inherit; }
+button:focus-visible { outline: 2px solid var(--chosen); outline-offset: 2px; }
+.stage { max-width: 1240px; margin: 0 auto; padding: 28px 16px 48px; }
+.top h1 { font-weight: 600; font-size: 20px; color: var(--head); margin: 0; }
+.top p { margin: 4px 0 18px; color: var(--sub); max-width: 800px; line-height: 1.5; }
+.row { display: flex; align-items: flex-start; flex-wrap: wrap; }
+.wrap { display: flex; align-items: flex-start; flex: none; max-width: 100%; }
+
+.dock { width: 340px; max-width: calc(100vw - 76px); height: 800px; border: 1px solid var(--edge); border-radius: 6px;
+  background: linear-gradient(#1b1814, #040404); flex: none; display: flex; flex-direction: column; position: relative; z-index: 1; }
+.head { padding: 14px 16px 10px; display: flex; align-items: center; gap: 9px; }
+.head h2 { margin: 0; font-weight: 600; font-size: 20px; color: var(--head); }
+.head small { display: block; color: var(--sub); font-size: 12px; }
+.scroll { flex: 1; overflow-y: auto; padding: 0 16px 16px; scrollbar-width: thin; scrollbar-color: #5a554c transparent; }
+.sect { margin-top: 14px; }
+.sect:first-child { margin-top: 0; }
+.sect h3 { margin: 0 0 6px; font-weight: 400; font-size: 11px; letter-spacing: .6px; color: var(--sub); text-transform: uppercase;
+  display: flex; justify-content: space-between; align-items: center; min-height: 20px; gap: 8px; }
+.sect h3 .aside { text-transform: none; letter-spacing: 0; color: var(--faint); font-size: 11px; }
+.card { border: 1px solid #45423c; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 10px; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.kpi { border: 1px solid #45423c; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 7px 10px 6px; }
+.kpi b { display: block; font-weight: 400; font-size: 20px; line-height: 24px; }
+.kpi span { font-size: 11px; color: var(--sub); }
+.kpi small { display: block; font-size: 10px; color: var(--faint); margin-top: 1px; }
+
+.seg { display: inline-flex; border: 1px solid #45423c; border-radius: 3px; overflow: hidden; }
+.seg button { border: 0; background: linear-gradient(#262420, #0e0d0b); color: var(--sub); font-size: 11px; padding: 2px 8px; }
+.seg button + button { border-left: 1px solid #45423c; }
+.seg button.on { background: linear-gradient(#3d3a33, #191816); color: var(--chosen); }
+
+/* columns: played time, stacked by class; click one to open it below */
+.plot { position: relative; height: 128px; margin: 6px 0 0 30px; }
+.grid { position: absolute; left: 0; right: 0; border-top: 1px solid #2c2925; }
+.grid span { position: absolute; right: calc(100% + 6px); top: -7px; font-size: 10px; color: var(--faint); white-space: nowrap; }
+.cols { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 3px; }
+.col { flex: 1; max-width: 40px; height: 100%; display: flex; flex-direction: column-reverse; margin: 0 auto; position: relative; border-radius: 2px; }
+.col i { display: block; width: 100%; opacity: .62; transition: opacity .16s; }
+.col i:last-child { border-radius: 2px 2px 0 0; }
+.col:hover i { opacity: .85; }
+.col.sel i { opacity: 1; }
+.col.sel::after { content: ""; position: absolute; left: -2px; right: -2px; bottom: -6px; height: 2px; border-radius: 1px; background: var(--chosen); }
+.ticks { display: flex; gap: 3px; margin: 8px 0 0 30px; }
+.ticks span { flex: 1; max-width: 40px; margin: 0 auto; font-size: 10px; color: var(--faint); text-align: center; white-space: nowrap; }
+.ticks span.sel { color: var(--chosen); }
+.legend { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 8px; font-size: 11px; color: var(--ink2); }
+.legend span { display: flex; align-items: center; gap: 4px; }
+.legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--k); }
+
+/* the chosen period */
+.period { margin-top: 14px; border-top: 1px solid #3a3730; padding-top: 12px; }
+.period .title { display: flex; justify-content: space-between; align-items: baseline; }
+.period .title b { font-size: 16px; font-weight: 600; color: var(--head); }
+.period .title span { font-size: 12px; color: var(--sub); }
+.stepper { display: flex; gap: 4px; }
+.stepper button { width: 22px; height: 22px; border: 1px solid #45423c; border-radius: 3px; background: linear-gradient(#262420, #0e0d0b); color: var(--ink2); font-size: 11px; padding: 0; }
+.stepper button:disabled { opacity: .3; cursor: default; }
+.big { font-size: 26px; line-height: 30px; margin: 4px 0 0; }
+.big small { font-size: 12px; color: var(--sub); margin-left: 6px; }
+.split { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--track); margin: 8px 0 4px; }
+.split i { display: block; height: 100%; }
+.splitnote { font-size: 11px; color: var(--sub); }
+
+/* class and character rows */
+.cls > button { width: 100%; display: grid; grid-template-columns: 18px 1fr auto 12px; gap: 8px; align-items: center; padding: 5px 4px;
+  border: 0; background: none; border-radius: 3px; text-align: left; }
+.cls > button:hover { background: rgba(242,234,214,.06); }
+.badge { width: 18px; height: 18px; border-radius: 3px; border: 1px solid #000; background: var(--k); box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); }
+.lab { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; gap: 6px; }
+.lab b { font-weight: 400; color: var(--k); }
+.lab span { color: var(--sub); white-space: nowrap; }
+.trk { height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.trk i { display: block; height: 100%; border-radius: 3px; background: var(--k); }
+.time { font-size: 12px; min-width: 50px; text-align: right; }
+.chev { color: var(--faint); font-size: 10px; transition: transform .16s; }
+.cls.open .chev { transform: rotate(90deg); }
+.chars { display: none; padding: 2px 4px 6px 30px; }
+.cls.open .chars { display: block; }
+.ch { padding: 5px 0; }
+.ch + .ch { border-top: 1px solid #24221e; }
+.ch .l1 { display: flex; justify-content: space-between; font-size: 12px; }
+.ch .l1 span { color: var(--sub); }
+.ch .l2 { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; color: var(--ink2); margin-top: 2px; }
+.ch .l2 span { display: flex; align-items: center; gap: 4px; }
+.ch .l2 i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.ch .none { color: var(--faint); }
+
+/* gathered rows */
+.gat { display: grid; grid-template-columns: 10px 74px 1fr auto; gap: 8px; align-items: center; padding: 4px; font-size: 12px; border-radius: 3px; }
+.gat:hover { background: rgba(242,234,214,.05); }
+.gat > i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.gat .trk i { background: var(--c); }
+.gat .n { text-align: right; min-width: 64px; }
+.gat .n small { color: var(--sub); font-size: 10px; display: block; line-height: 12px; }
+.coins i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 3px 0 1px; }
+.note { font-size: 11px; color: var(--faint); margin-top: 8px; line-height: 1.45; }
+
+/* roster */
+.rgroup + .rgroup { margin-top: 8px; }
+.rhead { display: flex; justify-content: space-between; font-size: 11px; color: var(--k); padding: 0 4px 3px; border-bottom: 1px solid #2c2925; }
+.rhead span { color: var(--sub); }
+.rrow { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 4px; font-size: 12px; }
+.rrow .lv { color: var(--sub); font-size: 11px; }
+.rrow .dots { display: flex; gap: 3px; }
+.rrow .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.rrow .pl { min-width: 46px; text-align: right; }
+
+.rail { display: flex; flex-direction: column; gap: 2px; margin-top: 30px; margin-left: -1px; height: 770px; flex: none; }
+.tab { width: 38px; height: 38px; border: 1px solid #3a3730; border-left: 0; border-radius: 0 6px 6px 0; display: grid; place-items: center;
+  background: linear-gradient(90deg, #121110, #070706); position: relative; color: var(--rest); }
+.tab i { width: 11px; height: 11px; border-radius: 50%; background: var(--rest); opacity: .7; display: block; }
+.tab.on { background: linear-gradient(90deg, #1b1814, #141210); border-color: var(--edge); color: var(--chosen); width: 44px; }
+.tab.on::after { content: ""; position: absolute; inset: 0; border-radius: 0 6px 6px 0; pointer-events: none;
+  background: linear-gradient(270deg, rgba(242,234,214,.16), rgba(242,234,214,0) 85%); }
+.rail .push { flex: 1; }
+
+#tip { position: fixed; pointer-events: none; z-index: 10; min-width: 170px; max-width: 260px; padding: 7px 9px 6px; border-radius: 4px;
+  background: rgba(8,10,22,.94); border: 1px solid #8a8a8a; box-shadow: 0 0 0 1px #000, 0 6px 16px rgba(0,0,0,.6);
+  font: 12px/16px Arial, Helvetica, sans-serif; color: #fff; display: none; }
+#tip b { display: block; font-size: 13px; margin-bottom: 2px; }
+#tip .kv { display: flex; justify-content: space-between; gap: 12px; }
+#tip .kv span:first-child { color: #ffd100; }
+#tip .kv i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+#tip .dim { color: #9a9a9a; }
+
+.notes { flex: 1; min-width: 280px; max-width: 520px; margin-left: 40px; line-height: 1.55; color: var(--ink2); }
+.notes h3 { margin: 18px 0 4px; font-weight: 600; font-size: 14px; color: var(--head); }
+.notes h3:first-child { margin-top: 0; }
+.notes p, .notes li { margin: 0 0 7px; }
+.notes ol, .notes ul { padding-left: 18px; margin: 0 0 10px; }
+.notes .q { border-left: 2px solid var(--chosen); padding: 2px 0 2px 10px; margin: 8px 0; color: var(--text); }
+@media (max-width: 860px) { .notes { margin: 28px 0 0; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="top">
+    <h1>Time: an account summary of your play</h1>
+    <p>Mockup for discussion (2026-11-17, third take). Total play time across every character, by day, week, month or year, stacked
+      by class. Click a column (or use the arrows) to open that day or week below: who you played, for how long, and what they
+      gathered. Open a class for its characters. Names and numbers are made up; the clock icon and typefaces are stand-ins.</p>
+  </div>
+
+  <div class="row">
+    <div class="wrap">
+      <div class="dock" role="region" aria-label="Fieldnotes dock, Time page">
+        <div class="head">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="var(--chosen)" stroke-width="2"/><path d="M12 6.5V12l3.8 2.4" fill="none" stroke="var(--chosen)" stroke-width="2" stroke-linecap="round"/></svg>
+          <div><h2>Time</h2><small id="sub">Every character on this account</small></div>
+        </div>
+        <div class="scroll" id="page">
+          <div class="sect"><h3>Account</h3><div class="kpis" id="kpis"></div></div>
+
+          <div class="sect">
+            <h3><span>Time played</span>
+              <span class="seg" role="group" aria-label="Period">
+                <button data-p="day">Day</button><button data-p="week" class="on">Week</button><button data-p="month">Month</button><button data-p="year">Year</button>
+              </span></h3>
+            <div class="card">
+              <div class="plot" id="plot"></div>
+              <div class="ticks" id="ticks"></div>
+              <div class="legend" id="legend"></div>
+
+              <div class="period">
+                <div class="title"><b id="pName"></b>
+                  <span class="stepper"><button id="prev" aria-label="Earlier">◀</button><button id="next" aria-label="Later">▶</button></span></div>
+                <div class="big" id="pTime"></div>
+                <div class="split" id="pSplit"></div>
+                <div class="splitnote" id="pSplitNote"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sect"><h3><span id="clsTitle">By class</span><span class="aside">click for characters</span></h3><div class="card" id="classes"></div></div>
+
+          <div class="sect"><h3><span id="gatTitle">Gathered</span><span class="aside" id="gatAside"></span></h3><div class="card" id="gathered"></div></div>
+
+          <div class="sect"><h3><span>Your characters</span><span class="aside">all time, from /played</span></h3><div class="card" id="roster"></div>
+            <div class="note">Day-by-day time starts when this update is installed. Before that, each character's /played total
+              still counts in the account total and here.</div></div>
+        </div>
+      </div>
+
+      <div class="rail" aria-hidden="true">
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 5h7v14H4zM13 5h7v14h-7z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="tab"><i></i></div><div class="tab"><i></i></div><div class="tab"><i></i></div>
+        <div class="tab"><i></i></div><div class="tab"><i></i></div><div class="tab"><i></i></div>
+        <div class="push"></div>
+        <div class="tab on"><svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6.5V12l3.6 2.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <h3>What changed from the second take</h3>
+      <ul>
+        <li><b>Time played, not gathering time.</b> Every minute you're logged in, on every character, whether you gather or not.</li>
+        <li><b>Stacked by class</b> instead of by profession, with a Day view added (the last 14 days).</li>
+        <li><b>Click to dial in.</b> A column opens that day, week, month or year right under the chart; the arrows step back and forward.
+          Everything below the chart follows it.</li>
+        <li><b>Classes count characters.</b> "2 Hunters", and opening it lists each one with level, time and what they gathered.</li>
+        <li><b>Gathered</b> for the chosen period: each profession's count and money, with how much came in per hour played.</li>
+        <li><b>Your characters:</b> the whole roster grouped by class, with level, all-time /played and their gathering professions.</li>
+        <li>Days played, Session length and Recent sessions are gone, to keep the page about the account.</li>
+      </ul>
+
+      <h3>What Fieldnotes would start saving</h3>
+      <ul>
+        <li>Each character's class, level and gathering professions, when it logs in.</li>
+        <li>Minutes online per character per day, counted while you're logged in (a small number per day, so years stay small).</li>
+        <li>Each character's /played total, asked quietly at log in so the line doesn't show in chat.</li>
+      </ul>
+      <p>Gathered numbers come from the records Fieldnotes already keeps. All of it stays on your computer and never goes into a share.</p>
+
+      <h3>The top split</h3>
+      <p>The bar under the period's time shows how much of it went to gathering (lighter) against everything else, from the gathers
+        themselves, the same way the Stats page counts active time.</p>
+
+      <h3>For you to decide</h3>
+      <div class="q">1. Should AFK time count? /played counts it; leaving it out shows time you were actually playing.</div>
+      <div class="q">2. Day view: last 14 days, or the last 30?</div>
+      <div class="q">3. Anything missing from the account summary (for example gold earned per character)?</div>
+    </div>
+  </div>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+// ---- made-up account: 8 characters, several of the same class ----
+const PROFS = { skinning: ["Skinning", "skins"], mining: ["Mining", "veins"], herbalism: ["Herbalism", "herbs"],
+  fishing: ["Fishing", "catches"], cloth: ["Cloth", "cloth"], treasure: ["Treasure", "chests"] };
+const PORDER = Object.keys(PROFS);
+const CLASSES = { HUNTER: ["Hunter", "Hunters", "#abd473"], WARRIOR: ["Warrior", "Warriors", "#c79c6e"], DRUID: ["Druid", "Druids", "#ff7d0a"],
+  MAGE: ["Mage", "Mages", "#69ccf0"], ROGUE: ["Rogue", "Rogues", "#fff569"] };
+const CORDER = Object.keys(CLASSES);
+const CHARS = [
+  { name: "Thornwick", cls: "HUNTER",  lv: 60, from: "2025-01-06", w: 1.0,  pre: 410, profs: ["skinning", "fishing"] },
+  { name: "Vexa",      cls: "HUNTER",  lv: 34, from: "2026-06-01", w: 0.45, pre: 0,   profs: ["herbalism", "mining"] },
+  { name: "Brakka",    cls: "WARRIOR", lv: 58, from: "2025-04-01", w: 0.7,  pre: 120, profs: ["mining"] },
+  { name: "Grunda",    cls: "WARRIOR", lv: 19, from: "2026-09-20", w: 0.3,  pre: 0,   profs: ["skinning"] },
+  { name: "Elowen",    cls: "DRUID",   lv: 60, from: "2025-09-15", w: 0.8,  pre: 60,  profs: ["herbalism", "skinning"] },
+  { name: "Mirelle",   cls: "MAGE",    lv: 41, from: "2026-03-02", w: 0.5,  pre: 0,   profs: ["fishing"] },
+  { name: "Sable",     cls: "MAGE",    lv: 12, from: "2026-10-25", w: 0.35, pre: 4,   profs: [] },
+  { name: "Quill",     cls: "ROGUE",   lv: 27, from: "2026-08-10", w: 0.35, pre: 0,   profs: ["mining", "herbalism"] },
+];
+let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const DAY = 86400000, NOW = new Date("2026-11-17T20:00:00");
+const midnight = t => { const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
+// a day: { t, char, secs played, gsecs gathering, g { prof: count }, copper }
+const days = [];
+for (const c of CHARS) {
+  c.played = c.pre * 3600;
+  for (let t = midnight(new Date(c.from + "T12:00:00")); t <= midnight(NOW); t += DAY) {
+    const d = new Date(t), weekend = d.getDay() === 0 || d.getDay() === 6;
+    const season = 0.75 + 0.45 * Math.sin((t / DAY) / 58);
+    if (rnd() > 0.3 * c.w * season * (weekend ? 1.6 : 1)) continue;
+    const secs = (20 + Math.round(rnd() ** 1.4 * 220)) * 60;
+    const gfrac = c.profs.length ? 0.15 + rnd() * 0.4 : 0.03 + rnd() * 0.05;
+    const gsecs = secs * gfrac, g = {};
+    for (const p of c.profs) g[p] = Math.round(gsecs / 60 * (1.1 + rnd()) / c.profs.length);
+    g.cloth = Math.round(secs / 60 * 0.18 * rnd()); g.treasure = rnd() < 0.3 ? 1 + Math.floor(rnd() * 3) : 0;
+    days.push({ t, char: c, secs, gsecs, g, copper: Math.round(secs / 60 * c.lv * (8 + rnd() * 30)) });
+    c.played += secs;
+  }
+}
+
+// ---- helpers ----
+const $ = s => document.querySelector(s);
+const fmt = s => { const m = Math.round(s / 60); if (m < 60) return m + "m"; const h = Math.floor(m / 60); return h + "h" + (m % 60 ? " " + (m % 60) + "m" : ""); };
+const fmtH = s => s / 3600 >= 100 ? Math.round(s / 3600).toLocaleString() + "h" : fmt(s);
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DOWS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const monday = t => { const d = new Date(midnight(t)); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
+const coins = c => { const g = Math.floor(c / 10000), s = Math.floor(c / 100) % 100, cu = c % 100, out = [];
+  if (g) out.push(`${g.toLocaleString()}<i style="background:var(--money)"></i>`); if (s) out.push(`${s}<i style="background:var(--silver)"></i>`);
+  if (cu && !g) out.push(`${cu}<i style="background:var(--copper)"></i>`); return `<span class="coins">${out.join("") || "0"}</span>`; };
+const kv = (k, v) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`;
+const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
+let period = "week", sel = null;
+
+function buckets() {
+  const out = [];
+  if (period === "day") {
+    for (let i = 13; i >= 0; i--) { const a = midnight(NOW) - i * DAY, d = new Date(a);
+      out.push({ a, b: a + DAY, tick: i % 2 ? "" : String(d.getDate()), name: (i === 0 ? "Today, " : i === 1 ? "Yesterday, " : DOWS[d.getDay()] + " ") + MON[d.getMonth()] + " " + d.getDate() }); }
+  } else if (period === "week") {
+    const m0 = monday(NOW);
+    for (let i = 11; i >= 0; i--) { const a = m0 - i * 7 * DAY, d = new Date(a);
+      out.push({ a, b: a + 7 * DAY, tick: i % 2 ? "" : d.getDate() + " " + MON[d.getMonth()], name: (i === 0 ? "This week, " : "Week of ") + MON[d.getMonth()] + " " + d.getDate() }); }
+  } else if (period === "month") {
+    for (let i = 11; i >= 0; i--) { const d = new Date(NOW.getFullYear(), NOW.getMonth() - i, 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      out.push({ a: d.getTime(), b: e.getTime(), tick: MON[d.getMonth()][0] + (d.getMonth() === 0 ? "'" + String(d.getFullYear()).slice(2) : ""), name: MON[d.getMonth()] + " " + d.getFullYear() }); }
+  } else {
+    for (let y = 2025; y <= NOW.getFullYear(); y++) out.push({ a: new Date(y, 0, 1).getTime(), b: new Date(y + 1, 0, 1).getTime(), tick: String(y), name: String(y) });
+  }
+  for (const k of out) { k.days = days.filter(x => x.t >= k.a && x.t < k.b); k.secs = k.days.reduce((a, x) => a + x.secs, 0);
+    k.byC = {}; for (const x of k.days) k.byC[x.char.cls] = (k.byC[x.char.cls] || 0) + x.secs; }
+  return out;
+}
+
+function renderKpis() {
+  const total = CHARS.reduce((a, c) => a + c.played, 0), classes = new Set(CHARS.map(c => c.cls)).size;
+  const last30 = days.filter(x => x.t > midnight(NOW) - 30 * DAY).reduce((a, x) => a + x.secs, 0);
+  const wk = days.filter(x => x.t >= monday(NOW)).reduce((a, x) => a + x.secs, 0);
+  $("#kpis").innerHTML =
+    `<div class="kpi"><b>${fmtH(total)}</b><span>Total played</span><small>every character, all time</small></div>` +
+    `<div class="kpi"><b>${CHARS.length}</b><span>Characters</span><small>${classes} classes</small></div>` +
+    `<div class="kpi"><b>${fmt(wk)}</b><span>This week</span><small>since Monday</small></div>` +
+    `<div class="kpi"><b>${fmt(last30 / 30)}</b><span>A day</span><small>average, last 30 days</small></div>`;
+}
+
+const niceStep = h => [0.5, 1, 2, 3, 5, 10, 20, 25, 50, 100, 200].find(s => h / s <= 4) || 500;
+let ks = [];
+function renderChart() {
+  ks = buckets(); if (sel === null || sel >= ks.length) sel = ks.length - 1;
+  const maxS = Math.max(3600, ...ks.map(k => k.secs)), step = niceStep(maxS / 3600), top = Math.ceil(maxS / 3600 / step) * step;
+  let html = "";
+  for (let v = 0; v <= top + 1e-9; v += step) html += `<div class="grid" style="bottom:${v / top * 100}%"><span>${v ? v + "h" : "0"}</span></div>`;
+  html += `<div class="cols">` + ks.map((k, i) => `<button class="col${i === sel ? " sel" : ""}" data-i="${i}" aria-label="${k.name}, ${fmt(k.secs)}" style="border:0;padding:0;background:none">` +
+    CORDER.filter(c => k.byC[c]).map(c => `<i style="height:${k.byC[c] / 3600 / top * 100}%;background:${CLASSES[c][2]}"></i>`).join("") + `</button>`).join("") + `</div>`;
+  $("#plot").innerHTML = html;
+  $("#ticks").innerHTML = ks.map((k, i) => `<span class="${i === sel ? "sel" : ""}">${k.tick}</span>`).join("");
+  $("#legend").innerHTML = CORDER.map(c => `<span style="--k:${CLASSES[c][2]}"><i></i>${CLASSES[c][0]}</span>`).join("");
+  $("#plot").querySelectorAll(".col").forEach(b => { const k = ks[+b.dataset.i];
+    hover(b, () => `<b>${k.name}</b>` + (k.secs ? kv("Played", fmt(k.secs)) + `<div style="height:4px"></div>` +
+      CORDER.filter(c => k.byC[c]).sort((a, z) => k.byC[z] - k.byC[a]).map(c => kv(`<i style="background:${CLASSES[c][2]}"></i>${CLASSES[c][0]}`, fmt(k.byC[c]))).join("") +
+      `<div class="dim" style="margin-top:4px">Click to open</div>` : `<span class="dim">Not played</span>`));
+    b.onclick = () => { sel = +b.dataset.i; tipEl.style.display = "none"; renderAll(false); }; });
+  $("#prev").disabled = sel === 0; $("#next").disabled = sel === ks.length - 1;
+}
+
+function renderPeriod() {
+  const k = ks[sel], gsecs = k.days.reduce((a, x) => a + x.gsecs, 0), chars = new Set(k.days.map(x => x.char));
+  $("#pName").textContent = k.name;
+  $("#pTime").innerHTML = k.secs ? `${fmt(k.secs)}<small>played · ${plural(chars.size, "character", "characters")}</small>` : `<span style="color:var(--sub);font-size:16px">Not played</span>`;
+  $("#pSplit").innerHTML = k.secs ? `<i style="width:${gsecs / k.secs * 100}%;background:var(--chosen)"></i><i style="width:${100 - gsecs / k.secs * 100}%;background:#57524a"></i>` : "";
+  $("#pSplitNote").textContent = k.secs ? `${fmt(gsecs)} gathering (${Math.round(gsecs / k.secs * 100)}%), ${fmt(k.secs - gsecs)} everything else` : "";
+  $("#clsTitle").textContent = "By class · " + k.name.replace(/^(This week|Today|Yesterday), /, "$1, ");
+  $("#gatTitle").textContent = "Gathered · " + k.name;
+
+  // classes, then their characters
+  const byC = {};
+  for (const x of k.days) { const c = byC[x.char.cls] ||= { secs: 0, chars: new Map() }; c.secs += x.secs;
+    const ch = c.chars.get(x.char) || { secs: 0, g: {} }; ch.secs += x.secs;
+    for (const [p, n] of Object.entries(x.g)) ch.g[p] = (ch.g[p] || 0) + n; c.chars.set(x.char, ch); }
+  const keys = Object.keys(byC).sort((a, b) => byC[b].secs - byC[a].secs), max = keys.length ? byC[keys[0]].secs : 1;
+  const open = new Set([...document.querySelectorAll(".cls.open")].map(e => e.dataset.k));
+  $("#classes").innerHTML = keys.length ? keys.map(c => { const [one, many, col] = CLASSES[c], v = byC[c], n = v.chars.size;
+    const rows = [...v.chars.entries()].sort((a, b) => b[1].secs - a[1].secs).map(([ch, d]) => {
+      const got = PORDER.filter(p => d.g[p]).map(p => `<span style="--c:var(--${p})"><i></i>${d.g[p].toLocaleString()} ${PROFS[p][1]}</span>`).join("");
+      return `<div class="ch"><div class="l1">${ch.name} <span>level ${ch.lv} · ${fmt(d.secs)}</span></div><div class="l2">${got || '<span class="none">Nothing gathered</span>'}</div></div>`; }).join("");
+    return `<div class="cls${open.has(c) ? " open" : ""}" data-k="${c}" style="--k:${col}">
+      <button aria-expanded="${open.has(c)}"><span class="badge"></span>
+        <span><div class="lab"><b>${n > 1 ? n + " " + many : one}</b><span>${Math.round(v.secs / k.secs * 100)}%</span></div><div class="trk"><i style="width:${v.secs / max * 100}%"></i></div></span>
+        <span class="time">${fmt(v.secs)}</span><span class="chev">▶</span></button><div class="chars">${rows}</div></div>`; }).join("")
+    : `<div style="color:var(--sub);font-size:12px;padding:4px">No characters played.</div>`;
+  $("#classes").querySelectorAll(".cls > button").forEach(b => b.onclick = () => {
+    const el = b.parentElement; el.classList.toggle("open"); b.setAttribute("aria-expanded", el.classList.contains("open")); });
+
+  // gathered
+  const g = {}; let copper = 0;
+  for (const x of k.days) { copper += x.copper; for (const [p, n] of Object.entries(x.g)) g[p] = (g[p] || 0) + n; }
+  const hrs = k.secs / 3600, gmax = Math.max(1, ...PORDER.map(p => g[p] || 0));
+  $("#gatAside").textContent = k.secs ? "per hour played" : "";
+  $("#gathered").innerHTML = k.secs ? PORDER.filter(p => g[p]).map(p => `<div class="gat" style="--c:var(--${p})"><i></i><span>${PROFS[p][0]}</span>
+      <div class="trk"><i style="width:${g[p] / gmax * 100}%"></i></div><span class="n">${g[p].toLocaleString()} ${PROFS[p][1]}<small>${(g[p] / hrs).toFixed(g[p] / hrs < 10 ? 1 : 0)} an hour</small></span></div>`).join("") +
+    `<div class="gat" style="--c:var(--money)"><i></i><span>Money</span><span></span><span class="n">${coins(copper)}<small>${coins(Math.round(copper / hrs))} an hour</small></span></div>`
+    : `<div style="color:var(--sub);font-size:12px;padding:4px">Nothing this ${period}.</div>`;
+}
+
+function renderRoster() {
+  $("#roster").innerHTML = CORDER.map(c => { const list = CHARS.filter(x => x.cls === c).sort((a, b) => b.played - a.played);
+    const [one, many, col] = CLASSES[c], tot = list.reduce((a, x) => a + x.played, 0);
+    return `<div class="rgroup" style="--k:${col}"><div class="rhead">${list.length > 1 ? list.length + " " + many : one}<span>${fmtH(tot)}</span></div>` +
+      list.map(x => `<div class="rrow"><span>${x.name} <span class="lv">${x.lv}</span></span><span class="dots">${x.profs.map(p => `<i style="--c:var(--${p})" title="${PROFS[p][0]}"></i>`).join("")}</span><span class="pl">${fmtH(x.played)}</span></div>`).join("") + `</div>`; })
+    .sort((a, b) => 0).join("");
+}
+
+const tipEl = $("#tip");
+function place(x, y) { const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let l = x + 14, t = y - h - 10; if (l + w > innerWidth - 8) l = x - w - 14; if (t < 8) t = y + 16;
+  tipEl.style.left = Math.max(8, l) + "px"; tipEl.style.top = t + "px"; }
+function hover(el, html) {
+  el.onmousemove = e => { tipEl.innerHTML = html(); tipEl.style.display = "block"; place(e.clientX, e.clientY); };
+  el.onfocus = () => { const r = el.getBoundingClientRect(); tipEl.innerHTML = html(); tipEl.style.display = "block"; place(r.right, r.top); };
+  el.onmouseleave = el.onblur = () => tipEl.style.display = "none";
+}
+
+document.querySelector(".seg").onclick = e => { const b = e.target.closest("button"); if (!b) return;
+  period = b.dataset.p; sel = null; document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x === b)); renderAll(false); };
+$("#prev").onclick = () => { if (sel > 0) { sel--; renderAll(false); } };
+$("#next").onclick = () => { if (sel < ks.length - 1) { sel++; renderAll(false); } };
+function renderAll(full) { if (full) { renderKpis(); renderRoster(); } renderChart(); renderPeriod(); }
+renderAll(true);
+</script>
+</body>
+</html>

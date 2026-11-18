@@ -1761,7 +1761,7 @@ end
 GoTo = function(key)
     local s = M.S()
     if list then list:Hide() end
-    dock.statsOpen = false
+    dock.statsOpen, dock.timeOpen = false, false
     if dock.sheetOpen then
         SetSheet(false)
         if DockOpen() and s.prof == key then
@@ -1785,7 +1785,7 @@ end
 
 SetSheet = function(open)
     dock.sheetOpen = open
-    if open then dock.statsOpen = false end
+    if open then dock.statsOpen, dock.timeOpen = false, false end
     ui.gear = dock.gear
     dock.gear.open = open
     dock.gear:Tint()
@@ -2283,6 +2283,9 @@ local function BuildDock()
         Dropdown = Dropdown, ShowProvider = ShowProvider, WhenProvider = WhenProvider, DockScroll = DockScroll,
         -- a chip changes the profession: the header's subtitle follows (it went stale before)
         OnPick = function() if StatsPlace then StatsPlace() end end })
+    -- the Time page (TimePage.lua): opened by the Time tab, the clock above Stats
+    dock.timePage = FN.TimePage.Build(body, { inner = INNER, pad = PAD, top = FIRST_Y + SCROLL_TOP, ctrlH = CTRL_H,
+        DockScroll = DockScroll })
     dock.session = SessionCard(body, INNER)
 
     -- the settings page: no panel of its own, it rises inside the dock (which clips it)
@@ -2324,7 +2327,7 @@ local function BuildDock()
             FN.db.settings.dockOpen = false
         else
             FN.db.settings.dockOpen = true
-            dock.statsOpen = false
+            dock.statsOpen, dock.timeOpen = false, false
             local s = M.S()
             if s.prof ~= "all" then
                 s.prof = "all"
@@ -2534,9 +2537,14 @@ local function BuildDock()
         profTabs[i] = t
     end
 
-    -- Stats and Settings, at the dock's bottom. Settings opens the settings page inside the dock
-    -- (at rest its icon turns a darker gold while anything differs from the defaults); Stats opens
-    -- the stats window.
+    -- Time, Stats and Settings, at the dock's bottom. Time opens the Time page (how long you play),
+    -- Stats the Stats page, Settings the settings page inside the dock (at rest its icon turns a
+    -- darker gold while anything differs from the defaults).
+    dock.time = RailTab("clock-white", C.TITLE, "Time", "How long you play, on every character", function()
+        MapUI.OpenTime(not dock.timeOpen)
+    end)
+    dock.time.p = false
+    function dock.time:Tint() ApplyTab(self) end
     dock.stats = RailTab("stats-white", C.TITLE, "Stats", "Charts of your gathering", function()
         MapUI.OpenStats(not dock.statsOpen)
     end)
@@ -2559,7 +2567,7 @@ local function BuildDock()
         self.rest = changed and C.GOLD2 or false
         ApplyTab(self)
     end
-    utilTabs[1], utilTabs[2] = dock.stats, dock.gear
+    utilTabs[1], utilTabs[2], utilTabs[3] = dock.time, dock.stats, dock.gear
 end
 
 -- which side of the small map the dock goes on, and the gap between the map's art and the
@@ -2948,10 +2956,12 @@ local function LayoutDock()
         ApplyTab(t)
         local active
         if t.p then
-            active = not dock.sheetOpen and not dock.statsOpen and s.prof == t.p.key
+            active = not dock.sheetOpen and not dock.statsOpen and not dock.timeOpen and s.prof == t.p.key
             t.rec:SetShown(t.p.key ~= "all" and FN.SessionHas and FN.SessionHas(t.p.key) or false)
         elseif t == dock.gear then
             active = dock.sheetOpen == true
+        elseif t == dock.time then
+            active = dock.timeOpen == true
         else
             active = dock.statsOpen == true
         end
@@ -2976,6 +2986,26 @@ local function RenderDock(m)
     local s = M.S()
     dock.switch:Sync()
     dock.statsPage:SetShown(dock.statsOpen == true)
+    dock.timePage:SetShown(dock.timeOpen == true)
+    if dock.timeOpen then
+        dock.icon:Set(nil)
+        dock.prof:ClearAllPoints()
+        dock.prof:SetPoint("TOPLEFT", PAD, -PAD - 2)
+        dock.prof:SetText("Time")
+        dock.prof:SetTextColor(C.TITLE[1], C.TITLE[2], C.TITLE[3])
+        dock.place:SetTextColor(C.SUBTEXT[1], C.SUBTEXT[2], C.SUBTEXT[3])
+        dock.place:SetText("Every character on this account")
+        dock.page:Hide()
+        dock.dash:Hide()
+        dock:SetGlow(nil)
+        dock.timePage:Update()
+        dock.session:ClearAllPoints()
+        dock.session:SetPoint("BOTTOMLEFT", dock.body, "BOTTOMLEFT", PAD, FOOTER_H + 8)
+        dock.session:Update()
+        dock.gear:Tint()
+        if dock.sheetOpen then SheetLayout() end
+        return
+    end
     if dock.statsOpen then
         dock.icon:Set(nil)
         dock.prof:ClearAllPoints()
@@ -3475,7 +3505,7 @@ function MapUI.Debug(Size)
             type(shown) == "number" and shown or 0, all))
     end
     -- the active tab: its copied page, the light over it, and their layers
-    for _, t in ipairs({ homeTab, dock and dock.stats, dock and dock.gear, unpack(profTabs) }) do
+    for _, t in ipairs({ homeTab, dock and dock.time, dock and dock.stats, dock and dock.gear, unpack(profTabs) }) do
         local page = t and rawget(t, "page")
         if t and rawget(t, "active") and page then
             local light = page.light
@@ -3527,7 +3557,21 @@ function MapUI.Init()
         if list then list:Hide() end
         if open and dock.sheetOpen then SetSheet(false) end
         dock.statsOpen = open == true
-        if open then FN.db.settings.dockOpen = true end
+        if open then
+            dock.timeOpen = false
+            FN.db.settings.dockOpen = true
+        end
+        MapUI.Render(model)
+    end
+    -- the Time page (the Time tab, /fn time): open or close it in the dock
+    function MapUI.OpenTime(open)
+        if list then list:Hide() end
+        if open and dock.sheetOpen then SetSheet(false) end
+        dock.timeOpen = open == true
+        if open then
+            dock.statsOpen = false
+            FN.db.settings.dockOpen = true
+        end
         MapUI.Render(model)
     end
     BuildToolbar()
@@ -3573,4 +3617,21 @@ function FN.ShowStats()
 end
 function FN.ToggleStats()
     if FN.StatsShown() then FN.HideStats() else FN.ShowStats() end
+end
+
+-- Time: a page in the dock (TimePage.lua). /fn time comes here.
+function FN.TimeShown()
+    return dock ~= nil and dock.timeOpen == true and WorldMapFrame:IsShown() and ui.layout == "dock"
+end
+function FN.ToggleTime()
+    if not dock then return end
+    if FN.TimeShown() then
+        MapUI.OpenTime(false)
+        return
+    end
+    if not WorldMapFrame:IsShown() and ToggleWorldMap then ToggleWorldMap() end
+    MapUI.OpenTime(true)
+    if WorldMapFrame:IsShown() and not UseDock() then
+        FN.Print("Time opens in the map's side panel: make the map smaller to see it.")
+    end
 end

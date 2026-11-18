@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldnotes playtime v4</title>
+<style>
+:root {
+  --head: #ece4d0; --chosen: #f2ead6; --bronze: #8a8070; --edge: #4a463f; --rest: #a9a59c;
+  --text: #e8e8e8; --ink2: #bdbdbd; --sub: #999; --faint: #6d665a; --track: #2a2824;
+  --skinning: #e8803b; --mining: #e35445; --herbalism: #70bf4f; --fishing: #4fa3e0; --cloth: #a67ddb; --treasure: #40c7ad;
+  --money: #ffcc33; --silver: #c9ccd4; --copper: #c8814a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 30% 30%, #2a3138 0%, #11161b 70%); color: var(--text);
+  font: 13px/1.4 "Segoe UI", Arial, sans-serif; min-height: 100vh; }
+button { font: inherit; cursor: pointer; color: inherit; }
+button:focus-visible { outline: 2px solid var(--chosen); outline-offset: 2px; }
+.stage { max-width: 1240px; margin: 0 auto; padding: 28px 16px 48px; }
+.top h1 { font-weight: 600; font-size: 20px; color: var(--head); margin: 0; }
+.top p { margin: 4px 0 18px; color: var(--sub); max-width: 800px; line-height: 1.5; }
+.row { display: flex; align-items: flex-start; flex-wrap: wrap; }
+.wrap { display: flex; align-items: flex-start; flex: none; max-width: 100%; }
+
+.dock { width: 340px; max-width: calc(100vw - 76px); height: 800px; border: 1px solid var(--edge); border-radius: 6px;
+  background: linear-gradient(#1b1814, #040404); flex: none; display: flex; flex-direction: column; position: relative; z-index: 1; }
+.head { padding: 14px 16px 10px; display: flex; align-items: center; gap: 9px; }
+.head h2 { margin: 0; font-weight: 600; font-size: 20px; color: var(--head); }
+.head small { display: block; color: var(--sub); font-size: 12px; }
+
+/* one control: the range */
+.ranges { display: flex; margin: 0 16px; border: 1px solid #45423c; border-radius: 3px; overflow: hidden; }
+.ranges button { flex: 1; border: 0; height: 26px; background: linear-gradient(#262420, #0e0d0b); color: var(--sub); font-size: 12px; padding: 0; }
+.ranges button + button { border-left: 1px solid #45423c; }
+.ranges button.on { background: linear-gradient(#3d3a33, #191816); color: var(--chosen); }
+.ranges button:hover:not(.on) { color: var(--ink2); }
+
+.scroll { flex: 1; overflow-y: auto; padding: 0 16px 16px; scrollbar-width: thin; scrollbar-color: #5a554c transparent; }
+
+/* the headline */
+.hero { padding: 14px 0 4px; }
+.hero .what { font-size: 12px; color: var(--sub); display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.hero .what .back { border: 1px solid #45423c; border-radius: 11px; background: linear-gradient(#262420, #0e0d0b); font-size: 11px; padding: 1px 8px 1px 6px; color: var(--ink2); }
+.hero .what .back:hover { border-color: var(--bronze); }
+.hero .num { font-size: 34px; line-height: 40px; color: var(--text); }
+.hero .num small { font-size: 13px; color: var(--sub); margin-left: 4px; }
+.hero .cmp { font-size: 12px; color: var(--ink2); }
+.up { color: #8fd18f; } .down { color: #d9a08a; }
+.afk { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--sub); margin-top: 8px; background: none; border: 0; padding: 0; }
+.pill { width: 26px; height: 14px; border-radius: 7px; background: #2e2b27; border: 1px solid #4a463f; position: relative; transition: background .16s; }
+.pill::after { content: ""; position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; background: #8a857c; transition: transform .16s, background .16s; }
+.afk[aria-checked="true"] .pill { background: #57524a; }
+.afk[aria-checked="true"] .pill::after { transform: translateX(12px); background: var(--chosen); }
+
+/* columns, stacked by class */
+.plot { position: relative; height: 120px; margin: 12px 0 0 30px; }
+.grid { position: absolute; left: 0; right: 0; border-top: 1px solid #2c2925; }
+.grid span { position: absolute; right: calc(100% + 6px); top: -7px; font-size: 10px; color: var(--faint); white-space: nowrap; }
+.cols { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+.col { flex: 1; max-width: 36px; height: 100%; display: flex; flex-direction: column-reverse; margin: 0 auto; position: relative; border: 0; padding: 0; background: none; }
+.col i { display: block; width: 100%; transition: opacity .16s; }
+.col i:last-child { border-radius: 2px 2px 0 0; }
+.cols.focus .col:not(.sel) i { opacity: .3; }
+.col:hover i { filter: brightness(1.2); }
+.col.sel::after { content: ""; position: absolute; left: 0; right: 0; bottom: -5px; height: 2px; border-radius: 1px; background: var(--chosen); }
+.ticks { display: flex; gap: 2px; margin: 7px 0 0 30px; }
+.ticks span { flex: 1; max-width: 36px; margin: 0 auto; font-size: 10px; color: var(--faint); text-align: center; white-space: nowrap; overflow: visible; }
+
+/* three facts under the headline */
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+.facts div { border: 1px solid #3a3730; border-radius: 4px; padding: 6px 8px 5px; background: linear-gradient(#211f1b, #0d0c0b); min-width: 0; }
+.facts b { display: block; font-weight: normal; font-size: 15px; line-height: 19px; color: var(--text); white-space: nowrap; }
+.facts b small { font-size: 11px; color: var(--sub); }
+.facts span { display: block; font-size: 10px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* class legend: share of the range, hover to pick a class out of the chart */
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 10px 0 0 30px; font-size: 11px; color: var(--ink2); }
+.legend span { display: flex; align-items: center; gap: 5px; cursor: default; }
+.legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--k); }
+.legend em { font-style: normal; color: var(--faint); }
+
+/* when you play: day by hour, like Stats' When you gather */
+.heat { display: grid; grid-template-columns: 22px repeat(24, minmax(0, 1fr)); gap: 1.5px; }
+.heat b { font-weight: normal; font-size: 9px; color: var(--faint); align-self: center; }
+.heat i { display: block; min-width: 0; aspect-ratio: 1; border-radius: 1px; background: #29261f; }
+.heat i.on { background: rgba(242,234,214,var(--a)); }
+.heat i:hover { outline: 1px solid rgba(255,255,255,.6); }
+.hticks { display: grid; grid-template-columns: 22px repeat(4, minmax(0, 1fr)); margin-top: 3px; font-size: 9px; color: var(--faint); }
+.busy { font-size: 11px; color: var(--sub); margin-top: 4px; }
+.busy b { font-weight: normal; color: var(--ink2); }
+
+/* gathered: one strip */
+.label { margin: 18px 0 6px; font-size: 11px; letter-spacing: .6px; color: var(--sub); text-transform: uppercase; display: flex; justify-content: space-between; }
+.label span { text-transform: none; letter-spacing: 0; color: var(--faint); }
+.got { display: flex; flex-wrap: wrap; gap: 6px; }
+.got > span { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 1px solid #3a3730; border-radius: 13px;
+  background: linear-gradient(#211f1b, #0d0c0b); font-size: 12px; }
+.got > span > i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.got > span em { font-style: normal; color: var(--sub); }
+.coins i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 3px 0 1px; }
+.coins i:last-child { margin-right: 0; }
+
+/* characters, grouped by class */
+.group { border: 1px solid #45423c; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 4px 6px; }
+.group + .group { margin-top: 6px; }
+.ghead { display: flex; align-items: center; gap: 8px; padding: 5px 4px 6px; font-size: 12px; color: var(--k); border-bottom: 1px solid #2c2925; }
+.ghead i { width: 10px; height: 10px; border-radius: 2px; background: var(--k); }
+.ghead span { margin-left: auto; color: var(--text); }
+.char > button { width: 100%; display: grid; grid-template-columns: 1fr auto 58px 10px; gap: 10px; align-items: center; padding: 6px 4px;
+  background: none; border: 0; border-radius: 3px; text-align: left; font-size: 12px; }
+.char > button:hover { background: rgba(242,234,214,.06); }
+.char > button { position: relative; }
+.char > button::after { content: ""; position: absolute; left: 4px; bottom: 1px; height: 2px; border-radius: 1px;
+  width: calc((100% - 8px) * var(--w, 0)); background: var(--k); opacity: .5; }
+.char .lv { color: var(--sub); font-size: 11px; margin-left: 4px; }
+.char .gold { text-align: right; font-size: 11px; color: var(--ink2); }
+.char .t { text-align: right; }
+.char .chev { color: var(--faint); font-size: 9px; transition: transform .16s; }
+.char.open .chev { transform: rotate(90deg); }
+.char.idle > button { color: var(--faint); }
+.detail { display: none; padding: 0 4px 8px; }
+.char.open .detail { display: block; }
+.detail .got > span { height: 22px; font-size: 11px; }
+.detail p { margin: 6px 0 0; font-size: 11px; color: var(--sub); }
+.note { font-size: 11px; color: var(--faint); margin-top: 10px; line-height: 1.45; }
+
+.rail { display: flex; flex-direction: column; gap: 2px; margin-top: 30px; margin-left: -1px; height: 770px; flex: none; }
+.tab { width: 38px; height: 38px; border: 1px solid #3a3730; border-left: 0; border-radius: 0 6px 6px 0; display: grid; place-items: center;
+  background: linear-gradient(90deg, #121110, #070706); position: relative; color: var(--rest); }
+.tab i { width: 11px; height: 11px; border-radius: 50%; background: var(--rest); opacity: .7; display: block; }
+.tab.on { background: linear-gradient(90deg, #1b1814, #141210); border-color: var(--edge); color: var(--chosen); width: 44px; }
+.tab.on::after { content: ""; position: absolute; inset: 0; border-radius: 0 6px 6px 0; pointer-events: none;
+  background: linear-gradient(270deg, rgba(242,234,214,.16), rgba(242,234,214,0) 85%); }
+.rail .push { flex: 1; }
+
+#tip { position: fixed; pointer-events: none; z-index: 10; min-width: 160px; max-width: 250px; padding: 7px 9px 6px; border-radius: 4px;
+  background: rgba(8,10,22,.94); border: 1px solid #8a8a8a; box-shadow: 0 0 0 1px #000, 0 6px 16px rgba(0,0,0,.6);
+  font: 12px/16px Arial, Helvetica, sans-serif; color: #fff; display: none; }
+#tip b { display: block; font-size: 13px; margin-bottom: 2px; }
+#tip .kv { display: flex; justify-content: space-between; gap: 12px; }
+#tip .kv span:first-child { color: #ffd100; }
+#tip .kv i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+#tip .dim { color: #9a9a9a; }
+
+.notes { flex: 1; min-width: 280px; max-width: 520px; margin-left: 40px; line-height: 1.55; color: var(--ink2); }
+.notes h3 { margin: 18px 0 4px; font-weight: 600; font-size: 14px; color: var(--head); }
+.notes h3:first-child { margin-top: 0; }
+.notes p, .notes li { margin: 0 0 7px; }
+.notes ol, .notes ul { padding-left: 18px; margin: 0 0 10px; }
+.notes .q { border-left: 2px solid var(--chosen); padding: 2px 0 2px 10px; margin: 8px 0; color: var(--text); }
+@media (max-width: 860px) { .notes { margin: 28px 0 0; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="top">
+    <h1>Time v4: the same idea, fewer parts</h1>
+    <p>Mockup for discussion (2026-11-17, fourth take). One range control, one headline, one chart, what you gathered, and your
+      characters. Click a column to look at just that day; click a character for what they gathered. Names and numbers are made up;
+      the clock icon and typefaces are stand-ins.</p>
+  </div>
+
+  <div class="row">
+    <div class="wrap">
+      <div class="dock" role="region" aria-label="Fieldnotes dock, Time page">
+        <div class="head">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="var(--chosen)" stroke-width="2"/><path d="M12 6.5V12l3.8 2.4" fill="none" stroke="var(--chosen)" stroke-width="2" stroke-linecap="round"/></svg>
+          <div><h2>Time</h2><small>Every character on this account</small></div>
+        </div>
+        <div class="ranges" role="group" aria-label="Range">
+          <button data-r="7">Week</button><button data-r="14" class="on">2 Weeks</button><button data-r="30">Month</button><button data-r="year">Year</button><button data-r="all">All</button>
+        </div>
+        <div class="scroll" id="page">
+          <div class="hero">
+            <div class="what" id="what"></div>
+            <div class="num" id="num"></div>
+            <div class="cmp" id="cmp"></div>
+            <div class="facts" id="facts"></div>
+            <button class="afk" id="afk" role="switch" aria-checked="false"><span class="pill"></span>Count time spent AFK</button>
+          </div>
+          <div class="plot" id="plot"></div>
+          <div class="ticks" id="ticks"></div>
+          <div class="legend" id="legend"></div>
+
+          <div class="label">When you play <span>day by hour</span></div>
+          <div class="heat" id="heat" role="img"></div>
+          <div class="hticks"><span></span><span>12a</span><span>6a</span><span>12p</span><span>6p</span></div>
+          <div class="busy" id="busy"></div>
+
+          <div class="label">Gathered <span id="gotAside"></span></div>
+          <div class="got" id="got"></div>
+
+          <div class="label">Characters <span>time · gold looted</span></div>
+          <div id="chars"></div>
+          <div class="note">Time counts only while you're logged in and not AFK, starting with this update. All shows each character's
+            /played as well, so play from before the update is included there.</div>
+        </div>
+      </div>
+
+      <div class="rail" aria-hidden="true">
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 5h7v14H4zM13 5h7v14h-7z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="tab"><i></i></div><div class="tab"><i></i></div><div class="tab"><i></i></div>
+        <div class="tab"><i></i></div><div class="tab"><i></i></div><div class="tab"><i></i></div>
+        <div class="push"></div>
+        <div class="tab on"><svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6.5V12l3.6 2.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <h3>What got simpler</h3>
+      <ul>
+        <li><b>One control.</b> Week, 2 Weeks and Month show a column a day (the last 7, 14 or 30 days); Year a column a month;
+          All a column a year. No separate Day / Week / Month switch, and no arrows.</li>
+        <li><b>One headline</b> instead of four tiles: time played in the range, how many characters, and against the range before it.</li>
+        <li><b>A click on a column</b> narrows the page to that day (or month). "Back" or a second click returns to the range.</li>
+        <li><b>Gathered is one strip</b> of totals, money last, instead of a card of bars.</li>
+        <li><b>When you play</b>: the day by hour grid from Stats, filled with time played instead of gathers. It follows the
+          range and a clicked day, and says when you play most.</li>
+        <li><b>By class and Your characters are one list.</b> Each class is a group ("Hunter, 6h 10m"), each character a row with
+          level, time and gold looted. Click a character for what they gathered. On All, the list is the full roster with /played.</li>
+        <li>The gathering-versus-everything-else bar is gone.</li>
+      </ul>
+
+      <h3>Review pass: more detail, still one page</h3>
+      <ul>
+        <li><b>Three facts under the headline:</b> days played (13 of 14), a day you play on average, longest session.
+          A clicked day swaps them for sessions, longest session and first log in.</li>
+        <li><b>A class key under the chart</b> with each class's share. Before, the colors could only be read by hovering.
+          Hover a class to pick it out of the columns.</li>
+        <li><b>A thin bar under each character</b>, in class color, so you can see who got the time without reading the numbers.</li>
+        <li><b>Gathered totals show an hour played rate</b> on hover (skins an hour, coin an hour).</li>
+        <li>Fixed: days counted twice across the clock change (it read "15 of 14"), and the hour grid ran wider than the dock.</li>
+      </ul>
+
+      <h3>AFK</h3>
+      <p>Not counted. The switch under the headline adds it back for anyone who wants /played's way of counting. It moves every
+        number on the page. The setting is remembered.</p>
+
+      <h3>Gold</h3>
+      <p>Each character's row shows the coin they looted in the range (Fieldnotes already records it). Opening a character also shows
+        the gold they're carrying, saved at log out.</p>
+
+      <h3>For you to decide</h3>
+      <div class="q">1. Default range: 2 Weeks (shown), or Week?</div>
+      <div class="q">2. Characters with no time in the range: list them dimmed (shown), or leave them out?</div>
+    </div>
+  </div>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+// ---- made-up account: 8 characters, several of the same class ----
+const PROFS = { skinning: "skins", mining: "veins", herbalism: "herbs", fishing: "catches", cloth: "cloth", treasure: "chests" };
+const PORDER = Object.keys(PROFS);
+const CLASSES = { HUNTER: ["Hunter", "Hunters", "#abd473"], WARRIOR: ["Warrior", "Warriors", "#c79c6e"], DRUID: ["Druid", "Druids", "#ff7d0a"],
+  MAGE: ["Mage", "Mages", "#69ccf0"], ROGUE: ["Rogue", "Rogues", "#fff569"] };
+const CORDER = Object.keys(CLASSES);
+const CHARS = [
+  { name: "Thornwick", cls: "HUNTER",  lv: 60, from: "2025-01-06", w: 1.0,  pre: 410, bag: 1843210, profs: ["skinning", "fishing"] },
+  { name: "Vexa",      cls: "HUNTER",  lv: 34, from: "2026-06-01", w: 0.45, pre: 0,   bag: 128840,  profs: ["herbalism", "mining"] },
+  { name: "Brakka",    cls: "WARRIOR", lv: 58, from: "2025-04-01", w: 0.7,  pre: 120, bag: 642077,  profs: ["mining"] },
+  { name: "Grunda",    cls: "WARRIOR", lv: 19, from: "2026-09-20", w: 0.3,  pre: 0,   bag: 4410,    profs: ["skinning"] },
+  { name: "Elowen",    cls: "DRUID",   lv: 60, from: "2025-09-15", w: 0.8,  pre: 60,  bag: 2210554, profs: ["herbalism", "skinning"] },
+  { name: "Mirelle",   cls: "MAGE",    lv: 41, from: "2026-03-02", w: 0.5,  pre: 0,   bag: 203315,  profs: ["fishing"] },
+  { name: "Sable",     cls: "MAGE",    lv: 12, from: "2026-10-25", w: 0.35, pre: 4,   bag: 712,     profs: [] },
+  { name: "Quill",     cls: "ROGUE",   lv: 27, from: "2026-08-10", w: 0.35, pre: 0,   bag: 31090,   profs: ["mining", "herbalism"] },
+];
+let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const DAY = 86400000, NOW = new Date("2026-11-17T20:00:00");
+const midnight = t => { const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
+// a day on one character: played seconds (not AFK), AFK seconds, gathers, coin looted
+const days = [];
+for (const c of CHARS) {
+  c.preSecs = c.pre * 3600;
+  for (const d = new Date(c.from + "T00:00:00"); d <= NOW; d.setDate(d.getDate() + 1)) {
+    const t = d.getTime(), weekend = d.getDay() === 0 || d.getDay() === 6;
+    const season = 0.75 + 0.45 * Math.sin((t / DAY) / 58);
+    if (rnd() > 0.3 * c.w * season * (weekend ? 1.6 : 1)) continue;
+    const secs = (20 + Math.round(rnd() ** 1.4 * 220)) * 60, afk = Math.round(secs * (0.05 + rnd() * 0.3));
+    const g = {};
+    for (const p of c.profs) g[p] = Math.round(secs / 60 * (0.3 + rnd() * 0.5) / c.profs.length);
+    g.cloth = Math.round(secs / 60 * 0.18 * rnd()); if (rnd() < 0.3) g.treasure = 1 + Math.floor(rnd() * 3);
+    // which hours of the day: evenings on weekdays, afternoons too on weekends
+    const hrs = new Array(24).fill(0);
+    let left = secs, h = weekend ? 11 + Math.floor(rnd() * 10) : 17 + Math.floor(rnd() * 5), chunk = (60 - Math.floor(rnd() * 60)) * 60;
+    while (left > 0) { const s = Math.min(left, chunk); hrs[h % 24] += s; left -= s; h++; chunk = 3600; }
+    days.push({ t, char: c, secs, afk, g, hrs, copper: Math.round(secs / 60 * c.lv * (8 + rnd() * 30)) });
+  }
+}
+
+// ---- helpers ----
+const $ = s => document.querySelector(s);
+const fmt = s => { const m = Math.round(s / 60); if (m < 60) return m + "m"; const h = Math.floor(m / 60); return h + "h" + (m % 60 ? " " + (m % 60) + "m" : ""); };
+const fmtH = s => s / 3600 >= 100 ? Math.round(s / 3600).toLocaleString() + "h" : fmt(s);
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DOWS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const HDOW = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const HDOW_ONE = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const HDOW_LONG = HDOW_ONE.map(d => d + "s");
+const hourText = h => h === 0 ? "12 am" : h < 12 ? h + " am" : h === 12 ? "12 pm" : (h - 12) + " pm";
+const coins = c => { const g = Math.floor(c / 10000), s = Math.floor(c / 100) % 100, cu = c % 100, out = [];
+  if (g) out.push(`${g.toLocaleString()}<i style="background:var(--money)"></i>`); if (s) out.push(`${s}<i style="background:var(--silver)"></i>`);
+  if (cu && !g) out.push(`${cu}<i style="background:var(--copper)"></i>`); return `<span class="coins">${out.join("") || "0"}</span>`; };
+const kv = (k, v) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`;
+let range = "14", focus = null, withAfk = false;
+const played = x => x.secs - (withAfk ? 0 : x.afk);
+
+// the range's columns: a day each (7, 14, 30), a month each (Year), a year each (All)
+function columns(r) {
+  const out = [], today = midnight(NOW);
+  if (r === "year") for (let i = 11; i >= 0; i--) { const d = new Date(NOW.getFullYear(), NOW.getMonth() - i, 1);
+      out.push({ a: d.getTime(), b: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(), tick: MON[d.getMonth()][0], name: MON[d.getMonth()] + " " + d.getFullYear() }); }
+  else if (r === "all") for (let y = 2025; y <= NOW.getFullYear(); y++)
+      out.push({ a: new Date(y, 0, 1).getTime(), b: new Date(y + 1, 0, 1).getTime(), tick: String(y), name: String(y) });
+  else { const n = +r; for (let i = n - 1; i >= 0; i--) { const d = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - i), a = d.getTime();
+      const every = n === 7 ? 1 : n === 14 ? 2 : 5;
+      out.push({ a, b: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(), tick: n === 7 ? DOWS[d.getDay()] : (i % every ? "" : String(d.getDate())),
+        name: (i === 0 ? "Today" : i === 1 ? "Yesterday" : DOWS[d.getDay()]) + ", " + MON[d.getMonth()] + " " + d.getDate() }); } }
+  for (const k of out) { k.days = days.filter(x => x.t >= k.a && x.t < k.b); k.secs = k.days.reduce((s, x) => s + played(x), 0);
+    k.byC = {}; for (const x of k.days) k.byC[x.char.cls] = (k.byC[x.char.cls] || 0) + played(x); }
+  return out;
+}
+const RANGE_WORD = { "7": "in the last 7 days", "14": "in the last 2 weeks", "30": "in the last 30 days", year: "in the last 12 months", all: "all time" };
+const PREV_WORD = { "7": "the 7 days before", "14": "the 2 weeks before", "30": "the 30 days before", year: "the 12 months before" };
+
+function render() {
+  const cols = columns(range);
+  if (focus !== null && focus >= cols.length) focus = null;
+  const sel = focus !== null ? cols[focus] : null;
+  const inRange = sel ? sel.days : cols.flatMap(k => k.days);
+  const total = inRange.reduce((s, x) => s + played(x), 0) + (range === "all" && !sel ? CHARS.reduce((s, c) => s + c.preSecs, 0) : 0);
+  const who = range === "all" && !sel ? CHARS.length : new Set(inRange.map(x => x.char)).size;
+
+  // headline
+  $("#what").innerHTML = sel ? `<button class="back" id="back">◀ ${{ "7": "Week", "14": "2 Weeks", "30": "Month", year: "Year", all: "All" }[range]}</button>${sel.name}`
+    : "Played " + RANGE_WORD[range];
+  $("#num").innerHTML = total ? `${fmtH(total)}<small>${who} character${who === 1 ? "" : "s"}</small>` : `<span style="color:var(--sub);font-size:20px">Not played</span>`;
+  let cmp = "";
+  if (!sel && PREV_WORD[range]) {
+    const span = cols[cols.length - 1].b - cols[0].a, a0 = cols[0].a - span;
+    const prev = days.filter(x => x.t >= a0 && x.t < cols[0].a).reduce((s, x) => s + played(x), 0);
+    if (prev) { const diff = total - prev; cmp = `<span class="${diff >= 0 ? "up" : "down"}">${fmt(Math.abs(diff))} ${diff >= 0 ? "more" : "less"}</span> than ${PREV_WORD[range]}`; }
+  } else if (!sel && range === "all") cmp = `Includes /played from before Fieldnotes kept time`;
+  $("#cmp").innerHTML = cmp;
+
+  // three facts: how often, how long a day, how long at once
+  const tracked = inRange.reduce((s, x) => s + played(x), 0);
+  const longest = inRange.reduce((m, x) => Math.max(m, played(x)), 0);
+  const fact = (v, k) => `<div><b>${v}</b><span>${k}</span></div>`;
+  if (!inRange.length) $("#facts").innerHTML = "";
+  else if (sel && range !== "year" && range !== "all") {
+    const first = Math.min(...inRange.map(x => x.hrs.findIndex(v => v > 0)));
+    $("#facts").innerHTML = fact(inRange.length, inRange.length === 1 ? "session" : "sessions") + fact(fmt(longest), "longest session") + fact(hourText(first), "first log in");
+  } else {
+    const dayset = new Set(inRange.map(x => x.t)), last = Math.min(sel ? sel.b : cols[cols.length - 1].b, midnight(NOW) + DAY);
+    const first = Math.max(sel ? sel.a : cols[0].a, Math.min(...days.map(x => x.t))), span = Math.round((last - first) / DAY); // DST-safe: rounds the odd hour away
+    $("#facts").innerHTML = fact(`${dayset.size}<small> of ${span.toLocaleString()}</small>`, "days played") +
+      fact(fmt(tracked / dayset.size), "a day you play") + fact(fmt(longest), "longest session");
+  }
+  const back = $("#back"); if (back) back.onclick = () => { focus = null; render(); };
+
+  // chart
+  const maxS = Math.max(3600, ...cols.map(k => k.secs)), step = [0.5, 1, 2, 3, 5, 10, 20, 25, 50, 100, 200].find(s => maxS / 3600 / s <= 4) || 500;
+  const top = Math.ceil(maxS / 3600 / step) * step;
+  let html = "";
+  for (let v = 0; v <= top + 1e-9; v += step) html += `<div class="grid" style="bottom:${v / top * 100}%"><span>${v ? v + "h" : "0"}</span></div>`;
+  html += `<div class="cols${sel ? " focus" : ""}">` + cols.map((k, i) => `<button class="col${i === focus ? " sel" : ""}" data-i="${i}" aria-label="${k.name}, ${fmt(k.secs)}">` +
+    CORDER.filter(c => k.byC[c]).map(c => `<i data-c="${c}" style="height:${k.byC[c] / 3600 / top * 100}%;background:${CLASSES[c][2]}"></i>`).join("") + `</button>`).join("") + `</div>`;
+  $("#plot").innerHTML = html;
+  $("#ticks").innerHTML = cols.map(k => `<span>${k.tick}</span>`).join("");
+  $("#plot").querySelectorAll(".col").forEach(b => { const k = cols[+b.dataset.i];
+    hover(b, () => `<b>${k.name}</b>` + (k.secs ? kv("Played", fmt(k.secs)) + `<div style="height:4px"></div>` +
+      CORDER.filter(c => k.byC[c]).sort((a, z) => k.byC[z] - k.byC[a]).map(c => kv(`<i style="background:${CLASSES[c][2]}"></i>${CLASSES[c][0]}`, fmt(k.byC[c]))).join("")
+      : `<span class="dim">Not played</span>`));
+    b.onclick = () => { focus = focus === +b.dataset.i ? null : +b.dataset.i; tipEl.style.display = "none"; render(); }; });
+
+  // legend: each class's share of the range; hover picks it out of the chart
+  const byClass = {}; for (const x of inRange) byClass[x.char.cls] = (byClass[x.char.cls] || 0) + played(x);
+  $("#legend").innerHTML = CORDER.filter(c => byClass[c]).sort((a, z) => byClass[z] - byClass[a])
+    .map(c => `<span data-c="${c}" style="--k:${CLASSES[c][2]}"><i></i>${CLASSES[c][0]} <em>${Math.round(byClass[c] / tracked * 100)}%</em></span>`).join("");
+  $("#legend").querySelectorAll("span").forEach(el => {
+    el.onmouseenter = () => $("#plot").querySelectorAll(".col i").forEach(i => i.style.opacity = i.dataset.c === el.dataset.c ? 1 : .2);
+    el.onmouseleave = () => $("#plot").querySelectorAll(".col i").forEach(i => i.style.opacity = ""); });
+
+  // when you play: Mon first, like Stats
+  const heat = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  for (const x of inRange) { const dw = (new Date(x.t).getDay() + 6) % 7, k = played(x) / x.secs; x.hrs.forEach((s, h) => heat[dw][h] += s * k); }
+  const hmax = Math.max(1, ...heat.flat());
+  const one = !!sel && range !== "year" && range !== "all";
+  let hh = "";
+  heat.forEach((row, dw) => { hh += `<b>${HDOW[dw]}</b>` + row.map((v, h) => v > 0
+    ? `<i class="on" data-d="${dw}" data-h="${h}" style="--a:${(0.15 + 0.85 * (v / hmax) ** 0.7).toFixed(2)}"></i>` : `<i data-d="${dw}" data-h="${h}"></i>`).join(""); });
+  $("#heat").innerHTML = hh;
+  $("#heat").querySelectorAll("i").forEach(el => { const dw = +el.dataset.d, h = +el.dataset.h;
+    hover(el, () => { const v = heat[dw][h]; return `<b>${one ? HDOW_ONE[dw] : HDOW_LONG[dw]}, ${hourText(h)}</b>` +
+      (v ? kv("Played", fmt(v)) : `<span class="dim">Not played</span>`) + (v && v === hmax && !one ? `<div class="dim">Your busiest hour</div>` : ""); }); });
+  const rows = heat.map(r => r.reduce((a, b) => a + b, 0)), hcols = heat[0].map((_, h) => heat.reduce((s, r) => s + r[h], 0));
+  const bd = rows.indexOf(Math.max(...rows)), bh = hcols.indexOf(Math.max(...hcols));
+  $("#busy").innerHTML = !inRange.length ? "" : one ? `Played from <b>${hourText(heat[bd].findIndex(v => v > 0))}</b> to <b>${hourText((heat[bd].findLastIndex(v => v > 0) + 1) % 24)}</b>`
+    : `Most often on <b>${HDOW_LONG[bd]}</b>, around <b>${hourText(bh)}</b>`;
+  $("#heat").setAttribute("aria-label", "Time played by day and hour. " + ($("#busy").textContent || "Not played"));
+
+  // gathered
+  const g = {}; let copper = 0;
+  for (const x of inRange) { copper += x.copper; for (const [p, n] of Object.entries(x.g)) g[p] = (g[p] || 0) + n; }
+  $("#gotAside").textContent = sel ? sel.name : "";
+  $("#got").innerHTML = inRange.length ? PORDER.filter(p => g[p]).map(p => `<span data-p="${p}" style="--c:var(--${p})"><i></i>${g[p].toLocaleString()} <em>${PROFS[p]}</em></span>`).join("") +
+    `<span data-p="money" style="--c:var(--money)">${coins(copper)}</span>` : `<span style="color:var(--sub)">Nothing yet</span>`;
+  const hrsPlayed = tracked / 3600;
+  $("#got").querySelectorAll("[data-p]").forEach(el => { const p = el.dataset.p;
+    hover(el, () => p === "money"
+      ? `<b>Coin looted</b>` + kv("In all", coins(copper)) + kv("An hour played", hrsPlayed > 0.05 ? coins(Math.round(copper / hrsPlayed)) : "-")
+      : `<b>${p[0].toUpperCase() + p.slice(1)}</b>` + kv("In all", g[p].toLocaleString() + " " + PROFS[p]) +
+        kv("An hour played", hrsPlayed > 0.05 ? (g[p] / hrsPlayed).toFixed(1) : "-")); });
+
+  // characters by class
+  const per = new Map();
+  for (const x of inRange) { const v = per.get(x.char) || { secs: 0, copper: 0, g: {} }; v.secs += played(x); v.copper += x.copper;
+    for (const [p, n] of Object.entries(x.g)) v.g[p] = (v.g[p] || 0) + n; per.set(x.char, v); }
+  if (range === "all" && !sel) for (const c of CHARS) { const v = per.get(c) || { secs: 0, copper: 0, g: {} }; v.secs += c.preSecs; per.set(c, v); }
+  const maxC = Math.max(1, ...[...per.values()].map(v => v.secs));
+  const open = new Set([...document.querySelectorAll(".char.open")].map(e => e.dataset.n));
+  const groups = CORDER.map(c => { const list = CHARS.filter(x => x.cls === c).map(x => ({ c: x, v: per.get(x) || { secs: 0, copper: 0, g: {} } }))
+      .sort((a, b) => b.v.secs - a.v.secs); return { c, list, secs: list.reduce((s, x) => s + x.v.secs, 0) }; })
+    .sort((a, b) => b.secs - a.secs);
+  $("#chars").innerHTML = groups.map(({ c, list, secs }) => { const [one, many, col] = CLASSES[c];
+    return `<div class="group" style="--k:${col}"><div class="ghead"><i></i>${one}<span>${secs ? fmtH(secs) : "-"}</span></div>` +
+      list.map(({ c: ch, v }) => { const gotten = PORDER.filter(p => v.g[p]).map(p => `<span style="--c:var(--${p})"><i></i>${v.g[p].toLocaleString()} <em>${PROFS[p]}</em></span>`).join("");
+        return `<div class="char${v.secs ? "" : " idle"}${open.has(ch.name) ? " open" : ""}" data-n="${ch.name}">
+          <button aria-expanded="${open.has(ch.name)}" style="--w:${(v.secs / maxC).toFixed(3)}"><span>${ch.name}<span class="lv">${ch.lv}</span></span><span class="gold">${v.copper ? coins(v.copper) : ""}</span>
+            <span class="t">${v.secs ? fmtH(v.secs) : "-"}</span><span class="chev">▶</span></button>
+          <div class="detail"><div class="got">${gotten || '<span style="color:var(--sub)">Nothing gathered</span>'}</div>
+            <p>Carrying ${coins(ch.bag)}<span style="color:var(--faint)">  ·  </span>${fmtH(ch.preSecs + days.filter(x => x.char === ch).reduce((s, x) => s + played(x), 0))} played in all</p></div></div>`; }).join("") + `</div>`; }).join("");
+  $("#chars").querySelectorAll(".char > button").forEach(b => b.onclick = () => {
+    const el = b.parentElement; el.classList.toggle("open"); b.setAttribute("aria-expanded", el.classList.contains("open")); });
+}
+
+const tipEl = $("#tip");
+function place(x, y) { const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let l = x + 14, t = y - h - 10; if (l + w > innerWidth - 8) l = x - w - 14; if (t < 8) t = y + 16;
+  tipEl.style.left = Math.max(8, l) + "px"; tipEl.style.top = t + "px"; }
+function hover(el, html) {
+  el.onmousemove = e => { tipEl.innerHTML = html(); tipEl.style.display = "block"; place(e.clientX, e.clientY); };
+  el.onfocus = () => { const r = el.getBoundingClientRect(); tipEl.innerHTML = html(); tipEl.style.display = "block"; place(r.right, r.top); };
+  el.onmouseleave = el.onblur = () => tipEl.style.display = "none";
+}
+document.querySelector(".ranges").onclick = e => { const b = e.target.closest("button"); if (!b) return;
+  range = b.dataset.r; focus = null; document.querySelectorAll(".ranges button").forEach(x => x.classList.toggle("on", x === b)); render(); };
+$("#afk").onclick = () => { withAfk = !withAfk; $("#afk").setAttribute("aria-checked", withAfk);
+  document.querySelector(".note").firstChild.textContent = withAfk ? "Time counts everything while you're logged in, AFK included, starting with this update. All shows each character's\n            /played as well, so play from before the update is included there."
+    : "Time counts only while you're logged in and not AFK, starting with this update. All shows each character's\n            /played as well, so play from before the update is included there."; render(); };
+render();
+</script>
+</body>
+</html>

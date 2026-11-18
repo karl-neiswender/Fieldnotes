@@ -136,6 +136,12 @@ UIParent = NewWidget("frame")
 UISpecialFrames = {}
 function GetItemIcon() return 134400 end
 C_Timer = { After = function(_, fn) fn() end }
+function UnitClass(u) if u == "player" then return "Hunter", "HUNTER" end end
+function GetMoney() return 123456 end
+playedAsked = 0
+function RequestTimePlayed() playedAsked = playedAsked + 1 end
+playedLines = 0
+function ChatFrame_DisplayTimePlayed() playedLines = playedLines + 1 end
 """
 
 # Forever, over the Era stand-in above: no old item globals (only C_Item), and the game's side tab
@@ -759,7 +765,7 @@ local demoShare = roundTrip and cutOff and imported and after > before
 
 -- every command, in demo mode
 commandErrors = {}
-for _, cmd in ipairs({ "", "", "stats", "summary", "tracker", "tracker", "chat", "chat", "share", "import", "debug", "fake", "help" }) do
+for _, cmd in ipairs({ "", "", "stats", "time", "summary", "tracker", "tracker", "chat", "chat", "share", "import", "debug", "fake", "help" }) do
   local ok, err = pcall(SlashCmdList.FIELDNOTES, cmd)
   if not ok then commandErrors[#commandErrors + 1] = "/fn " .. cmd .. " (demo): " .. tostring(err) end
 end
@@ -777,8 +783,57 @@ for _, l in ipairs(ns.CommunityLists("skinning", 1434)) do communityReal = commu
 local realShare = (refusedDemo and refusedOwn and addedTheirs and communityReal == 1) and "ok"
   or ("demo " .. tostring(refusedDemo) .. " own " .. tostring(refusedOwn) .. " theirs " .. tostring(addedTheirs) .. " n " .. communityReal)
 
+-- 10. Time: an hour at the keys and a half hour AFK on one character, /played asked quietly
+do
+  local P, TP = ns.Playtime, ns.TimePage
+  UnitIsAFK = function() return false end
+  Fire("PLAYER_FLAGS_CHANGED", "player")
+  P.Count()
+  local before, beforeAll = TP.Collect("14", nil, false).secs, TP.Collect("14", nil, true).secs
+  for _ = 1, 240 do now = now + 15; P.Count() end -- (the game counts every 15 seconds)
+  UnitIsAFK = function(u) return u == "player" end
+  Fire("PLAYER_FLAGS_CHANGED", "player")
+  for _ = 1, 120 do now = now + 15; P.Count() end
+  UnitIsAFK = function() return false end
+  Fire("PLAYER_FLAGS_CHANGED", "player")
+  local linesBefore = playedLines
+  Fire("TIME_PLAYED_MSG", 90000, 5000)
+  ChatFrame_DisplayTimePlayed() -- (the game's own /played afterwards still prints)
+  local quiet = playedAsked > 0 and playedLines == linesBefore + 1
+  local r = FieldnotesDB.playtime.roster[ns.CharIndex()]
+  local rosterOk = r.class == "HUNTER" and r.copper == 123456 and r.played == 90000 and r.pre and r.pre < 90000
+  WorldMapFrame:Show()
+  if ns.TimeShown() then ns.ToggleTime() end
+  SlashCmdList.FIELDNOTES("time")
+  local tp = ns.MapUI.dock.timePage
+  local opened = ns.TimeShown() and tp:IsShown() and not ns.StatsShown()
+  local played = tp.data.secs - before
+  FieldnotesDB.settings.timeAfk = true
+  tp:Update()
+  local withAfk = tp.data.secs - beforeAll
+  FieldnotesDB.settings.timeAfk = false
+  local ranges = true
+  for _, k in ipairs({ "7", "30", "year", "all" }) do
+    FieldnotesDB.settings.timeRange = k
+    ranges = ranges and pcall(tp.Update, tp)
+  end
+  FieldnotesDB.settings.timeAfk = true -- (All with AFK counted is /played)
+  tp:Update()
+  local allSecs = tp.data.secs + tp.data.pre
+  FieldnotesDB.settings.timeAfk = false
+  FieldnotesDB.settings.timeRange = "14"
+  tp:Update()
+  timePageOk = opened and quiet and rosterOk and math.abs(played - 3600) < 30 and math.abs(withAfk - 5400) < 30
+    and ranges and math.abs(allSecs - 90000) < 30 and tp.data.sessions == 1
+  timeDetail = "opened " .. tostring(opened) .. " quiet " .. tostring(quiet) .. " roster " .. tostring(rosterOk)
+    .. " played " .. tostring(played) .. " withAfk " .. tostring(withAfk) .. " ranges " .. tostring(ranges)
+    .. " all " .. tostring(allSecs) .. " sessions " .. tostring(tp.data.sessions)
+  SlashCmdList.FIELDNOTES("time")
+  timePageOk = timePageOk and not ns.TimeShown()
+end
+
 -- every command again, with your own records
-for _, cmd in ipairs({ "", "", "stats", "summary", "tracker", "tracker", "chat", "chat", "share", "import", "debug", "fake", "help" }) do
+for _, cmd in ipairs({ "", "", "stats", "time", "summary", "tracker", "tracker", "chat", "chat", "share", "import", "debug", "fake", "help" }) do
   local ok, err = pcall(SlashCmdList.FIELDNOTES, cmd)
   if not ok then commandErrors[#commandErrors + 1] = "/fn " .. cmd .. " (real): " .. tostring(err) end
 end
@@ -881,6 +936,8 @@ def play(flavor, stubs, verbose):
         ("share: demo text and your own text are refused; someone else's joins Community", real_share == "ok"),
         ("stats page: /fn opens it in the dock, the Stats tab closes it; All counts every profession",
          rt.globals().statsPageOk is True),
+        ("time: counts play, leaves AFK out unless asked, /played asked quietly, every range draws",
+         rt.globals().timePageOk is True),
         ("stats page fills its numbers", stats.split("|")[0].replace(",", "").isdigit() and stats.split("|")[1] != "-"),
         ("stats page: Me counts fewer skins than Account",
          0 < int(me_skins.replace(",", "")) < int(stats.split("|")[0].replace(",", ""))),
@@ -893,6 +950,7 @@ def play(flavor, stubs, verbose):
     for e in rt.globals().commandErrors.values():
         print("COMMAND    [" + flavor + "] " + e)
     if not good:
+        print("time: " + str(rt.globals().timeDetail) )
         print("record: " + str(first))
         print(chat)
     if not verbose:

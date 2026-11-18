@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldnotes time page</title>
+<style>
+:root {
+  /* the neutral look (2026-11-10): ivory chosen state and headings, bronze grey edges, gold for money only */
+  --head: #ece4d0; --chosen: #f2ead6; --bronze: #8a8070; --edge: #4a463f; --rest: #a9a59c;
+  --text: #e8e8e8; --ink2: #bdbdbd; --sub: #999; --faint: #6d665a; --track: #2a2824;
+  --skinning: #e8803b; --mining: #e35445; --herbalism: #70bf4f; --fishing: #4fa3e0; --cloth: #a67ddb; --treasure: #40c7ad; --money: #ffcc33;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 30% 30%, #2a3138 0%, #11161b 70%); color: var(--text);
+  font: 13px/1.4 "Segoe UI", Arial, sans-serif; min-height: 100vh; }
+button { font: inherit; cursor: pointer; color: inherit; }
+button:focus-visible { outline: 2px solid var(--chosen); outline-offset: 2px; }
+.stage { max-width: 1240px; margin: 0 auto; padding: 28px 16px 48px; }
+.top h1 { font-weight: 600; font-size: 20px; color: var(--head); margin: 0; }
+.top p { margin: 4px 0 18px; color: var(--sub); max-width: 780px; line-height: 1.5; }
+.row { display: flex; align-items: flex-start; flex-wrap: wrap; }
+.wrap { display: flex; align-items: flex-start; flex: none; max-width: 100%; }
+
+/* the dock (272 in game, drawn at 1.25x) */
+.dock { width: 340px; max-width: calc(100vw - 76px); height: 780px; border: 1px solid var(--edge); border-radius: 6px;
+  background: linear-gradient(#1b1814, #040404); flex: none; display: flex; flex-direction: column; position: relative; z-index: 1; }
+.head { padding: 14px 16px 8px; display: flex; align-items: center; gap: 9px; }
+.head svg { flex: none; }
+.head h2 { margin: 0; font-weight: 600; font-size: 20px; color: var(--head); }
+.head small { display: block; color: var(--sub); font-size: 12px; }
+.drops { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 16px; }
+.dd { height: 28px; display: flex; align-items: center; padding: 0 10px; border: 1px solid #66605a; border-radius: 3px;
+  background: linear-gradient(#3c3a36, #141311); color: var(--ink2); font-size: 13px; }
+.dd em { margin-left: auto; font-style: normal; font-size: 10px; }
+.chips { display: flex; gap: 4px; padding: 10px 16px 8px; }
+.chip { flex: 1; height: 28px; border: 1px solid #45423c; border-radius: 3px; background: linear-gradient(#262420, #0e0d0b);
+  display: grid; place-items: center; color: var(--ink2); font-size: 12px; padding: 0; }
+.chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); display: block; }
+.chip.all { flex: 1.6; }
+.chip.on { border-color: var(--chosen); background: linear-gradient(#3d3a33, #191816); color: var(--chosen); }
+.chip:hover:not(.on) { border-color: var(--bronze); }
+
+.scroll { flex: 1; overflow-y: auto; padding: 2px 16px 16px; scrollbar-width: thin; scrollbar-color: #5a554c transparent; }
+.sect { margin-top: 14px; }
+.sect h3 { margin: 0 0 6px; font-weight: 400; font-size: 11px; letter-spacing: .6px; color: var(--sub); text-transform: uppercase;
+  display: flex; justify-content: space-between; align-items: center; min-height: 20px; }
+.sect h3 .aside { text-transform: none; letter-spacing: 0; color: var(--faint); font-size: 11px; }
+.card { border: 1px solid #45423c; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 10px; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.kpi { border: 1px solid #45423c; border-radius: 4px; background: linear-gradient(#26241f, #0d0c0b); padding: 7px 10px 6px; }
+.kpi b { display: block; font-weight: 400; font-size: 20px; line-height: 24px; }
+.kpi span { font-size: 11px; color: var(--sub); }
+.kpi small { display: block; font-size: 10px; color: var(--faint); margin-top: 1px; }
+
+/* Week / Month / Year */
+.seg { display: inline-flex; border: 1px solid #45423c; border-radius: 3px; overflow: hidden; }
+.seg button { border: 0; background: linear-gradient(#262420, #0e0d0b); color: var(--sub); font-size: 11px; padding: 2px 9px; }
+.seg button + button { border-left: 1px solid #45423c; }
+.seg button.on { background: linear-gradient(#3d3a33, #191816); color: var(--chosen); }
+
+/* columns */
+.plot { position: relative; height: 132px; margin: 6px 0 0 30px; }
+.grid { position: absolute; left: 0; right: 0; border-top: 1px solid #2c2925; }
+.grid span { position: absolute; right: calc(100% + 6px); top: -7px; font-size: 10px; color: var(--faint); white-space: nowrap; }
+.cols { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 3px; }
+.col { flex: 1; max-width: 40px; height: 100%; display: flex; flex-direction: column-reverse; cursor: default; margin: 0 auto; }
+.col i { display: block; width: 100%; }
+.col i:last-child { border-radius: 2px 2px 0 0; }
+.col:hover, .col:focus { filter: brightness(1.3); outline: none; }
+.col.now i { box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.ticks { display: flex; gap: 3px; margin: 4px 0 0 30px; }
+.ticks span { flex: 1; max-width: 40px; margin: 0 auto; font-size: 10px; color: var(--faint); text-align: center; white-space: nowrap; }
+/* the legend is the filter: click a profession to show only its time, click again for all */
+.legend { display: flex; flex-wrap: wrap; gap: 2px 2px; margin: 10px -4px 0; padding-top: 8px; border-top: 1px solid #2c2925; }
+.legend button { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border: 1px solid transparent; border-radius: 11px;
+  background: none; font-size: 11px; color: var(--ink2); transition: opacity .16s, background .16s; }
+.legend button i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.legend button:hover { background: rgba(242,234,214,.07); }
+.legend button.on { border-color: color-mix(in srgb, var(--c) 70%, transparent); background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--text); }
+.legend.picked button:not(.on) { opacity: .45; }
+.legend.picked button:not(.on):hover { opacity: .8; }
+.summary { margin-top: 8px; font-size: 12px; color: var(--ink2); }
+.summary b { color: var(--text); font-weight: 600; }
+.dot { color: var(--faint); }
+
+/* streak strip: the last 5 weeks, a square a day */
+.streak { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+.streak .big b { display: block; font-size: 26px; font-weight: 400; line-height: 28px; }
+.streak .big span { font-size: 11px; color: var(--sub); }
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.days i { aspect-ratio: 1; border-radius: 2px; background: #1c1a17; box-shadow: inset 0 0 0 1px #2c2925; }
+.days i.on { background: var(--chosen); box-shadow: none; }
+.days i.today { outline: 1px solid var(--chosen); outline-offset: 1px; }
+.dow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; font-size: 9px; color: var(--faint); text-align: center; margin-bottom: 3px; }
+.streak .foot { grid-column: 1 / 3; font-size: 11px; color: var(--sub); }
+
+/* bar rows: classes, session lengths */
+.bar { width: 100%; display: grid; grid-template-columns: 18px 1fr auto 12px; gap: 8px; align-items: center; padding: 4px;
+  border: 0; background: none; border-radius: 3px; text-align: left; }
+button.bar:hover { background: rgba(242,234,214,.06); }
+.bar.plain { grid-template-columns: 74px 1fr auto; cursor: default; }
+.bar.plain .nm { font-size: 11px; color: var(--ink2); }
+.badge { width: 18px; height: 18px; border-radius: 3px; border: 1px solid #000; background: var(--k); box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); }
+.lab { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+.lab b { font-weight: 400; color: var(--k); }
+.lab span { color: var(--sub); }
+.trk { height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.trk i { display: block; height: 100%; border-radius: 3px; background: var(--k); }
+.time { font-size: 12px; color: var(--text); min-width: 46px; text-align: right; }
+.chev { color: var(--faint); font-size: 10px; transition: transform .16s; }
+.open .chev { transform: rotate(90deg); }
+.chars { display: none; padding: 0 4px 6px 30px; }
+.open .chars { display: block; }
+.ch { display: grid; grid-template-columns: 1fr auto; gap: 8px; font-size: 11px; line-height: 19px; color: var(--ink2); }
+.ch span:last-child { color: var(--sub); }
+
+/* recent sessions */
+.ses { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 5px 4px; border-radius: 3px; }
+.ses + .ses { border-top: 1px solid #24221e; }
+.ses:hover { background: rgba(242,234,214,.05); }
+.ses .when { font-size: 12px; }
+.ses .when span { color: var(--sub); }
+.ses .len { font-size: 12px; text-align: right; }
+.ses .mix { grid-column: 1 / 3; display: flex; height: 3px; border-radius: 2px; overflow: hidden; background: var(--track); }
+.ses .mix i { display: block; height: 100%; }
+.ses .what { grid-column: 1 / 3; font-size: 10px; color: var(--faint); }
+.note { font-size: 11px; color: var(--faint); margin-top: 8px; line-height: 1.45; }
+
+/* the rail: the dock's tabs */
+.rail { display: flex; flex-direction: column; gap: 2px; margin-top: 30px; margin-left: -1px; height: 750px; flex: none; }
+.tab { width: 38px; height: 38px; border: 1px solid #3a3730; border-left: 0; border-radius: 0 6px 6px 0; display: grid; place-items: center;
+  background: linear-gradient(90deg, #121110, #070706); position: relative; color: var(--rest); }
+.tab i { width: 11px; height: 11px; border-radius: 50%; background: var(--rest); opacity: .7; display: block; }
+.tab.on { background: linear-gradient(90deg, #1b1814, #141210); border-color: var(--edge); color: var(--chosen); width: 44px; }
+.tab.on::after { content: ""; position: absolute; inset: 0; border-radius: 0 6px 6px 0; pointer-events: none;
+  background: linear-gradient(270deg, rgba(242,234,214,.16), rgba(242,234,214,0) 85%); }
+.tab .tag { position: absolute; left: calc(100% + 8px); white-space: nowrap; font-size: 11px; color: #4cd964; }
+.tab.newtab { outline: 1px dashed rgba(76,217,100,.7); outline-offset: 2px; }
+.rail .push { flex: 1; }
+
+/* game-style tooltip */
+#tip { position: fixed; pointer-events: none; z-index: 10; min-width: 160px; max-width: 250px; padding: 7px 9px 6px; border-radius: 4px;
+  background: rgba(8,10,22,.94); border: 1px solid #8a8a8a; box-shadow: 0 0 0 1px #000, 0 6px 16px rgba(0,0,0,.6);
+  font: 12px/16px Arial, Helvetica, sans-serif; color: #fff; display: none; }
+#tip b { display: block; font-size: 13px; margin-bottom: 2px; }
+#tip .kv { display: flex; justify-content: space-between; gap: 12px; }
+#tip .kv span:first-child { color: #ffd100; }
+#tip .kv i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+#tip .dim { color: #9a9a9a; }
+
+.notes { flex: 1; min-width: 280px; max-width: 520px; margin-left: 60px; line-height: 1.55; color: var(--ink2); }
+.notes h3 { margin: 18px 0 4px; font-weight: 600; font-size: 14px; color: var(--head); }
+.notes h3:first-child { margin-top: 0; }
+.notes p, .notes li { margin: 0 0 7px; }
+.notes ol, .notes ul { padding-left: 18px; margin: 0 0 10px; }
+.notes .q { border-left: 2px solid var(--chosen); padding: 2px 0 2px 10px; margin: 8px 0; color: var(--text); }
+@media (max-width: 860px) { .notes { margin: 28px 0 0; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="top">
+    <h1>Time: its own page in the dock</h1>
+    <p>Mockup for discussion (2026-11-17, second take). Time leaves the Stats page and gets its own rail tab, a clock, right above
+      Stats. Hover columns, squares and sessions; switch Week / Month / Year; click a profession in the chart's legend; open a class. Names and
+      numbers are made up. Typefaces and the clock are stand-ins.</p>
+  </div>
+
+  <div class="row">
+    <div class="wrap">
+      <div class="dock" role="region" aria-label="Fieldnotes dock, Time page">
+        <div class="head">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="var(--chosen)" stroke-width="2"/><path d="M12 6.5V12l3.8 2.4" fill="none" stroke="var(--chosen)" stroke-width="2" stroke-linecap="round"/></svg>
+          <div><h2>Time</h2><small id="where">All professions · Account · All time</small></div>
+        </div>
+        <div class="drops" style="padding-bottom:6px"><div class="dd">Account<em>▼</em></div><div class="dd">All time<em>▼</em></div></div>
+        <div class="scroll" id="page">
+          <div class="sect"><h3>Overview</h3><div class="kpis" id="kpis"></div></div>
+
+          <div class="sect">
+            <h3><span id="periodTitle">By week</span>
+              <span class="seg" role="group" aria-label="Period">
+                <button data-p="week" class="on">Week</button><button data-p="month">Month</button><button data-p="year">Year</button>
+              </span></h3>
+            <div class="card">
+              <div class="plot" id="plot"></div>
+              <div class="ticks" id="ticks"></div>
+              <div class="legend" id="legend" role="group" aria-label="Show one profession"></div>
+              <div class="summary" id="summary"></div>
+            </div>
+          </div>
+
+          <div class="sect"><h3>Days played <span class="aside">last 5 weeks</span></h3><div class="card" id="streak"></div></div>
+
+          <div class="sect"><h3>By class <span class="aside">click for characters</span></h3><div class="card" id="classes"></div></div>
+
+          <div class="sect"><h3>Session length</h3><div class="card" id="lengths"></div></div>
+
+          <div class="sect"><h3>Recent sessions</h3><div class="card" id="recent"></div>
+            <div class="note">Time is counted from your gathers: one character's gathers less than 5 minutes apart are one session, so
+              it reads a little lower than the session clock.</div></div>
+        </div>
+      </div>
+
+      <div class="rail" aria-hidden="true">
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 5h7v14H4zM13 5h7v14h-7z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="tab"><i></i></div><div class="tab"><i></i></div><div class="tab"><i></i></div>
+        <div class="tab"><i></i></div><div class="tab"><i></i></div><div class="tab"><i></i></div>
+        <div class="push"></div>
+        <div class="tab on newtab"><svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6.5V12l3.6 2.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="tag">new: Time</span></div>
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+        <div class="tab"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <h3>What changed from the first take</h3>
+      <ul>
+        <li>Time is its own page: a <b>Time</b> tab with a clock sits right above Stats on the rail. Stats goes back to being about gathers, as it is today.</li>
+        <li>No "Unknown class": only the real classes are listed.</li>
+        <li>No profession chips. Plain dots read as classes on this page, and icons would repeat the rail's at a tiny size.
+          The chart's legend is the filter instead: click a name to show only that profession, click it again for all.</li>
+      </ul>
+
+      <h3>The page, top to bottom</h3>
+      <ol>
+        <li><b>Overview:</b> time gathering, sessions, average session, longest session.</li>
+        <li><b>By week, month or year:</b> columns stacked by profession. Hover for time, sessions, gathers, pace and each profession's share.
+          Under it: this period so far, the last one, and the average.</li>
+        <li><b>Days played:</b> a square for each of the last 35 days, lit on days you gathered. Your current streak and your best.</li>
+        <li><b>By class:</b> a bar per class in the game's class colors, longest first. Click a class for its characters.</li>
+        <li><b>Session length:</b> how many sessions were under 15 minutes, 15 to 30, 30 to 60, 1 to 2 hours, and longer.</li>
+        <li><b>Recent sessions:</b> the last five, with day, character, length and a thin bar of what you gathered.</li>
+      </ol>
+
+      <h3>Controls</h3>
+      <p>Show and When work as on Stats. Picking a profession in the legend narrows the whole page to its time, and the
+        subtitle under "Time" says which (try Skinning). The other names dim but stay clickable. With Show: Me, By class is left out.</p>
+
+      <h3>About classes</h3>
+      <p>Fieldnotes only saves names today, and the game can only tell an add-on the class of the character you're logged in as.
+        So each character's class is saved when it logs in. A character you haven't logged into since the update can't be
+        placed in a class yet, so it's simply left out of By class until you do. It still counts everywhere else on the page.</p>
+
+      <h3>For you to decide</h3>
+      <div class="q">1. Is the clock tab right above Stats the right spot, or should it come after Stats?</div>
+      <div class="q">2. Anything to cut or add? Days played and Recent sessions are new ideas.</div>
+      <div class="q">3. Is 5 minutes the right gap for splitting sessions?</div>
+      <p style="font-size:12px;color:var(--sub)">The clock icon is a stand-in until there is one in Codex's set.</p>
+    </div>
+  </div>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+// ---- made-up data: sessions over two years, shaped like real play ----
+const PROFS = [["skinning","Skinning"],["mining","Mining"],["herbalism","Herbalism"],["fishing","Fishing"],["cloth","Cloth"],["treasure","Treasure"]];
+const CLASSES = { HUNTER: ["Hunter","#abd473"], WARRIOR: ["Warrior","#c79c6e"], DRUID: ["Druid","#ff7d0a"], MAGE: ["Mage","#69ccf0"], ROGUE: ["Rogue","#fff569"] };
+const CHARS = [
+  { name: "Thornwick", cls: "HUNTER",  from: "2025-01-06", w: 1.0, mix: { skinning: 6, cloth: 2, treasure: 1, fishing: 1 } },
+  { name: "Brakka",    cls: "WARRIOR", from: "2025-04-01", w: 0.7, mix: { mining: 6, cloth: 2, treasure: 1 } },
+  { name: "Elowen",    cls: "DRUID",   from: "2025-09-15", w: 0.8, mix: { herbalism: 6, skinning: 2, fishing: 1 } },
+  { name: "Mirelle",   cls: "MAGE",    from: "2026-03-02", w: 0.5, mix: { cloth: 4, fishing: 3, treasure: 1 } },
+  { name: "Quill",     cls: "ROGUE",   from: "2026-08-10", w: 0.35, mix: { skinning: 3, cloth: 3, treasure: 2 } },
+];
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const DAY = 86400000, NOW = new Date("2026-11-17T20:00:00");
+const sessions = [];
+for (const c of CHARS) {
+  const tot = Object.values(c.mix).reduce((a, b) => a + b, 0);
+  for (let t = new Date(c.from + "T12:00:00").getTime(); t < NOW.getTime() - 3 * 3600000; t += DAY) {
+    const d = new Date(t), weekend = d.getDay() === 0 || d.getDay() === 6;
+    const season = 0.75 + 0.45 * Math.sin((t / DAY) / 58);
+    if (rnd() > 0.26 * c.w * season * (weekend ? 1.7 : 1)) continue;
+    const mins = 6 + Math.round(rnd() ** 1.6 * 100);
+    const by = {};
+    for (const [p, w] of Object.entries(c.mix)) by[p] = mins * 60 * w / tot * (0.6 + rnd() * 0.8);
+    const secs = Object.values(by).reduce((a, b) => a + b, 0);
+    sessions.push({ t: t + Math.round(rnd() * 8) * 3600000, char: c, by, secs, gathers: Math.round(secs / (24 + rnd() * 14)) });
+  }
+}
+sessions.sort((a, b) => a.t - b.t);
+
+// ---- helpers ----
+const $ = s => document.querySelector(s);
+const fmt = s => { const m = Math.round(s / 60); if (m < 60) return m + "m"; const h = Math.floor(m / 60); return h + "h" + (m % 60 ? " " + (m % 60) + "m" : ""); };
+const fmtH = s => s / 3600 >= 100 ? Math.round(s / 3600) + "h" : fmt(s);
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DOWS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const midnight = t => { const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
+const monday = t => { const d = new Date(midnight(t)); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
+let prof = "all", period = "week";
+const secsOf = s => prof === "all" ? s.secs : (s.by[prof] || 0);
+const gathersOf = s => Math.round(s.gathers * secsOf(s) / s.secs);
+const live = () => sessions.filter(s => secsOf(s) > 0);
+const kv = (k, v) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`;
+
+// ---- controls ----
+// the legend under the columns picks a profession for the whole page; the same one again goes back to all
+function renderLegend() {
+  const lg = $("#legend");
+  lg.classList.toggle("picked", prof !== "all");
+  lg.innerHTML = PROFS.filter(([p]) => sessions.some(s => s.by[p])).map(([k, n]) =>
+    `<button data-k="${k}" class="${prof === k ? "on" : ""}" style="--c:var(--${k})" aria-pressed="${prof === k}"><i></i>${n}</button>`).join("");
+  lg.querySelectorAll("button").forEach(b => {
+    hover(b, () => prof === b.dataset.k ? `<b>${b.textContent}</b><span class="dim">Click to show every profession</span>`
+      : `<b>${b.textContent}</b><span class="dim">Click to show only ${b.textContent}'s time</span>`);
+    b.onclick = () => { prof = prof === b.dataset.k ? "all" : b.dataset.k; tipEl.style.display = "none";
+      $("#where").textContent = (prof === "all" ? "All professions" : b.textContent) + " · Account · All time"; render(); };
+  });
+}
+document.querySelector(".seg").onclick = e => { const b = e.target.closest("button"); if (!b) return;
+  period = b.dataset.p; document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x === b)); renderPeriod(); };
+
+// ---- overview ----
+function renderKpis() {
+  const ss = live(), tot = ss.reduce((a, s) => a + secsOf(s), 0);
+  const long = ss.reduce((a, s) => secsOf(s) > secsOf(a) ? s : a, ss[0]), d = new Date(long.t), first = new Date(ss[0].t);
+  const days = new Set(ss.map(s => midnight(s.t))).size;
+  $("#kpis").innerHTML =
+    `<div class="kpi"><b>${fmtH(tot)}</b><span>Time gathering</span><small>since ${MON[first.getMonth()]} ${first.getFullYear()}</small></div>` +
+    `<div class="kpi"><b>${ss.length}</b><span>Sessions</span><small>on ${days} days</small></div>` +
+    `<div class="kpi"><b>${fmt(tot / ss.length)}</b><span>Average session</span><small>${Math.round(ss.reduce((a, s) => a + gathersOf(s), 0) / (tot / 3600))} gathers an hour</small></div>` +
+    `<div class="kpi"><b>${fmt(secsOf(long))}</b><span>Longest session</span><small>${long.char.name}, ${MON[d.getMonth()]} ${d.getDate()} ${d.getFullYear()}</small></div>`;
+}
+
+// ---- by period ----
+function buckets() {
+  const out = [];
+  if (period === "week") {
+    const m0 = monday(NOW.getTime());
+    for (let i = 11; i >= 0; i--) { const a = m0 - i * 7 * DAY, d = new Date(a);
+      out.push({ a, b: a + 7 * DAY, tick: i % 2 ? "" : d.getDate() + " " + MON[d.getMonth()], name: "Week of " + MON[d.getMonth()] + " " + d.getDate() }); }
+  } else if (period === "month") {
+    for (let i = 11; i >= 0; i--) { const d = new Date(NOW.getFullYear(), NOW.getMonth() - i, 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      out.push({ a: d.getTime(), b: e.getTime(), tick: MON[d.getMonth()][0] + (d.getMonth() === 0 ? "'" + String(d.getFullYear()).slice(2) : ""), name: MON[d.getMonth()] + " " + d.getFullYear() }); }
+  } else {
+    for (let y = new Date(sessions[0].t).getFullYear(); y <= NOW.getFullYear(); y++)
+      out.push({ a: new Date(y, 0, 1).getTime(), b: new Date(y + 1, 0, 1).getTime(), tick: String(y), name: String(y) });
+  }
+  for (const k of out) {
+    k.by = {}; k.secs = 0; k.n = 0; k.g = 0;
+    for (const s of live()) if (s.t >= k.a && s.t < k.b) {
+      k.n++; k.g += gathersOf(s); k.secs += secsOf(s);
+      for (const [p] of PROFS) if (prof === "all" || p === prof) k.by[p] = (k.by[p] || 0) + (s.by[p] || 0);
+    }
+  }
+  return out;
+}
+const niceStep = h => [0.5, 1, 2, 3, 5, 10, 20, 25, 50, 100, 200].find(s => h / s <= 4) || 500;
+function renderPeriod() {
+  $("#periodTitle").textContent = "By " + period;
+  const ks = buckets(), maxS = Math.max(3600, ...ks.map(k => k.secs));
+  const step = niceStep(maxS / 3600), top = Math.ceil(maxS / 3600 / step) * step;
+  let html = "";
+  for (let v = 0; v <= top + 1e-9; v += step) html += `<div class="grid" style="bottom:${v / top * 100}%"><span>${v ? v + "h" : "0"}</span></div>`;
+  html += `<div class="cols">` + ks.map((k, i) => `<div class="col${i === ks.length - 1 ? " now" : ""}" data-i="${i}" tabindex="0">` +
+    PROFS.filter(([p]) => k.by[p]).map(([p]) => `<i style="height:${k.by[p] / 3600 / top * 100}%;background:var(--${p})"></i>`).join("") + `</div>`).join("") + `</div>`;
+  $("#plot").innerHTML = html;
+  $("#ticks").innerHTML = ks.map(k => `<span>${k.tick}</span>`).join("");
+  renderLegend();
+  $("#plot").querySelectorAll(".col").forEach(c => { const k = ks[+c.dataset.i];
+    hover(c, () => `<b>${k.name}${c.classList.contains("now") ? " <span class='dim'>(so far)</span>" : ""}</b>` +
+      (k.n ? kv("Time", fmt(k.secs)) + kv("Sessions", k.n) + kv("Gathers", k.g.toLocaleString()) + kv("Pace", Math.round(k.g / (k.secs / 3600)) + " an hour") +
+        (prof === "all" ? `<div style="height:5px"></div>` + PROFS.filter(([p]) => k.by[p] > 60).sort((a, b) => k.by[b[0]] - k.by[a[0]])
+          .map(([p, n]) => kv(`<i style="background:var(--${p})"></i>${n}`, Math.round(k.by[p] / k.secs * 100) + "%")).join("") : "")
+        : `<span class="dim">No gathering</span>`)); });
+  const cur = ks[ks.length - 1], prev = ks[ks.length - 2], done = ks.slice(0, -1).filter(k => k.secs > 0);
+  const word = { week: "This week", month: "This month", year: "This year" }[period];
+  let line = `<b>${word}</b> ${fmtH(cur.secs)} so far`;
+  if (prev) line += `<span class="dot">  ·  </span>last ${period} ${fmtH(prev.secs)}`;
+  if (done.length > 1) line += `<span class="dot">  ·  </span>average ${fmtH(done.reduce((a, k) => a + k.secs, 0) / done.length)}`;
+  $("#summary").innerHTML = line;
+}
+
+// ---- days played ----
+function renderStreak() {
+  const byDay = {};
+  for (const s of live()) { const d = midnight(s.t); byDay[d] = (byDay[d] || 0) + secsOf(s); }
+  const today = midnight(NOW.getTime()), start = monday(today) - 28 * DAY;
+  let cells = "";
+  for (let i = 0; i < 35; i++) { const d = start + i * DAY;
+    cells += d > today ? `<i style="visibility:hidden"></i>` : `<i class="${byDay[d] ? "on" : ""}${d === today ? " today" : ""}" data-d="${d}"></i>`; }
+  // current streak counts back from today, or from yesterday if today has nothing yet
+  let cur = 0, d = byDay[today] ? today : today - DAY;
+  while (byDay[d]) { cur++; d -= DAY; }
+  let best = 0, run = 0, prev = null;
+  for (const k of Object.keys(byDay).map(Number).sort((a, b) => a - b)) { run = prev !== null && k - prev === DAY ? run + 1 : 1; best = Math.max(best, run); prev = k; }
+  const in30 = Object.keys(byDay).filter(k => k > today - 30 * DAY).length;
+  $("#streak").innerHTML = `<div class="streak">
+    <div class="big"><b>${cur}</b><span>day${cur === 1 ? "" : "s"} in a row</span></div>
+    <div><div class="dow">${["M","T","W","T","F","S","S"].map(x => `<span>${x}</span>`).join("")}</div><div class="days">${cells}</div></div>
+    <div class="foot">Best streak ${best} days<span class="dot">  ·  </span>${in30} of the last 30 days</div></div>`;
+  $("#streak").querySelectorAll(".days i[data-d]").forEach(c => { const t = +c.dataset.d, dd = new Date(t);
+    hover(c, () => `<b>${DOWS[dd.getDay()]} ${MON[dd.getMonth()]} ${dd.getDate()}</b>` + (byDay[t] ? kv("Time", fmt(byDay[t])) : `<span class="dim">No gathering</span>`)); });
+}
+
+// ---- by class ----
+function renderClasses() {
+  const byC = {};
+  for (const s of live()) { const v = secsOf(s), c = byC[s.char.cls] ||= { secs: 0, chars: {} }; c.secs += v;
+    const ch = c.chars[s.char.name] ||= { secs: 0, n: 0 }; ch.secs += v; ch.n++; }
+  const total = Object.values(byC).reduce((a, c) => a + c.secs, 0), keys = Object.keys(byC).sort((a, b) => byC[b].secs - byC[a].secs);
+  const max = byC[keys[0]].secs, open = new Set([...document.querySelectorAll("#classes .open")].map(e => e.dataset.k));
+  $("#classes").innerHTML = keys.map(k => { const [name, col] = CLASSES[k], c = byC[k];
+    return `<div class="${open.has(k) ? "open" : ""}" data-k="${k}" style="--k:${col}">
+      <button class="bar" aria-expanded="${open.has(k)}"><span class="badge"></span>
+        <span><div class="lab"><b>${name}</b><span>${Math.round(c.secs / total * 100)}%</span></div><div class="trk"><i style="width:${c.secs / max * 100}%"></i></div></span>
+        <span class="time">${fmtH(c.secs)}</span><span class="chev">▶</span></button>
+      <div class="chars">${Object.entries(c.chars).sort((a, b) => b[1].secs - a[1].secs)
+        .map(([n, v]) => `<div class="ch"><span>${n}</span><span>${fmtH(v.secs)} · ${v.n} sessions</span></div>`).join("")}</div></div>`; }).join("");
+  $("#classes").querySelectorAll(".bar").forEach(b => b.onclick = () => {
+    const el = b.parentElement; el.classList.toggle("open"); b.setAttribute("aria-expanded", el.classList.contains("open")); });
+}
+
+// ---- session length ----
+function renderLengths() {
+  const bands = [["Under 15m", 0, 900], ["15 to 30m", 900, 1800], ["30m to 1h", 1800, 3600], ["1 to 2h", 3600, 7200], ["Over 2h", 7200, 1e9]];
+  const ss = live(), n = bands.map(([, a, b]) => ss.filter(s => secsOf(s) >= a && secsOf(s) < b).length), max = Math.max(...n);
+  $("#lengths").innerHTML = bands.map(([name], i) => `<div class="bar plain" style="--k:var(--chosen)"><span class="nm">${name}</span>
+    <div class="trk"><i style="width:${n[i] / max * 100}%;opacity:${.45 + .55 * n[i] / max}"></i></div><span class="time">${n[i]}</span></div>`).join("");
+}
+
+// ---- recent sessions ----
+function renderRecent() {
+  const today = midnight(NOW.getTime());
+  $("#recent").innerHTML = live().slice(-5).reverse().map(s => { const d = new Date(s.t), m = midnight(s.t);
+    const day = m === today ? "Today" : m === today - DAY ? "Yesterday" : DOWS[d.getDay()] + " " + MON[d.getMonth()] + " " + d.getDate();
+    const hr = d.getHours() % 12 || 12, ps = PROFS.filter(([p]) => s.by[p] && (prof === "all" || p === prof));
+    return `<div class="ses"><div class="when">${day} <span>${hr} ${d.getHours() < 12 ? "am" : "pm"} · ${s.char.name}</span></div><div class="len">${fmt(secsOf(s))}</div>
+      <div class="mix">${ps.map(([p]) => `<i style="width:${s.by[p] / secsOf(s) * 100}%;background:var(--${p})"></i>`).join("")}</div>
+      <div class="what">${gathersOf(s)} gathers · ${ps.map(([, n]) => n).join(", ")}</div></div>`; }).join("");
+}
+
+// ---- tooltip ----
+const tipEl = $("#tip");
+function place(x, y) { const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let l = x + 14, t = y - h - 10; if (l + w > innerWidth - 8) l = x - w - 14; if (t < 8) t = y + 16;
+  tipEl.style.left = Math.max(8, l) + "px"; tipEl.style.top = t + "px"; }
+function hover(el, html) {
+  el.onmousemove = e => { tipEl.innerHTML = html(); tipEl.style.display = "block"; place(e.clientX, e.clientY); };
+  el.onfocus = () => { const r = el.getBoundingClientRect(); tipEl.innerHTML = html(); tipEl.style.display = "block"; place(r.right, r.top); };
+  el.onmouseleave = el.onblur = () => tipEl.style.display = "none";
+}
+
+function render() { renderKpis(); renderPeriod(); renderStreak(); renderClasses(); renderLengths(); renderRecent(); }
+render();
+</script>
+</body>
+</html>

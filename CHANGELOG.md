@@ -1,5 +1,17 @@
 # Fieldnotes changelog
 
+## Unreleased
+
+- **Time, a new page** (the clock above Stats, or /fn time): how long you play, across every
+  character on this account. Pick Week, 2 Weeks, Month, Year or All. See time played and how it
+  compares with the range before; days played, time per day and your longest session; a chart by
+  class (click a column for just that day); when in the week you play most; what you gathered with a
+  rate per hour played; and a card per class with each character's level, gold looted and time. Click a
+  character for what they gathered, the gold they carry and their time played in all.
+- Time spent AFK is left out unless you switch it on. Fieldnotes starts keeping time with this
+  version; All adds each character's /played from before (asked quietly when you log in).
+  Characters you haven't played since the update wait in one card until you log in on them.
+
 ## 0.10.1
 
 - **Looting coin starts a session** (unless sessions are set to start by hand), and resumes a paused

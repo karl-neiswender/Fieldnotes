@@ -419,6 +419,11 @@ local function Legend(parent, w)
     return g
 end
 
+-- the same pieces for the Time page (TimePage.lua), so both pages draw alike
+SP.kit = { Tip = Tip, Begin = Begin, Tex = Tex, Rect = Rect, Finish = Finish, Cursor = Cursor, Hoverable = Hoverable,
+    Section = Section, Tile = Tile, Commas = Commas, HourText = HourText, FAINT = FAINT, EMPTY = EMPTY, CP = CP,
+    DOW = DOW, DOW_LONG = DOW_LONG }
+
 -- ------------------------------------------------------------
 -- The page
 -- ------------------------------------------------------------

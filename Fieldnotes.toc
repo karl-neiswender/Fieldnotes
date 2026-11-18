@@ -14,10 +14,12 @@ Core.lua
 Style.lua
 Recorder.lua
 Session.lua
+Playtime.lua
 Stats.lua
 Demo.lua
 Map.lua
 MapUI.lua
 StatsPage.lua
+TimePage.lua
 Share.lua
 Shots.lua
