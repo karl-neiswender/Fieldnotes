@@ -375,6 +375,7 @@ function TP.Build(parent, opts)
 
     -- the chart: columns stacked by class
     local chart = Section(d, "Time played")
+    holder.chart = chart -- (read by tools/check.py)
     local COL_H, YL = 80, 22 -- the chart's height, its hour labels' column
     chart.f = CreateFrame("Frame", nil, chart.card)
     chart.f:SetSize(CW, COL_H)
@@ -391,11 +392,70 @@ function TP.Build(parent, opts)
         fs:SetJustifyH("CENTER")
         chart.ticks[i] = fs
     end
+    -- the class key: hovering a class picks it out in the columns (the rest fade back), as the
+    -- mockup's legend does; only alphas change, nothing is redrawn
+    -- (eased over 0.16 s, as the mockup's `transition: opacity .16s` with CSS's "ease")
+    local FADE = 0.16
+    local fading, fadeT = {}, 0
+    local fader = CreateFrame("Frame", nil, chart.card)
+    local function Ease(p) return 1 - (1 - p) ^ 3 end
+    local function FadeStep(_, elapsed)
+        fadeT = fadeT + (elapsed or FADE)
+        local p = math.min(1, fadeT / FADE)
+        local e = Ease(p)
+        for _, it in ipairs(fading) do it.obj:SetAlpha(it.from + (it.to - it.from) * e) end
+        if p >= 1 then
+            fading = {}
+            fader:SetScript("OnUpdate", nil)
+        end
+    end
+    local function FadeTo(list)
+        fading, fadeT = {}, 0
+        for _, it in ipairs(list) do
+            local from = it.obj.GetAlpha and it.obj:GetAlpha() or it.to
+            fading[#fading + 1] = { obj = it.obj, from = tonumber(from) or it.to, to = it.to }
+        end
+        fader:SetScript("OnUpdate", FadeStep)
+    end
+    local function PickClass(class)
+        local list = {}
+        for _, s in ipairs(chart.segs or {}) do
+            local on = not class or s.class == class
+            list[#list + 1] = { obj = s.t, to = on and 1 or 0.15 }
+        end
+        for _, k in ipairs(chart.keys) do
+            local on = not class or k.class == class
+            list[#list + 1] = { obj = k.sq, to = on and 1 or 0.35 }
+            list[#list + 1] = { obj = k.fs, to = on and 1 or 0.45 }
+        end
+        FadeTo(list)
+    end
+    -- (a redraw puts every piece back at full and stops any fade in flight)
+    function chart:StopFade()
+        fading = {}
+        fader:SetScript("OnUpdate", nil)
+    end
     for i = 1, 9 do
         local sq = chart.card:CreateTexture(nil, "ARTWORK")
         sq:SetTexture(SOLID)
         sq:SetSize(7, 7)
-        chart.keys[i] = { sq = sq, fs = St.Text(chart.card, 9, C.INK2) }
+        local k = { sq = sq, fs = St.Text(chart.card, 9, C.INK2) }
+        k.btn = CreateFrame("Button", nil, chart.card)
+        k.btn:SetPoint("TOPLEFT", sq, "TOPLEFT", -3, 4)
+        k.btn:SetSize(CW / 3 - 4, 14)
+        k.btn:SetScript("OnEnter", function(self)
+            PickClass(k.class)
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            local c = ClassColor(k.class)
+            GameTooltip:SetText(ClassName(k.class), c[1], c[2], c[3])
+            if k.secs then GameTooltip:AddLine(Fmt(k.secs) .. " played, " .. k.pct .. "% of the range", 0.8, 0.8, 0.8) end
+            GameTooltip:Show()
+        end)
+        k.btn:SetScript("OnLeave", function()
+            PickClass(nil)
+            GameTooltip:Hide()
+        end)
+        chart.keys[i] = k
     end
     Hoverable(chart.f)
     chart.f:SetScript("OnMouseUp", function(self)
@@ -716,6 +776,8 @@ function TP.Build(parent, opts)
                 if data.byClass[a] ~= data.byClass[b] then return data.byClass[a] > data.byClass[b] end
                 return a < b
             end)
+            chart:StopFade()
+            chart.segs = {}
             for i, col in ipairs(cols) do
                 local x0 = YL + (i - 1) * bw + (bw - cw) / 2
                 local base = COL_H
@@ -724,7 +786,9 @@ function TP.Build(parent, opts)
                     local v = col.byClass and col.byClass[class] or 0
                     if v > 0 then
                         local h = v / 3600 / top * COL_H
-                        Rect(f, x0, base - h, cw, h, ClassColor(class), dim and 0.3 or 1)
+                        local t = Rect(f, x0, base - h, cw, h, ClassColor(class), dim and 0.3 or 1)
+                        t:SetAlpha(1)
+                        chart.segs[#chart.segs + 1] = { t = t, class = class }
                         base = base - h
                     end
                 end
@@ -781,14 +845,21 @@ function TP.Build(parent, opts)
                     k.sq:SetVertexColor(c[1], c[2], c[3])
                     k.fs:ClearAllPoints()
                     k.fs:SetPoint("TOPLEFT", chart.card, "TOPLEFT", kx + col * kw + 11, ky - row * 14)
-                    k.fs:SetText(ClassName(class) .. "  |cff6d665a" .. math.floor(data.byClass[class] / math.max(1, total) * 100 + 0.5) .. "%|r")
+                    k.class, k.secs = class, data.byClass[class]
+                    k.pct = math.floor(data.byClass[class] / math.max(1, total) * 100 + 0.5)
+                    k.fs:SetText(ClassName(class) .. "  |cff6d665a" .. k.pct .. "%|r")
+                    k.sq:SetAlpha(1)
+                    k.fs:SetAlpha(1)
                     k.sq:Show()
                     k.fs:Show()
+                    k.btn:Show()
                 end
             end
             for i = shown + 1, #chart.keys do
                 chart.keys[i].sq:Hide()
                 chart.keys[i].fs:Hide()
+                chart.keys[i].btn:Hide()
+                chart.keys[i].class = nil
             end
             local keyH = shown > 0 and (math.ceil(shown / 3) * 14 + 4) or 0
             chart.aside:SetText(R.days and "a column a day" or (range == "year" and "a column a month" or "a column a year"))

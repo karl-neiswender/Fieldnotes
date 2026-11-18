@@ -632,6 +632,6 @@
     Shares StatsPage's drawing pieces (SP.kit).
   - Rail: a Time tab (clock) above Stats; /fn time. Clock icon is a stand-in drawn to match the set
     (design/icons-v2-2026-11-04/clock-64.png -> Media/icons/clock-white.tga, tools/icons.py).
-  - Not in this build from the mockup: hovering the class key to pick out one class.
+  - Hovering the class key picks out one class in the columns (alphas only, no redraw).
   - Checks pass (58, one new: time counted, AFK left out unless asked, /played quiet, every range
     draws). Copied to Era and Forever. Seen in game by Karl (2026-11-17) and tuned from his screenshots.

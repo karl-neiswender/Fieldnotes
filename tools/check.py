@@ -823,11 +823,15 @@ do
   FieldnotesDB.settings.timeAfk = false
   FieldnotesDB.settings.timeRange = "14"
   tp:Update()
-  timePageOk = opened and quiet and rosterOk and math.abs(played - 3600) < 30 and math.abs(withAfk - 5400) < 30
+  -- hovering the class key picks out that class, and leaving puts every class back
+  local key = tp.chart.keys[1]
+  local keyOk = key.class ~= nil and #tp.chart.segs > 0
+    and pcall(key.btn.scripts.OnEnter, key.btn) and pcall(key.btn.scripts.OnLeave, key.btn)
+  timePageOk = keyOk and opened and quiet and rosterOk and math.abs(played - 3600) < 30 and math.abs(withAfk - 5400) < 30
     and ranges and math.abs(allSecs - 90000) < 30 and tp.data.sessions == 1
   timeDetail = "opened " .. tostring(opened) .. " quiet " .. tostring(quiet) .. " roster " .. tostring(rosterOk)
     .. " played " .. tostring(played) .. " withAfk " .. tostring(withAfk) .. " ranges " .. tostring(ranges)
-    .. " all " .. tostring(allSecs) .. " sessions " .. tostring(tp.data.sessions)
+    .. " all " .. tostring(allSecs) .. " sessions " .. tostring(tp.data.sessions) .. " key " .. tostring(keyOk)
   SlashCmdList.FIELDNOTES("time")
   timePageOk = timePageOk and not ns.TimeShown()
 end
@@ -936,7 +940,7 @@ def play(flavor, stubs, verbose):
         ("share: demo text and your own text are refused; someone else's joins Community", real_share == "ok"),
         ("stats page: /fn opens it in the dock, the Stats tab closes it; All counts every profession",
          rt.globals().statsPageOk is True),
-        ("time: counts play, leaves AFK out unless asked, /played asked quietly, every range draws",
+        ("time: counts play, leaves AFK out unless asked, /played asked quietly, every range draws, the class key picks out a class",
          rt.globals().timePageOk is True),
         ("stats page fills its numbers", stats.split("|")[0].replace(",", "").isdigit() and stats.split("|")[1] != "-"),
         ("stats page: Me counts fewer skins than Account",
