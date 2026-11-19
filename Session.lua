@@ -739,6 +739,19 @@ local function InlineIcon(name, c, size)
         c[1] * 255, c[2] * 255, c[3] * 255)
 end
 
+-- Money's icon in its largest coin's color: copper under a silver, silver under a gold, then gold
+-- (a gold coin over 89 copper read as gold looted; Karl, 2026-11-19)
+local function CoinColor(copper)
+    copper = copper or 0
+    return copper >= 10000 and C.MONEY or copper >= 100 and C.SILVER or C.COPPER
+end
+
+-- a profession's tint: its own color, Money's by how much it holds
+local function KeyColor(key, p, e)
+    if key == "money" then return CoinColor(e.copper) end
+    return p.color
+end
+
 -- a profession's line in the recap: what the session added and how fast it went
 -- a rate rounded to its largest coin's neighbour: copper only while under a silver an hour, else no
 -- copper, so the line does not flicker as the clock runs
@@ -817,7 +830,7 @@ function FN.UpdateTracker()
         local parts = {}
         for _, key in ipairs(session.order) do
             local p, e = ProfInfo(key), session.profs[key]
-            parts[#parts + 1] = InlineIcon(key .. "-white", p.color) .. " "
+            parts[#parts + 1] = InlineIcon(key .. "-white", KeyColor(key, p, e)) .. " "
                 .. (key == "money" and FN.FormatMoney(e.copper or 0) or e.count)
         end
         for _, r in ipairs(ui.rows) do ShowRow(r, false) end
@@ -889,9 +902,10 @@ function FN.UpdateTracker()
         r.rule:SetPoint("TOPRIGHT", -PADX, y + 4)
         r.chip:ClearAllPoints()
         r.chip:SetPoint("TOPLEFT", PADX, y - 2)
-        r.chip:SetColorTexture(p.color[1], p.color[2], p.color[3], 0.16)
+        local tint = KeyColor(key, p, e)
+        r.chip:SetColorTexture(tint[1], tint[2], tint[3], 0.16)
         r.mark:SetTexture(St.Icon(key .. "-white"))
-        r.mark:SetVertexColor(p.color[1], p.color[2], p.color[3])
+        r.mark:SetVertexColor(tint[1], tint[2], tint[3])
         r.name:SetText(p.label)
         local money = key == "money"
         -- Money's amount is too wide to sit beside a rate: it takes the right edge, its rate the line below
