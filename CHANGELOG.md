@@ -1,6 +1,6 @@
 # Fieldnotes changelog
 
-## Unreleased
+## 0.11.0
 
 - **Time, a new page** (the clock above Stats, or /fn time): how long you play, across every
   character on this account. Pick Week, 2 Weeks, Month, Year or All. See time played and how it
@@ -11,6 +11,17 @@
 - Time spent AFK is left out unless you switch it on. Fieldnotes starts keeping time with this
   version; All adds each character's /played from before (asked quietly when you log in).
   Characters you haven't played since the update wait in one card until you log in on them.
+- **The Money map weighs coin, not loots.** Heat, hot spots and continent circles follow how much
+  copper you looted, so a rich spot stands out. Hot spots show the average per loot, and the list
+  can show just Copper, Silver or Gold drops, each dot in its coin's color.
+- **The tracker's coin icon shows your largest coin:** copper, silver or gold.
+- **The tracker clock can show hours** (1:05:30 instead of 65:30): Show hours, in its Window settings.
+- The folded tracker widens to fit its counts.
+- Looting coin no longer adds an empty Cloth row; Cloth shows once cloth drops.
+- Map settings have a Show zone circles switch for continent and world maps.
+- A footlocker you pick open counts as treasure, even with no coin in it.
+- Darken map now dims the map under the heat and pins, not over them.
+- The Fieldnotes tab on the map's side sits below the quest log's tabs, and other add-ons' tabs.
 
 ## 0.10.1
 

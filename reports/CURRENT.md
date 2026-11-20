@@ -635,3 +635,9 @@
   - Hovering the class key picks out one class in the columns (alphas only, no redraw).
   - Checks pass (58, one new: time counted, AFK left out unless asked, /played quiet, every range
     draws). Copied to Era and Forever. Seen in game by Karl (2026-11-17) and tuned from his screenshots.
+- Coin icon by size (2026-11-19, Karl): the tracker's Money icon (folded line, row icon and chip) takes
+  the color of the largest coin looted this session: copper under 1s, silver under 1g, then gold
+  (Session.lua CoinColor). Copied to Era and Forever. Committed (69f0363).
+- v0.11.0 release (2026-11-20, Karl: "push and release"): TOC 0.11.0, CHANGELOG 0.11.0 (Time page,
+  Money map weighs coin, coin icon by size, tracker hours, zone circles switch, footlockers, Darken map,
+  side tab). Tag v0.11.0 pushed to trigger the CurseForge workflow.
