@@ -530,13 +530,15 @@ end
 -- Hot spots hide until asked for (Karl, 2026-11-05): the heat already shows where the activity
 -- is. Each pin is an invisible hover area about the size of its cluster; moving over it, or
 -- lighting its row in the dock, shows the marker (disc, rank, gold ring) and, a beat later, the
--- tooltip. The area takes no clicks where the client allows it, so the map's own clicks (zoom
--- out, waypoints) still work. Peaks sit at least 6 cells apart (Peaks), and the area reaches
--- HIT_REACH cells either side, so two areas never overlap. settings.map.spotsShown keeps every
--- marker showing.
+-- tooltip. Peaks sit at least 6 cells apart (Peaks), and the area reaches HIT_REACH cells either
+-- side, so two areas never overlap. settings.map.spotsShown keeps every marker showing.
+-- The areas take no mouse at all (Karl, 2026-11-23: over a hot spot the map would not drag, and
+-- its icons and quest objectives could not be hovered or clicked). WatchHover finds the hovered
+-- area by position instead, and only while the map itself is under the cursor, so any icon on
+-- top of a hot spot keeps its own tooltip and clicks.
 local HIT_REACH = 2.2 -- cells (times GRID_SCALE) either side of the peak
 local TIP_DELAY = 0.15 -- seconds before the tooltip follows the marker
-local PASS_CLICKS = CreateFrame("Button").SetMouseClickEnabled ~= nil
+local HOVER_EVERY = 0.05 -- seconds between hover checks
 
 -- marker shown: always-show on, or the pin lit (hovered, its dock row lit) or pinging
 local function MarkShown(p, instant)
@@ -550,10 +552,10 @@ end
 local function Pin(i)
     local p = pins[i]
     if p then return p end
-    p = CreateFrame("Button", nil, overlay)
+    p = CreateFrame("Frame", nil, overlay)
     p.i = i
     p:SetFrameLevel(overlay:GetFrameLevel() + 10)
-    if PASS_CLICKS then p:SetMouseClickEnabled(false) end
+    p:EnableMouse(false)
     -- the marker: its own frame, centred in the hover area, hidden at rest
     p.mark = CreateFrame("Frame", nil, p)
     p.mark:SetPoint("CENTER")
@@ -586,20 +588,74 @@ local function Pin(i)
         t:Hide()
         if j > 1 then p.ripples[j - 1] = t end
     end
-    p:SetScript("OnEnter", function(self)
-        self.hover = true
-        M.LightPin(self.rank, true, true)
-        C_Timer.After(TIP_DELAY, function()
-            if self.hover and self:IsShown() then PinTooltip(self) end
-        end)
-    end)
-    p:SetScript("OnLeave", function(self)
-        self.hover = false
-        if not GameTooltip.IsOwned or GameTooltip:IsOwned(self) then GameTooltip:Hide() end
-        M.LightPin(self.rank, false, true)
-    end)
     pins[i] = p
     return p
+end
+
+local function PinEnter(p)
+    p.hover = true
+    M.LightPin(p.rank, true, true)
+    C_Timer.After(TIP_DELAY, function()
+        if p.hover and p:IsShown() then PinTooltip(p) end
+    end)
+end
+
+local function PinLeave(p)
+    p.hover = false
+    if not GameTooltip.IsOwned or GameTooltip:IsOwned(p) then GameTooltip:Hide() end
+    M.LightPin(p.rank, false, true)
+end
+
+-- the frame the cursor is on: the map itself (its scroll area or canvas) lets a hot spot light;
+-- anything else there (Blizzard's icons, quest objectives, other add-ons' pins) wins
+local function MapUnderCursor()
+    local f
+    if GetMouseFoci then
+        local foci = GetMouseFoci()
+        f = foci and foci[1]
+    elseif GetMouseFocus then
+        f = GetMouseFocus()
+    end
+    if f == nil or f == WorldFrame then return true end
+    return f == WorldMapFrame.ScrollContainer or f == WorldMapFrame:GetCanvas()
+end
+
+-- a held left button: the map is being dragged (or about to be), so no hot spot lights and an
+-- open tooltip closes instead of riding off with the map (Karl, 2026-11-23)
+local function Dragging()
+    return IsMouseButtonDown and IsMouseButtonDown("LeftButton") and true or false
+end
+
+-- which hot spot area the cursor is over (none while an icon covers it), lit as it changes
+local hovered, hoverWait = nil, 0
+local function WatchHover(dt)
+    hoverWait = hoverWait - dt
+    if hoverWait > 0 then return end
+    hoverWait = HOVER_EVERY
+    local over
+    if overlay:IsVisible() and overlay:GetAlpha() > 0.05 and not Dragging() and overlay:IsMouseOver()
+        and MapUnderCursor() then
+        for _, p in pairs(pins) do
+            if p:IsShown() and p:IsMouseOver() then
+                over = p
+                break
+            end
+        end
+    end
+    if over == hovered then return end
+    if hovered then PinLeave(hovered) end
+    hovered = over
+    if over then PinEnter(over) end
+end
+
+-- the map closing or redrawing lets go of the hovered spot
+local function DropHover()
+    hoverWait = 0
+    if hovered then
+        local p = hovered
+        hovered = nil
+        PinLeave(p)
+    end
 end
 
 -- the pin for a hot spot (by rank), lit with a gold ring; fromPin: the dock's row lights too
@@ -1097,6 +1153,7 @@ local function Draw()
     HidePool(blobs)
     HidePool(dots)
     HidePool(rings)
+    DropHover()
     HidePool(pins)
     HidePool(shades)
     HidePool(badges)
@@ -1338,13 +1395,9 @@ local function Draw()
             local pin = (i == 1 and 16 or 12) * k
             p.size = pin
             p.mark:SetSize(pin, pin)
-            -- the hover area: the cluster's reach, or just the marker where clicks can't pass through
-            if PASS_CLICKS then
-                p:SetSize(math.max(pin, 2 * HIT_REACH * GRID_SCALE / cols * w),
-                    math.max(pin, 2 * HIT_REACH * GRID_SCALE / rows * h))
-            else
-                p:SetSize(pin, pin)
-            end
+            -- the hover area: the cluster's reach
+            p:SetSize(math.max(pin, 2 * HIT_REACH * GRID_SCALE / cols * w),
+                math.max(pin, 2 * HIT_REACH * GRID_SCALE / rows * h))
             p.dot:SetSize(pin / 2, pin / 2)
             p.k = k
             p.num:SetFont(STANDARD_TEXT_FONT, 13 * k, "OUTLINE")
@@ -1581,7 +1634,9 @@ local function Init()
     -- zooming scales the map under us: badges follow every frame; the dots and pins are drawn
     -- again once the zoom settles
     local lastK, still = nil, 0
+    WorldMapFrame:HookScript("OnHide", DropHover)
     overlay:SetScript("OnUpdate", function(_, dt)
+        WatchHover(dt)
         local k = PinScale()
         if not lastK then lastK = k end
         if math.abs(k - lastK) > 0.002 * lastK then

@@ -641,3 +641,7 @@
 - v0.11.0 release (2026-11-20, Karl: "push and release"): TOC 0.11.0, CHANGELOG 0.11.0 (Time page,
   Money map weighs coin, coin icon by size, tracker hours, zone circles switch, footlockers, Darken map,
   side tab). Tag v0.11.0 pushed to trigger the CurseForge workflow.
+- Hot spots let the map through (2026-11-23, Karl): their hover areas take no mouse, so the map drags
+  and its icons and quest objectives hover and click over a hot spot. Map.lua's WatchHover finds the
+  hovered spot by position, only while the map itself is under the cursor (an icon on top wins), and
+  drops it while the left button is held, so a drag closes the tooltip. Confirmed in game.
