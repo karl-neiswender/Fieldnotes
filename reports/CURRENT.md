@@ -645,3 +645,5 @@
   and its icons and quest objectives hover and click over a hot spot. Map.lua's WatchHover finds the
   hovered spot by position, only while the map itself is under the cursor (an icon on top wins), and
   drops it while the left button is held, so a drag closes the tooltip. Confirmed in game.
+- v0.11.1 release (2026-11-23, Karl: "release the current version"): TOC 0.11.1, CHANGELOG 0.11.1 (hot
+  spots let the map through). Tag v0.11.1 pushed to trigger the CurseForge workflow.

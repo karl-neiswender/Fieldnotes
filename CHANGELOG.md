@@ -1,5 +1,11 @@
 # Fieldnotes changelog
 
+## 0.11.1
+
+- **Hot spots no longer get in the way on the map.** You can drag the map, and hover and click its
+  icons and quest objectives, right over a hot spot. A hot spot lights only where nothing else sits on
+  top of it, and its tooltip closes while you drag the map.
+
 ## 0.11.0
 
 - **Time, a new page** (the clock above Stats, or /fn time): how long you play, across every
